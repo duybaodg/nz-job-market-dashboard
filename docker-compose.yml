@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nz_job_market}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nz_job_market}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/src/Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB:-nz_job_market};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      AI_EXTRACTION_ENABLED: ${AI_EXTRACTION_ENABLED:-false}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      FIRECRAWL_BASE_URL: ${FIRECRAWL_BASE_URL:-https://api.firecrawl.dev/v2}
+      FIRECRAWL_TIMEOUT_SECONDS: ${FIRECRAWL_TIMEOUT_SECONDS:-60}
+      SCRAPLING_FETCHER_TYPE: ${SCRAPLING_FETCHER_TYPE:-fetcher}
+      SCRAPLING_PYTHON_EXECUTABLE: ${SCRAPLING_PYTHON_EXECUTABLE:-python3}
+      SCRAPLING_WORKER_SCRIPT: ${SCRAPLING_WORKER_SCRIPT:-}
+      SCRAPLING_ROBOTS_TXT_OBEY: ${SCRAPLING_ROBOTS_TXT_OBEY:-true}
+      SCRAPLING_TIMEOUT_SECONDS: ${SCRAPLING_TIMEOUT_SECONDS:-120}
+      SCRAPLING_PROXY_URL: ${SCRAPLING_PROXY_URL:-}
+    ports:
+      - "5050:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:5050
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/src/Worker/Dockerfile
+    environment:
+      DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB:-nz_job_market};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      AI_EXTRACTION_ENABLED: ${AI_EXTRACTION_ENABLED:-false}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      FIRECRAWL_BASE_URL: ${FIRECRAWL_BASE_URL:-https://api.firecrawl.dev/v2}
+      FIRECRAWL_TIMEOUT_SECONDS: ${FIRECRAWL_TIMEOUT_SECONDS:-60}
+      SCRAPLING_FETCHER_TYPE: ${SCRAPLING_FETCHER_TYPE:-fetcher}
+      SCRAPLING_PYTHON_EXECUTABLE: ${SCRAPLING_PYTHON_EXECUTABLE:-python3}
+      SCRAPLING_WORKER_SCRIPT: ${SCRAPLING_WORKER_SCRIPT:-}
+      SCRAPLING_ROBOTS_TXT_OBEY: ${SCRAPLING_ROBOTS_TXT_OBEY:-true}
+      SCRAPLING_TIMEOUT_SECONDS: ${SCRAPLING_TIMEOUT_SECONDS:-120}
+      SCRAPLING_PROXY_URL: ${SCRAPLING_PROXY_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

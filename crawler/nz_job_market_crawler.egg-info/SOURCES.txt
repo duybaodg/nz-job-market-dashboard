@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+adapters/__init__.py
+adapters/scrapling/__init__.py
+adapters/scrapling/scrapling_worker.py
+nz_job_market_crawler.egg-info/PKG-INFO
+nz_job_market_crawler.egg-info/SOURCES.txt
+nz_job_market_crawler.egg-info/dependency_links.txt
+nz_job_market_crawler.egg-info/requires.txt
+nz_job_market_crawler.egg-info/top_level.txt
+tests/test_scrapling_worker.py

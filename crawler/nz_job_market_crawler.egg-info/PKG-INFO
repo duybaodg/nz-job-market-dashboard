@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: nz-job-market-crawler
+Version: 0.1.0
+Summary: Scrapling crawler worker for the NZ Job Market Intelligence Dashboard
+Requires-Python: >=3.11
+Requires-Dist: scrapling>=0.3.0
+Requires-Dist: curl_cffi>=0.7.0
+Requires-Dist: playwright>=1.49.0
+Requires-Dist: browserforge>=1.2.0
+Provides-Extra: test
