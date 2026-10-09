@@ -7,7 +7,7 @@ public sealed class FirecrawlJobAdapter(
     IFirecrawlMarkdownParser parser)
     : IJobSourceAdapter
 {
-    public string SourceName => "Firecrawl";
+    public string Method => "Firecrawl";
 
     public async Task<SourceFetchResult> FetchJobsAsync(
         JobSearchRequest request,
@@ -17,15 +17,15 @@ public sealed class FirecrawlJobAdapter(
         var markdown = scrape.Markdown ?? string.Empty;
 
         var rawPage = new RawJobPageInput(
-            SourceName,
+            request.Source,
             scrape.Url,
             scrape.RawHtml,
             markdown,
             scrape.RawJson,
             DateTime.UtcNow);
 
-        var jobs = parser.Parse(SourceName, scrape.Url, markdown);
+        var jobs = parser.Parse(request.Source, scrape.Url, markdown);
 
-        return new SourceFetchResult(rawPage, jobs);
+        return new SourceFetchResult([rawPage], jobs, false);
     }
 }

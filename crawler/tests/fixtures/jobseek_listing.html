@@ -1,0 +1,1137 @@
+<main>
+
+        
+
+
+<style>
+/* ══ Jobs page tokens ════════════════════════════════ */
+.jp { --jp-blue: #2563EB; --jp-dark: #0F172A;
+      --jp-muted: #64748B; --jp-border: #E2E8F0;
+      --jp-surface: #F8FAFC; --jp-green: #16A34A; }
+
+/* ══ Search header ═══════════════════════════════════ */
+.jp-header {
+    background: linear-gradient(
+        150deg, #080F1E 0%, #0D1B38 60%,
+        #0A1628 100%);
+    padding: 52px 0 0;
+    position: relative;
+    color: #fff;
+}
+.jp-header-inner {
+    position: relative; z-index: 1;
+}
+.jp-header h1 {
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -.025em;
+    line-height: 1.15;
+    margin-bottom: 6px;
+    color: #fff;
+}
+.jp-header-sub {
+    font-size: .9rem;
+    color: #64748B;
+    margin-bottom: 28px;
+}
+/* ── Search bar ─────────────────────────────────────── */
+.jp-search-row {
+    display: flex;
+    gap: 8px;
+    background: rgba(255,255,255,.06);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 14px;
+    padding: 8px;
+    margin-bottom: 0;
+}
+.jp-search-input {
+    flex: 1;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 9px;
+    color: #fff;
+    font-size: .97rem;
+    padding: 12px 16px;
+    outline: none;
+    min-width: 0;
+    transition: border-color .2s, background .2s;
+}
+.jp-search-input::placeholder { color: rgba(255,255,255,.35); }
+.jp-search-input:focus {
+    border-color: rgba(56,189,248,.45);
+    background: rgba(255,255,255,.12);
+}
+.jp-search-btn {
+    flex-shrink: 0;
+    background: #2563EB;
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    font-size: .92rem;
+    font-weight: 700;
+    padding: 12px 26px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s;
+}
+.jp-search-btn:hover { background: #1D4ED8; }
+
+/* ── Filter bar ─────────────────────────────────────── */
+.jp-filter-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 16px 0 0;
+    border-top: 1px solid rgba(255,255,255,.07);
+    margin-top: 14px;
+}
+.jp-filter-select {
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 9px;
+    color: #94A3B8;
+    font-size: .83rem;
+    font-weight: 500;
+    padding: 9px 32px 9px 13px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px centre;
+    transition: border-color .2s, background .2s;
+    flex: 1 1 160px;
+    max-width: 220px;
+    min-width: 130px;
+}
+.jp-filter-select:focus {
+    outline: none;
+    border-color: rgba(56,189,248,.4);
+    color: #fff;
+}
+.jp-filter-select option { background: #1E293B; color: #E2E8F0; }
+
+/* Active filter chip */
+.jp-active-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 14px 0 20px;
+}
+.jp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(37,99,235,.25);
+    border: 1px solid rgba(56,189,248,.3);
+    color: #93C5FD;
+    font-size: .75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 99px;
+    text-decoration: none;
+}
+.jp-chip-clear {
+    background: rgba(220,38,38,.2);
+    border-color: rgba(220,38,38,.3);
+    color: #FCA5A5;
+    font-size: .72rem;
+    padding: 4px 10px;
+}
+
+/* ══ Results area ════════════════════════════════════ */
+.jp-body {
+    padding: 28px 0 60px;
+    background: var(--jp-surface);
+    min-height: 60vh;
+}
+.jp-results-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+.jp-results-count {
+    font-size: .88rem;
+    font-weight: 600;
+    color: var(--jp-dark);
+}
+.jp-results-count span {
+    color: var(--jp-blue);
+    font-size: 1.05rem;
+}
+.jp-page-info {
+    font-size: .8rem;
+    color: var(--jp-muted);
+}
+
+/* ── Job cards ──────────────────────────────────────── */
+.jp-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fill, minmax(310px, 1fr));
+    gap: 16px;
+}
+.jp-card {
+    background: #fff;
+    border: 1px solid var(--jp-border);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    transition: box-shadow .2s, transform .2s, border-color .2s;
+    min-height: 190px;
+}
+.jp-card:hover {
+    box-shadow: 0 8px 32px rgba(0,0,0,.1);
+    transform: translateY(-2px);
+    border-color: #BFDBFE;
+    color: inherit;
+}
+.jp-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.jp-card-header-left { flex: 1; min-width: 0; }
+.jp-card-date {
+    display: block;
+    font-size: .72rem;
+    font-weight: 600;
+    color: #2563eb;
+    margin-bottom: 4px;
+}
+.jp-card-title {
+    font-size: .95rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 2px;
+    line-height: 1.3;
+}
+.jp-card-company {
+    font-size: .8rem;
+    color: #64748b;
+    margin: 0;
+}
+.jp-avatar {
+    flex-shrink: 0;
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+    border: 1px solid #e2e8f0;
+    color: var(--jp-blue);
+    font-weight: 800;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.jp-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+.jp-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: .72rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 99px;
+    line-height: 1.4;
+}
+.jp-badge-match {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+.jp-badge-viewed {
+    display: none;
+    background: #f8fafc;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+.jp-badge-viewed.is-viewed { display: inline-flex; }
+.jp-new-dot {
+    position: absolute;
+    top: 14px; left: 14px;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #2563eb;
+}
+.jp-card-summary {
+    font-size: .8rem;
+    color: #475569;
+    line-height: 1.55;
+    margin: 4px 0 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex: 1;
+}
+.jp-salary {
+    font-size: .87rem;
+    font-weight: 700;
+    color: #0f172a;
+    text-align: right;
+    margin-bottom: 8px;
+}
+.jp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.jp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #fff;
+    color: #374151;
+    font-size: .73rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid #d1d5db;
+    white-space: nowrap;
+}
+.jp-card-meta { display: none; }
+
+.jp-filter-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 16px 0 0;
+    border-top: 1px solid rgba(255,255,255,.07);
+    margin-top: 14px;
+}
+.jp-filter-select {
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 9px;
+    color: #94A3B8;
+    font-size: .83rem;
+    font-weight: 500;
+    padding: 9px 32px 9px 13px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px centre;
+    transition: border-color .2s, background .2s;
+    flex: 1 1 160px;
+    max-width: 220px;
+    min-width: 130px;
+}
+.jp-filter-select:focus {
+    outline: none;
+    border-color: rgba(56,189,248,.4);
+    color: #fff;
+}
+.jp-filter-select option { background: #1E293B; color: #E2E8F0; }
+
+/* Active filter chip */
+.jp-active-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 14px 0 20px;
+}
+.jp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(37,99,235,.25);
+    border: 1px solid rgba(56,189,248,.3);
+    color: #93C5FD;
+    font-size: .75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 99px;
+    text-decoration: none;
+}
+.jp-chip-clear {
+    background: rgba(220,38,38,.2);
+    border-color: rgba(220,38,38,.3);
+    color: #FCA5A5;
+    font-size: .72rem;
+    padding: 4px 10px;
+}
+
+/* ══ Results area ════════════════════════════════════ */
+.jp-body {
+    padding: 28px 0 60px;
+    background: var(--jp-surface);
+    min-height: 60vh;
+}
+.jp-results-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+.jp-results-count {
+    font-size: .88rem;
+    font-weight: 600;
+    color: var(--jp-dark);
+}
+.jp-results-count span {
+    color: var(--jp-blue);
+    font-size: 1.05rem;
+}
+.jp-page-info {
+    font-size: .8rem;
+    color: var(--jp-muted);
+}
+
+/* ── Job cards ──────────────────────────────────────── */
+.jp-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fill, minmax(310px, 1fr));
+    gap: 16px;
+}
+.jp-card {
+    background: #fff;
+    border: 1px solid var(--jp-border);
+    border-radius: 16px;
+    padding: 22px 22px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    transition: box-shadow .2s, transform .2s,
+                border-color .2s;
+}
+.jp-card:hover {
+    box-shadow: 0 8px 32px rgba(0,0,0,.1);
+    transform: translateY(-2px);
+    border-color: #BFDBFE;
+    color: inherit;
+}
+.jp-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.jp-avatar {
+    width: 42px; height: 42px;
+    border-radius: 11px;
+    background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+    color: var(--jp-blue);
+    font-weight: 800;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.jp-badges {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+.jp-badge {
+    font-size: .66rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 99px;
+    white-space: nowrap;
+}
+.jp-badge-match {
+    background: #F0FDF4;
+    color: var(--jp-green);
+    border: 1px solid #BBF7D0;
+}
+.jp-badge-viewed {
+    background: #F8FAFC;
+    color: #94A3B8;
+    border: 1px solid #E2E8F0;
+    display: none;
+}
+.jp-card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--jp-dark);
+    margin: 0 0 3px;
+    line-height: 1.3;
+}
+.jp-card-company {
+    font-size: .84rem;
+    color: var(--jp-muted);
+    font-weight: 500;
+    margin: 0 0 14px;
+}
+.jp-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 12px;
+    border-top: 1px solid #F1F5F9;
+    margin-top: auto;
+}
+.jp-pill {
+    font-size: .72rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 99px;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    color: #475569;
+    white-space: nowrap;
+}
+.jp-salary {
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--jp-dark);
+    margin-left: auto;
+}
+/* New badge */
+.jp-new-dot {
+    position: absolute;
+    top: 18px; right: 18px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--jp-blue);
+    box-shadow: 0 0 0 2px #EFF6FF;
+}
+
+/* ── Empty state ────────────────────────────────────── */
+.jp-empty {
+    text-align: center;
+    padding: 80px 24px;
+    background: #fff;
+    border: 1px solid var(--jp-border);
+    border-radius: 20px;
+}
+.jp-empty-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    display: block;
+}
+
+/* ── Pagination ─────────────────────────────────────── */
+.jp-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 40px;
+}
+.jp-page-btn {
+    width: 38px; height: 38px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .85rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--jp-muted);
+    background: #fff;
+    border: 1px solid var(--jp-border);
+    transition: all .15s;
+}
+.jp-page-btn:hover {
+    border-color: #93C5FD;
+    color: var(--jp-blue);
+    background: #EFF6FF;
+}
+.jp-page-btn.active {
+    background: var(--jp-blue);
+    border-color: var(--jp-blue);
+    color: #fff;
+}
+.jp-page-btn.disabled {
+    opacity: .4;
+    pointer-events: none;
+}
+.jp-page-ellipsis {
+    color: var(--jp-muted);
+    font-size: .85rem;
+    padding: 0 4px;
+}
+
+@media (max-width: 768px) {
+    .jp-header { padding: 36px 0 0; }
+    .jp-search-row { flex-direction: column; gap: 6px; }
+    .jp-search-btn { width: 100%; text-align: center; }
+    .jp-filter-select { max-width: 100%; }
+    .jp-grid { grid-template-columns: 1fr; }
+    .jp-body { padding: 20px 0 48px; }
+}
+</style>
+
+<div class="jp">
+
+<!-- ══ SEARCH HEADER ══════════════════════════════════ -->
+<div class="jp-header">
+    <div class="container jp-header-inner">
+
+        <h1>
+All Jobs in New Zealand        </h1>
+
+        <p class="jp-header-sub">
+            48
+            opportunities from
+            NZBN‑verified NZ employers
+        </p>
+
+        <form method="get" id="jobsForm">
+
+            <div class="jp-search-row">
+                <input type="text"
+                       name="keyword"
+                       class="jp-search-input"
+                       placeholder="Job title, skill or employer…"
+                       autocomplete="off" />
+                <button type="submit"
+                        class="jp-search-btn">
+                    Search Jobs
+                </button>
+            </div>
+
+            <div class="jp-filter-bar">
+
+                <select name="category"
+                        class="jp-filter-select"
+                        onchange="this.form.submit()">
+                    <option value="">All Categories</option>
+                            <option value="Aviation">Aviation</option>
+                            <option value="Administration &amp; Office Support">Administration &amp; Office Support</option>
+                            <option value="Engineering">Engineering</option>
+                            <option value="Automotive">Automotive</option>
+                            <option value="Marketing &amp; Communications">Marketing &amp; Communications</option>
+                            <option value="Sales">Sales</option>
+                            <option value="Information Technology">Information Technology</option>
+                            <option value="Accounting &amp; Finance">Accounting &amp; Finance</option>
+                            <option value="Agriculture, Forestry &amp; Fishing">Agriculture, Forestry &amp; Fishing</option>
+                            <option value="Apprenticeships &amp; Internships">Apprenticeships &amp; Internships</option>
+                            <option value="Cleaning &amp; Maintenance">Cleaning &amp; Maintenance</option>
+                            <option value="Construction &amp; Trades">Construction &amp; Trades</option>
+                            <option value="Creative &amp; Design">Creative &amp; Design</option>
+                            <option value="Customer Service">Customer Service</option>
+                            <option value="Education &amp; Training">Education &amp; Training</option>
+                            <option value="Executive &amp; Management">Executive &amp; Management</option>
+                            <option value="Government &amp; Defence">Government &amp; Defence</option>
+                            <option value="Healthcare &amp; Medical">Healthcare &amp; Medical</option>
+                            <option value="Hospitality &amp; Tourism">Hospitality &amp; Tourism</option>
+                            <option value="Human Resources">Human Resources</option>
+                            <option value="Legal">Legal</option>
+                            <option value="Logistics &amp; Supply Chain">Logistics &amp; Supply Chain</option>
+                            <option value="Manufacturing">Manufacturing</option>
+                            <option value="Mining &amp; Energy">Mining &amp; Energy</option>
+                            <option value="Other">Other</option>
+                            <option value="Property &amp; Real Estate">Property &amp; Real Estate</option>
+                            <option value="Retail">Retail</option>
+                            <option value="Science &amp; Research">Science &amp; Research</option>
+                            <option value="Security &amp; Protective Services">Security &amp; Protective Services</option>
+                            <option value="Social &amp; Community Services">Social &amp; Community Services</option>
+                            <option value="Sport &amp; Recreation">Sport &amp; Recreation</option>
+                            <option value="Telecommunications">Telecommunications</option>
+                            <option value="Transport &amp; Logistics">Transport &amp; Logistics</option>
+                            <option value="Utilities &amp; Infrastructure">Utilities &amp; Infrastructure</option>
+                </select>
+
+                <select name="location"
+                        class="jp-filter-select"
+                        onchange="this.form.submit()">
+                    <option value="">All Locations</option>
+                            <option value="Auckland">Auckland</option>
+                            <option value="Canterbury">Canterbury</option>
+                            <option value="Christchurch">Christchurch</option>
+                            <option value="Christchurch CBD">Christchurch CBD</option>
+                            <option value="Dunedin">Dunedin</option>
+                            <option value="Hamilton">Hamilton</option>
+                            <option value="Huntly">Huntly</option>
+                            <option value="Tauranga">Tauranga</option>
+                            <option value="Wellington">Wellington</option>
+                </select>
+
+                <select name="employmentType"
+                        class="jp-filter-select"
+                        onchange="this.form.submit()">
+                    <option value="">Employment Type</option>
+                            <option value="Full Time">Full Time</option>
+                            <option value="Full-Time">Full-Time</option>
+                            <option value="Part Time">Part Time</option>
+                </select>
+
+                <select name="sortBy"
+                        class="jp-filter-select"
+                        onchange="this.form.submit()">
+                            <option value="Recommended" selected>Recommended</option>
+                            <option value="Newest">Newest first</option>
+                            <option value="A-Z">A &#x2013; Z</option>
+                            <option value="Salary High-Low">Salary: High &#x2192; Low</option>
+                            <option value="Salary Low-High">Salary: Low &#x2192; High</option>
+                </select>
+
+
+            </div>
+
+                <!-- spacer -->
+                <div style="height:20px"></div>
+
+        </form>
+
+    </div>
+</div>
+
+<!-- ══ RESULTS ════════════════════════════════════════ -->
+<div class="jp-body">
+    <div class="container">
+
+        <div class="jp-results-bar">
+            <div class="jp-results-count">
+                <span>48</span>
+                jobs found
+            </div>
+                <span class="jp-page-info">
+                    Page 1 of 4
+                </span>
+        </div>
+
+            <div class="jp-grid">
+                    <a href="/jobs/senior-data-entry-specialist-huntly-1"
+                       class="jp-card"
+                       data-job-id="8dbfb826-2c6e-4c19-885d-ca7a5bbd5076">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 11 Aug
+                                </span>
+                                <h2 class="jp-card-title">Senior Data Entry Specialist </h2>
+                                <p class="jp-card-company">Global Trips</p>
+                            </div>
+                            <div class="jp-avatar">
+G                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="8dbfb826-2c6e-4c19-885d-ca7a5bbd5076">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">About the Role&#xD;&#xA;We are seeking a detail-oriented and experienced Senior Data Entry Specialist to join our team. In this role, you will be responsible for acc&#x2026;</p>
+                            <div class="jp-salary">$25 &#x2013; $35 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Huntly
+                                </span>
+                                <span class="jp-pill">Part Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/it-project-manager-canterbury-1"
+                       class="jp-card"
+                       data-job-id="29002f59-f00f-40e0-86a9-bab74b8c94c0">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 15 Jul
+                                </span>
+                                <h2 class="jp-card-title">IT Project Manager</h2>
+                                <p class="jp-card-company">ALLIANCE GROUP LIMITED</p>
+                            </div>
+                            <div class="jp-avatar">
+                                    <img src="/files/logo/a3d8aeb8-c983-495b-bff1-8eafb3cda282.png"
+                                         alt="ALLIANCE GROUP LIMITED"
+                                         style="width:100%;height:100%;object-fit:contain;border-radius:9px" />
+                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="29002f59-f00f-40e0-86a9-bab74b8c94c0">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">Ko&#x202F;wai&#x202F;m&#x101;tou&#x202F;&#x2013; About Us&#x202F;At Alliance Group, we&#x2019;re more than a global supplier of exceptional grass-fed lamb, beef, and venison. We&#x2019;re a purpose-driven busines&#x2026;</p>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Canterbury
+                                </span>
+                                <span class="jp-pill">Full-Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/it-architect-canterbury-1"
+                       class="jp-card"
+                       data-job-id="e02b9b18-7da0-4bc3-aa34-25b0a41706de">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 26 Jun
+                                </span>
+                                <h2 class="jp-card-title">IT Architect</h2>
+                                <p class="jp-card-company">JobSeek NZ Limited</p>
+                            </div>
+                            <div class="jp-avatar">
+                                    <img src="/files/logo/cc866a21-bd3c-434f-b4b3-ed252c4591e7.png"
+                                         alt="JobSeek NZ Limited"
+                                         style="width:100%;height:100%;object-fit:contain;border-radius:9px" />
+                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="e02b9b18-7da0-4bc3-aa34-25b0a41706de">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">About the Role&#xD;&#xA;We are seeking an experienced IT Architect to join our team and lead the design and strategic direction of our technology landscape. This is &#x2026;</p>
+                            <div class="jp-salary">$150,000 &#x2013; $175,000 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Christchurch CBD
+                                </span>
+                                <span class="jp-pill">Full Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/senior-network-engineer-canterbury-1"
+                       class="jp-card"
+                       data-job-id="8cfd0a6a-23da-4557-a996-0276fc4037de">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 26 Jun
+                                </span>
+                                <h2 class="jp-card-title">Senior Network Engineer</h2>
+                                <p class="jp-card-company">JobSeek NZ Limited</p>
+                            </div>
+                            <div class="jp-avatar">
+                                    <img src="/files/logo/cc866a21-bd3c-434f-b4b3-ed252c4591e7.png"
+                                         alt="JobSeek NZ Limited"
+                                         style="width:100%;height:100%;object-fit:contain;border-radius:9px" />
+                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="8cfd0a6a-23da-4557-a996-0276fc4037de">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">We are seeking an experienced Senior Network Engineer to design, implement, and maintain our complex network infrastructure across multiple sites in New Zeal&#x2026;</p>
+                            <div class="jp-salary">$140,000 &#x2013; $150,000 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Canterbury
+                                </span>
+                                <span class="jp-pill">Full Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/office-cleaner-canterbury"
+                       class="jp-card"
+                       data-job-id="c47e6ba4-1c4d-4279-9897-473e8d33d854">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 25 Jun
+                                </span>
+                                <h2 class="jp-card-title">Office Cleaner</h2>
+                                <p class="jp-card-company">Test Comapny</p>
+                            </div>
+                            <div class="jp-avatar">
+                                    <img src="/files/logo/cc866a21-bd3c-434f-b4b3-ed252c4591e7.png"
+                                         alt="Test Comapny"
+                                         style="width:100%;height:100%;object-fit:contain;border-radius:9px" />
+                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="c47e6ba4-1c4d-4279-9897-473e8d33d854">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">We are seeking a reliable and hardworking Office Cleaner to maintain a clean, safe, and welcoming environment across our workplace. This is an excellent oppo&#x2026;</p>
+                            <div class="jp-salary">$25 &#x2013; $32 / hr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Canterbury
+                                </span>
+                                <span class="jp-pill">Part Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/team-coordinator-tauranga"
+                       class="jp-card"
+                       data-job-id="e45ddd9f-3b40-4da4-a839-c9174f4f3885">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 25 Jun
+                                </span>
+                                <h2 class="jp-card-title">Team Coordinator</h2>
+                                <p class="jp-card-company">Ryman Healthcare</p>
+                            </div>
+                            <div class="jp-avatar">
+R                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="e45ddd9f-3b40-4da4-a839-c9174f4f3885">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">We are seeking a Team Coordinator to join our growing team.</p>
+                            <div class="jp-salary">$119,811 &#x2013; $130,351 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Tauranga
+                                </span>
+                                <span class="jp-pill">Full Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/operations-administrator-wellington"
+                       class="jp-card"
+                       data-job-id="573f78e3-8884-46f9-8c1c-637eeda51dd3">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 25 Jun
+                                </span>
+                                <h2 class="jp-card-title">Operations Administrator</h2>
+                                <p class="jp-card-company">Fulton Hogan</p>
+                            </div>
+                            <div class="jp-avatar">
+F                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="573f78e3-8884-46f9-8c1c-637eeda51dd3">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">We are seeking a Operations Administrator to join our growing team.</p>
+                            <div class="jp-salary">$71,883 &#x2013; $173,469 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Wellington
+                                </span>
+                                <span class="jp-pill">Full Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/receptionist-dunedin"
+                       class="jp-card"
+                       data-job-id="053ae2cb-6f12-4af3-869d-6529a8deb16c">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 25 Jun
+                                </span>
+                                <h2 class="jp-card-title">Receptionist</h2>
+                                <p class="jp-card-company">Ryman Healthcare</p>
+                            </div>
+                            <div class="jp-avatar">
+R                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="053ae2cb-6f12-4af3-869d-6529a8deb16c">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">We are seeking a Receptionist to join our growing team.</p>
+                            <div class="jp-salary">$112,932 &#x2013; $178,238 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Dunedin
+                                </span>
+                                <span class="jp-pill">Full Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/executive-assistant-christchurch"
+                       class="jp-card"
+                       data-job-id="c62eafc1-53a6-4055-a0b5-c0436be01886">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 25 Jun
+                                </span>
+                                <h2 class="jp-card-title">Executive Assistant</h2>
+                                <p class="jp-card-company">Fulton Hogan</p>
+                            </div>
+                            <div class="jp-avatar">
+F                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="c62eafc1-53a6-4055-a0b5-c0436be01886">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">We are seeking a Executive Assistant to join our growing team.</p>
+                            <div class="jp-salary">$67,906 &#x2013; $122,730 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Christchurch
+                                </span>
+                                <span class="jp-pill">Full Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/office-administrator-tauranga"
+                       class="jp-card"
+                       data-job-id="bd92d108-d164-42b5-8281-d79ad4871d08">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 25 Jun
+                                </span>
+                                <h2 class="jp-card-title">Office Administrator</h2>
+                                <p class="jp-card-company">Datacom</p>
+                            </div>
+                            <div class="jp-avatar">
+D                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="bd92d108-d164-42b5-8281-d79ad4871d08">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">We are seeking a Office Administrator to join our growing team.</p>
+                            <div class="jp-salary">$74,834 &#x2013; $128,484 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Tauranga
+                                </span>
+                                <span class="jp-pill">Full Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/marketing-manager-tauranga"
+                       class="jp-card"
+                       data-job-id="681008a2-0079-43bc-bc57-5b4fd804fc55">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 25 Jun
+                                </span>
+                                <h2 class="jp-card-title">Marketing Manager</h2>
+                                <p class="jp-card-company">Airport Streams</p>
+                            </div>
+                            <div class="jp-avatar">
+A                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="681008a2-0079-43bc-bc57-5b4fd804fc55">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">We are seeking a Marketing Manager to join our growing team.</p>
+                            <div class="jp-salary">$77,789 &#x2013; $129,725 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Tauranga
+                                </span>
+                                <span class="jp-pill">Full Time</span>
+                        </div>
+
+                    </a>
+                    <a href="/jobs/brand-manager-wellington"
+                       class="jp-card"
+                       data-job-id="53258060-605a-4e71-bedf-a53deca0635e">
+
+                        <div class="jp-card-header">
+                            <div class="jp-card-header-left">
+                                <span class="jp-card-date">
+                                    Listed 25 Jun
+                                </span>
+                                <h2 class="jp-card-title">Brand Manager</h2>
+                                <p class="jp-card-company">Fonterra</p>
+                            </div>
+                            <div class="jp-avatar">
+F                            </div>
+                        </div>
+
+                            <span class="jp-badge jp-badge-viewed"
+                                  data-viewed-id="53258060-605a-4e71-bedf-a53deca0635e">
+                                <i class="fa-solid fa-check"></i> Viewed
+                            </span>
+
+                            <p class="jp-card-summary">We are seeking a Brand Manager to join our growing team.</p>
+                            <div class="jp-salary">$109,881 &#x2013; $159,181 / yr</div>
+                        <div class="jp-chips">
+                                <span class="jp-pill">
+                                    <i class="fa-solid fa-location-dot"></i> Wellington
+                                </span>
+                                <span class="jp-pill">Full Time</span>
+                        </div>
+
+                    </a>
+            </div>
+            <!-- ── Pagination ──────────────────────── -->
+                <nav class="jp-pagination"
+                     aria-label="Job results pages">
+
+                        <span class="jp-page-btn disabled">←</span>
+
+
+
+                        <a class="jp-page-btn
+                               active" href="/Jobs?page=1&amp;sortBy=Recommended&amp;pageSize=12">
+                            1
+                        </a>
+                        <a class="jp-page-btn
+                               " href="/Jobs?page=2&amp;sortBy=Recommended&amp;pageSize=12">
+                            2
+                        </a>
+                        <a class="jp-page-btn
+                               " href="/Jobs?page=3&amp;sortBy=Recommended&amp;pageSize=12">
+                            3
+                        </a>
+
+                        <a class="jp-page-btn" href="/Jobs?page=4&amp;sortBy=Recommended">
+                            4
+                        </a>
+                        <a class="jp-page-btn" aria-label="Next page" href="/Jobs?page=2&amp;sortBy=Recommended&amp;pageSize=12">
+                            →
+                        </a>
+
+                </nav>
+
+    </div>
+</div>
+
+</div>
+
+
+
+    </main>

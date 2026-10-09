@@ -10,11 +10,18 @@ export type Job = {
   employmentType: string
   seniority: string
   workMode: string
+  experienceBand: string
   industry: string | null
   descriptionSummary: string | null
   url: string
   postedDate: string | null
+  closingDate: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+  isActive: boolean
+  expiredAt: string | null
   skills: string[]
+  programmingLanguages: string[]
 }
 
 export type Overview = {

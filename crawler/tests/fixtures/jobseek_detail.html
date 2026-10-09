@@ -1,0 +1,881 @@
+<body>
+
+    
+
+
+<header class="public-header">
+
+    <div class="container">
+
+        <div class="d-flex justify-content-between align-items-center py-3">
+
+            <a class="logo" href="/">
+                <img src="/images/logo.png" alt="JobSeek — Trusted Employment & Verification" class="logo-img" />
+            </a>
+
+            <!-- Burger button — mobile only -->
+            <button class="nav-burger"
+                    id="navBurger"
+                    aria-label="Open menu"
+                    aria-expanded="false"
+                    aria-controls="mobileNav">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Nav — hidden on mobile until burger clicked -->
+            <nav id="mobileNav" class="main-nav">
+
+                    <a href="/Jobs">
+                        Jobs
+                    </a>
+                    <a href="/companies">
+                        Companies
+                    </a>
+                    <a href="/Employers">
+                        Employers
+                    </a>
+                    <a href="/Recruiters">
+                        Recruiters
+                    </a>
+                    <a href="/CareerAdvice">
+                        Career Advice
+                    </a>
+                    <a href="/EmploymentNews">
+                        Employment News
+                    </a>
+                    <a class="btn btn-primary" href="/Identity/Account/Login">
+                        Login / Register
+                    </a>
+
+
+
+
+
+            </nav>
+
+            <!-- Backdrop — mobile only -->
+            <div class="nav-backdrop" id="navBackdrop"></div>
+
+        </div>
+
+    </div>
+
+</header>
+
+<script>
+    (function () {
+        var burger   = document.getElementById('navBurger');
+        var nav      = document.getElementById('mobileNav');
+        var backdrop = document.getElementById('navBackdrop');
+
+        if (!burger || !nav) return;
+
+        function open() {
+            nav.classList.add('nav-open');
+            backdrop.classList.add('nav-backdrop-visible');
+            burger.setAttribute('aria-expanded', 'true');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function close() {
+            nav.classList.remove('nav-open');
+            backdrop.classList.remove('nav-backdrop-visible');
+            burger.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+        }
+
+        burger.addEventListener('click', function () {
+            nav.classList.contains('nav-open') ? close() : open();
+        });
+
+        backdrop.addEventListener('click', close);
+
+        // Close on Escape
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') close();
+        });
+
+        // Close when a nav link is tapped
+        nav.querySelectorAll('a').forEach(function (a) {
+            a.addEventListener('click', close);
+        });
+    })();
+</script>
+<script>
+    (function () {
+        var bell = document.getElementById("notificationBell");
+        if (!bell) return; // not a candidate page
+
+        var badge = document.getElementById("notifUnreadBadge");
+        var itemsContainer =
+            document.getElementById("notifDropdownItems");
+
+        function timeAgo(isoDate) {
+            var diffMs = Date.now() - new Date(isoDate).getTime();
+            var mins = Math.floor(diffMs / 60000);
+            if (mins < 1) return "just now";
+            if (mins < 60) return mins + "m ago";
+            var hours = Math.floor(mins / 60);
+            if (hours < 24) return hours + "h ago";
+            return Math.floor(hours / 24) + "d ago";
+        }
+
+        function escapeHtml(s) {
+            var div = document.createElement("div");
+            div.textContent = s || "";
+            return div.innerHTML;
+        }
+
+        function renderItems(items) {
+            if (!items.length) {
+                itemsContainer.innerHTML =
+                    '<div class="p-3 text-muted small">' +
+                    'No notifications yet.</div>';
+                return;
+            }
+
+            itemsContainer.innerHTML = items.map(function (n) {
+                var href = n.linkUrl || "/Candidate/Notifications";
+                var unreadDot = n.isRead
+                    ? ""
+                    : '<span style="display:inline-block;width:6px;' +
+                      'height:6px;border-radius:50%;background:#0d6efd;' +
+                      'margin-right:6px;"></span>';
+
+                return '<a href="' + href + '" class="d-block p-2 ' +
+                    'border-bottom text-decoration-none text-dark">' +
+                    '<div class="small fw-semibold">' + unreadDot +
+                    escapeHtml(n.title) + '</div>' +
+                    '<div class="small text-muted">' +
+                    escapeHtml(n.message) + '</div>' +
+                    '<div class="small text-muted">' +
+                    timeAgo(n.createdDate) + '</div></a>';
+            }).join("");
+        }
+
+        function refresh() {
+            fetch("/Candidate/Notifications/Summary", {
+                headers: { "X-Requested-With": "XMLHttpRequest" }
+            })
+                .then(function (r) {
+                    return r.ok ? r.json() : null;
+                })
+                .then(function (data) {
+                    if (!data) return;
+
+                    if (data.unreadCount > 0) {
+                        badge.style.display = "inline-block";
+                        badge.textContent = data.unreadCount > 99
+                            ? "99+" : data.unreadCount;
+                    } else {
+                        badge.style.display = "none";
+                    }
+
+                    renderItems(data.items || []);
+                })
+                .catch(function () {
+                    // Silent — the bell just won't update this cycle.
+                });
+        }
+
+        refresh();
+        setInterval(refresh, 45000);
+    })();
+
+    // ── Employer Messages unread badge ──────────────
+    (function () {
+        var badge = document.getElementById("empMsgBadge");
+        if (!badge) return;   // not on employer nav
+
+        function refreshMsgBadge() {
+            fetch("/Employer/Messages/UnreadCount", {
+                headers: { "X-Requested-With": "XMLHttpRequest" }
+            })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (!data) return;
+                if (data.count > 0) {
+                    badge.style.display = "inline-block";
+                    badge.textContent = data.count > 99
+                        ? "99+" : data.count;
+                } else {
+                    badge.style.display = "none";
+                }
+            })
+            .catch(function () {});
+        }
+
+        refreshMsgBadge();
+        setInterval(refreshMsgBadge, 45000);
+    })();
+</script>
+
+
+    <main>
+
+        
+
+<section class="job-details-hero">
+
+    <div class="container">
+
+        <div class="js-breadcrumb-dark">
+            
+
+
+    <!-- Visible breadcrumb trail -->
+    <nav class="js-breadcrumb" aria-label="Breadcrumb">
+        <ol class="js-breadcrumb-list">
+                <li class="js-breadcrumb-item
+                           ">
+                        <a href="/">Home</a>
+                        <span class="js-breadcrumb-sep"
+                              aria-hidden="true">›</span>
+                </li>
+                <li class="js-breadcrumb-item
+                           ">
+                        <a href="/jobs">Jobs</a>
+                        <span class="js-breadcrumb-sep"
+                              aria-hidden="true">›</span>
+                </li>
+                <li class="js-breadcrumb-item
+                           ">
+                        <a href="/jobs/industry/information-technology">Information Technology</a>
+                        <span class="js-breadcrumb-sep"
+                              aria-hidden="true">›</span>
+                </li>
+                <li class="js-breadcrumb-item
+                           js-breadcrumb-current">
+                        <span>IT Project Manager</span>
+                </li>
+        </ol>
+    </nav>
+    <!-- JSON-LD BreadcrumbList schema for Google -->
+    <script type="application/ld&#x2B;json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://jobseek.nz/"
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Jobs",
+                "item": "https://jobseek.nz/jobs"
+            },
+            {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "Information Technology",
+                "item": "https://jobseek.nz/jobs/industry/information-technology"
+            },
+            {
+                "@type": "ListItem",
+                "position": 4,
+                "name": "IT Project Manager",
+                "item": "https://jobseek.nz/jobs/it-project-manager-canterbury-1"
+            }        ]
+    }
+    </script>
+
+<style>
+.js-breadcrumb {
+    padding: 10px 0 4px;
+}
+
+.js-breadcrumb-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: .8rem;
+    color: #94a3b8;
+}
+
+.js-breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.js-breadcrumb-item a {
+    color: #64748b;
+    text-decoration: none;
+    transition: color .15s;
+}
+
+.js-breadcrumb-item a:hover { color: #2563eb; }
+
+.js-breadcrumb-sep { color: #cbd5e1; }
+
+.js-breadcrumb-current span {
+    color: #94a3b8;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: bottom;
+}
+
+/* Inverted (white) variant for dark hero backgrounds */
+.js-breadcrumb-dark .js-breadcrumb-item a  { color: #94a3b8; }
+.js-breadcrumb-dark .js-breadcrumb-item a:hover { color: #fff; }
+.js-breadcrumb-dark .js-breadcrumb-sep      { color: #475569; }
+.js-breadcrumb-dark .js-breadcrumb-current span { color: #64748b; }
+</style>
+
+        </div>
+
+        <div class="glass job-details-card">
+
+
+                <a href="/companies/alliance-group-limited-1"
+                   style="text-decoration:none;color:inherit;display:block">
+                    <div class="job-details-header">
+
+                        <div class="company-logo-large"
+                             style="background:white;padding:4px">
+                                <img src="/files/logo/a3d8aeb8-c983-495b-bff1-8eafb3cda282.png"
+                                     alt="ALLIANCE GROUP LIMITED"
+                                     style="width:100%;height:100%;
+                                            object-fit:contain;
+                                            border-radius:10px" />
+                        </div>
+
+                        <div class="job-details-title">
+
+                            <span class="company-name-large"
+                                  style="display:flex;align-items:center;gap:6px">
+                                ALLIANCE GROUP LIMITED
+                                <span style="font-size:.75rem;
+                                             color:#2563eb;
+                                             opacity:.8">↗</span>
+                            </span>
+
+                            <h1>IT Project Manager</h1>
+
+                            <div class="job-meta">
+
+                                <span><i class="fa-solid fa-location-dot"></i> Canterbury</span>
+
+                                <span><i class="fa-solid fa-briefcase"></i> Full-Time</span>
+
+
+                            </div>
+
+                        </div>
+
+                    </div>
+                </a>
+
+            <div class="job-actions">
+
+                    <a href="/Register"
+                           class="btn btn-jobseek">
+                        Register to Apply
+                    </a>
+                    <a class="btn btn-outline-primary" href="/Identity/Account/Login?returnUrl=%2Fjobs%2Fit-project-manager-canterbury-1">
+                        Sign In
+                    </a>
+
+                <button id="saveJobButton"
+                        class="btn btn-outline-primary">
+                    <i class="fa-solid fa-heart"></i> Save Job
+                </button>
+
+                <button class="btn btn-outline-secondary"
+                        onclick="if(navigator.share){
+                            navigator.share({
+                                title:'IT Project Manager',
+                                url:window.location.href
+                            })
+                        } else {
+                            navigator.clipboard
+                                .writeText(
+                                    window.location.href);
+                            this.textContent='Copied!';
+                        }">
+                    Share
+                </button>
+
+            </div>
+
+            <div class="job-meta-footer">
+
+                <span>
+                    Category:
+                    <strong>Information Technology</strong>
+                </span>
+
+                <span>
+                    Reference:
+                    <strong></strong>
+                </span>
+
+                    <span>
+                        Closing:
+                        <strong>
+                            14 Aug 2026
+                        </strong>
+                    </span>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<section class="section-spacing">
+
+    <div class="container">
+
+        <div class="row g-4">
+
+            <div class="col-lg-8">
+
+                <div class="glass content-card">
+
+
+                        <div class="job-description-html">
+                            <p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;"><span style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; font-weight: 700;">Ko wai mātou – About Us</span> </p><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">At Alliance Group, we’re more than a global supplier of exceptional grass-fed lamb, beef, and venison. We’re a purpose-driven business committed to driving prosperity for our farming families and creating thriving environments for our people. With sites across the North and South Islands, we’re focused on performance improvement, innovation, and reducing our environmental impact.&nbsp;&nbsp;</p><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;"><span style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; font-weight: 700;">Te Tūranga – The Role</span> &nbsp;</p><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">We're looking for an experienced Project Manager to join our Technology team and help deliver key initiatives that support Alliance's future success.</p><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">You'll lead the successful delivery of technology projects across Alliance. You'll manage projects from initiation through to closure, ensuring outcomes are delivered on time, within budget, and aligned with business objectives.</p><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">A key focus of this role will be the delivery of Alliance's Primary Processing Solution, a significant programme of work that will support operations across our six processing plants. Working closely with operational leaders, business stakeholders, vendors, and technical teams, you'll help drive successful implementation and adoption while ensuring strong governance, risk management, and communication throughout the project lifecycle.</p><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">Key responsibilities include:</p><ul style="border: 0px; margin: 16px 0px 24px 24px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;"><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Leading end-to-end delivery of technology projects.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Developing and managing project plans, budgets, schedules, and resource requirements.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Building strong relationships with business stakeholders, executive sponsors, vendors, and technical teams.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Managing project risks, issues, dependencies, and mitigation plans.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Facilitating steering committees, workshops, and project meetings.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Monitoring project financial performance and resource utilisation.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Ensuring compliance with project governance frameworks and reporting requirements.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Supporting organisational change initiatives to enable successful project outcomes.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Contributing to continuous improvement of project management practices across the business.</p></li></ul><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;"><span style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; font-weight: 700;">Ō pūkenga – About You</span> &nbsp;</p><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">We're looking for a confident and experienced project professional who can balance strategic thinking with practical delivery.</p><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">You'll bring:</p><ul style="border: 0px; margin: 16px 0px 24px 24px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;"><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">At least 5 years' experience delivering IT or technology projects.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Proven success leading medium to large-scale enterprise technology initiatives.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Experience working with both Agile and Waterfall project methodologies.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Strong stakeholder engagement skills, including experience working with senior leaders and executive teams.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Experience managing project budgets, timelines, resources, and vendors.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Exposure to ERP or business systems implementation projects.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Excellent planning, communication, and problem-solving abilities.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">A collaborative approach with the ability to influence and lead cross-functional teams.</p></li></ul><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">Ideally, you'll also have:</p><ul style="border: 0px; margin: 16px 0px 24px 24px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;"><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">A tertiary qualification in Information Technology, Business Information Systems, or a related discipline.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Experience in an evolution of manufacturing products.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">A recognised project management certification such as PMP or PRINCE2 Practitioner.</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Agile or Scrum certification.</p></li></ul><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;"><span style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; font-weight: 700;">Ngā painga – What’s in it for you? </span>&nbsp;</p><ul style="border: 0px; margin: 16px 0px 24px 24px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;"><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">A supportive and collaborative team environment&nbsp;&nbsp;</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Opportunities to grow your skills and career&nbsp;&nbsp;</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Competitive remuneration and benefits&nbsp;&nbsp;</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">One week’s extra annual leave&nbsp;&nbsp;</p></li><li style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; list-style-type: disc;"><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;">Access to wellbeing initiatives &nbsp;</p></li></ul><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;"><span style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; font-weight: 700;">Ko koe pea tēnei? – Sound like your kind of role?</span> &nbsp;</p><p style="border: 0px; margin: 0px 0px 16px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">If you're an experienced Project Manager who enjoys leading complex technology projects and building strong stakeholder relationships, we'd love to hear from you.</p><p style="border: 0px; margin: 0px; padding: 0px; vertical-align: baseline; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; color: rgb(46, 56, 73); font-family: SeekSans, &quot;SeekSans Fallback&quot;, Arial, Tahoma, sans-serif; font-size: 16px;">Apply today and help shape the future of technology at Alliance.</p>
+                        </div>
+
+                </div>
+
+
+            </div>
+
+            <div class="col-lg-4">
+
+                <div class="glass content-card">
+
+                    <h3>Quick Overview</h3>
+
+                    <ul class="job-overview-list">
+
+                        <li>
+                            <strong>Employer:</strong>
+                            ALLIANCE GROUP LIMITED
+                        </li>
+
+                        <li>
+                            <strong>Location:</strong>
+                            Canterbury
+                        </li>
+
+                        <li>
+                            <strong>Category:</strong>
+                            Information Technology
+                        </li>
+
+                        <li>
+                            <strong>Employment:</strong>
+                            Full-Time
+                        </li>
+
+                            <li>
+                                <strong>Closing:</strong>
+                                14 Aug 2026
+                            </li>
+
+                    </ul>
+
+                </div>
+
+                <div class="glass content-card mt-4">
+
+                    <h3>Ready to Apply?</h3>
+
+                    <p>
+                        Join ALLIANCE GROUP LIMITED and take
+                        the next step in your career
+                        journey.
+                    </p>
+
+                        <a href="/Register"
+                               class="btn btn-jobseek w-100">
+                            Create a Free Account
+                        </a>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+
+    </main>
+
+    
+<footer class="js-footer">
+
+    <div class="js-footer-inner">
+
+        <!-- Brand column -->
+        <div class="js-footer-brand">
+            <div class="js-footer-logo">
+                <a href="/">
+                    <img src="/images/logo.png" alt="JobSeek" style="height:48px;width:auto;
+                                display:block" />
+                </a>
+            </div>
+            <p class="js-footer-tagline">
+                New Zealand's trusted platform for<br>
+                verified hiring and workforce onboarding.
+            </p>
+            <div class="js-footer-badges">
+                <span class="js-footer-badge"><i class="fa-solid fa-flag"></i> NZ Owned</span>
+                <span class="js-footer-badge"><i class="fa-solid fa-lock"></i> Privacy Act 2020</span>
+            </div>
+        </div>
+
+        <!-- Candidates -->
+        <div class="js-footer-col">
+            <div class="js-footer-col-heading">Candidates</div>
+            <ul class="js-footer-links">
+                <li><a href="/jobs">Find Jobs</a></li>
+                <li><a href="/CareerAdvice">Career Advice</a></li>
+                <li><a href="/Register">Create Free Account</a></li>
+                <li><a href="/Login">Sign In</a></li>
+            </ul>
+        </div>
+
+        <!-- Employers -->
+        <div class="js-footer-col">
+            <div class="js-footer-col-heading">Employers</div>
+            <ul class="js-footer-links">
+                <li><a href="/employers">Why JobSeek?</a></li>
+                <li><a href="/Register">Register Free</a></li>
+                <li><a href="/Contact">Request a Demo</a></li>
+                <li><a href="/companies">Company Profiles</a></li>
+            </ul>
+        </div>
+
+        <!-- Recruiters -->
+        <div class="js-footer-col">
+            <div class="js-footer-col-heading">Recruiters</div>
+            <ul class="js-footer-links">
+                <li><a href="/recruiters">Recruiter Features</a></li>
+                <li><a href="/Register">Register Agency</a></li>
+                <li><a href="/Contact">Contact Us</a></li>
+            </ul>
+        </div>
+
+        <!-- Company -->
+        <div class="js-footer-col">
+            <div class="js-footer-col-heading">Company</div>
+            <ul class="js-footer-links">
+                <li><a href="/About">About JobSeek</a></li>
+                <li><a href="/Contact">Contact Us</a></li>
+                <li><a href="/Privacy">Privacy Policy</a></li>
+                <li><a href="/Terms">Terms of Service</a></li>
+                <li><a href="/Cookies">Cookie Policy</a></li>
+            </ul>
+        </div>
+
+    </div>
+
+    <div class="js-footer-bottom">
+        <div class="js-footer-bottom-inner">
+            <div class="js-footer-copyright">
+                &copy; 2026 JobSeek New Zealand Limited.
+                All rights reserved.
+            </div>
+            <div class="js-footer-legal">
+                <a href="/Privacy">
+                    Privacy Policy
+                </a>
+                <span class="js-footer-divider">·</span>
+                <a href="/Terms">Terms of Service</a>
+                <span class="js-footer-divider">·</span>
+                <a href="/Cookies">Cookies</a>
+                <span class="js-footer-divider">·</span>
+                <span class="text-muted" style="font-size:.8rem">
+                    Privacy Act 2020 Compliant
+                </span>
+            </div>
+        </div>
+    </div>
+
+</footer>
+
+<style>
+/* ── Footer ────────────────────────────────────────────────── */
+.js-footer {
+    background: #0f172a;
+    color: #94a3b8;
+    margin-top: 80px;
+    font-size: .875rem;
+}
+
+.js-footer-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 60px 32px 40px;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    gap: 40px;
+}
+
+@media (max-width: 1024px) {
+    .js-footer-inner {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+    .js-footer-brand { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+    .js-footer-inner {
+        grid-template-columns: 1fr 1fr;
+        padding: 40px 20px 24px;
+        gap: 28px;
+    }
+    .js-footer-brand { grid-column: 1 / -1; }
+}
+
+/* Brand */
+.js-footer-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.js-footer-logo-mark {
+    background: #2563eb;
+    color: #fff;
+    font-weight: 800;
+    font-size: .85rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: -.02em;
+}
+
+.js-footer-logo-text {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #f1f5f9;
+}
+
+.js-footer-tagline {
+    color: #64748b;
+    line-height: 1.65;
+    margin-bottom: 16px;
+    font-size: .875rem;
+}
+
+.js-footer-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.js-footer-badge {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: .75rem;
+    color: #94a3b8;
+}
+
+/* Columns */
+.js-footer-col-heading {
+    color: #f1f5f9;
+    font-weight: 700;
+    font-size: .8rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+}
+
+.js-footer-links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.js-footer-links a {
+    color: #64748b;
+    text-decoration: none;
+    transition: color .15s;
+    font-size: .875rem;
+}
+
+.js-footer-links a:hover {
+    color: #94a3b8;
+}
+
+/* Bottom bar */
+.js-footer-bottom {
+    border-top: 1px solid rgba(255,255,255,.07);
+}
+
+.js-footer-bottom-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 18px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+@media (max-width: 640px) {
+    .js-footer-bottom-inner {
+        padding: 16px 20px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}
+
+.js-footer-copyright {
+    font-size: .8rem;
+    color: #475569;
+}
+
+.js-footer-legal {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.js-footer-legal a {
+    color: #475569;
+    text-decoration: none;
+    font-size: .8rem;
+    transition: color .15s;
+}
+
+.js-footer-legal a:hover { color: #94a3b8; }
+
+.js-footer-divider {
+    color: #334155;
+}
+</style>
+
+
+    <script src="/lib/jquery/dist/jquery.min.js"></script>
+
+    <script src="/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script async data-id="101508822" src="//static.getclicky.com/js"></script>
+    <noscript><p><img alt="Clicky" width="1" height="1" src="//in.getclicky.com/101508822ns.gif" /></p></noscript>
+
+    <script>
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            function () {
+
+                const badge =
+                    document.getElementById(
+                        "savedJobsCount");
+
+                if (!badge)
+                    return;
+
+                const savedJobs =
+                    JSON.parse(
+                        localStorage.getItem(
+                            "savedJobs") || "[]");
+
+                badge.innerText =
+                    savedJobs.length;
+
+            });
+
+    </script>
+
+    
+    <script>
+        document.addEventListener(
+            "DOMContentLoaded", function () {
+
+            const jobId = "29002f59-f00f-40e0-86a9-bab74b8c94c0";
+
+            // Track viewed
+            let viewed = JSON.parse(
+                localStorage.getItem("viewedJobs")
+                || "[]");
+            if (!viewed.includes(jobId)) {
+                viewed.push(jobId);
+                localStorage.setItem(
+                    "viewedJobs",
+                    JSON.stringify(viewed));
+            }
+
+            // Save job
+            const saveBtn =
+                document.getElementById(
+                    "saveJobButton");
+
+            if (saveBtn) {
+                saveBtn.addEventListener(
+                    "click", async function () {
+                    try {
+                        const r = await fetch(
+                            "/Candidate/SavedJobs/Save",
+                            {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type":
+                                        "application/json"
+                                },
+                                body: JSON.stringify(
+                                    { jobId })
+                            });
+                        if (r.ok) {
+                            saveBtn.textContent =
+                                "<i class='fa-solid fa-heart'></i> Saved";
+                            saveBtn.disabled = true;
+                        } else {
+                            alert(
+                                "Please log in " +
+                                "to save jobs.");
+                        }
+                    } catch {
+                        alert(
+                            "Please log in " +
+                            "to save jobs.");
+                    }
+                });
+            }
+
+        });
+    </script>
+
+
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a4495744f94e4aed',t:'MTc5MTAwMzE4Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>

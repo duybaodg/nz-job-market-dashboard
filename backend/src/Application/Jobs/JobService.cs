@@ -15,6 +15,13 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
     {
         var jobs = dbContext.Jobs.AsNoTracking().Include(job => job.Skills).AsQueryable();
 
+        jobs = query.Status?.ToLowerInvariant() switch
+        {
+            "all" => jobs,
+            "expired" => jobs.Where(job => !job.IsActive),
+            _ => jobs.Where(job => job.IsActive)
+        };
+
         if (!string.IsNullOrWhiteSpace(query.Region))
         {
             jobs = jobs.Where(job => job.Region == query.Region);
@@ -47,11 +54,18 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
                 job.EmploymentType,
                 job.Seniority,
                 job.WorkMode,
+                job.ExperienceBand,
                 job.Industry,
                 job.DescriptionSummary,
                 job.Url,
                 job.PostedDate,
-                job.Skills.OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList()))
+                job.ClosingDate,
+                job.FirstSeenAt,
+                job.LastSeenAt,
+                job.IsActive,
+                job.ExpiredAt,
+                job.Skills.OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList(),
+                job.Skills.Where(skill => skill.SkillType == "ProgrammingLanguage").OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList()))
             .ToListAsync(cancellationToken);
     }
 
@@ -73,11 +87,18 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
                 job.EmploymentType,
                 job.Seniority,
                 job.WorkMode,
+                job.ExperienceBand,
                 job.Industry,
                 job.DescriptionSummary,
                 job.Url,
                 job.PostedDate,
-                job.Skills.OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList()))
+                job.ClosingDate,
+                job.FirstSeenAt,
+                job.LastSeenAt,
+                job.IsActive,
+                job.ExpiredAt,
+                job.Skills.OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList(),
+                job.Skills.Where(skill => skill.SkillType == "ProgrammingLanguage").OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList()))
             .SingleOrDefaultAsync(cancellationToken);
     }
 }

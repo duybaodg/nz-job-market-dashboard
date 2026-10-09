@@ -4,7 +4,7 @@ namespace Application.Crawling;
 
 public sealed record StartCrawlRunRequest(string Source, string Url);
 
-public sealed record JobSearchRequest(string Source, string Url);
+public sealed record JobSearchRequest(string Source, string Url, string Parser = "generic");
 
 public sealed record RawJobPageInput(
     string Source,
@@ -15,8 +15,9 @@ public sealed record RawJobPageInput(
     DateTime CrawledAt);
 
 public sealed record SourceFetchResult(
-    RawJobPageInput RawPage,
-    IReadOnlyList<RawJobInput> Jobs);
+    IReadOnlyList<RawJobPageInput> RawPages,
+    IReadOnlyList<RawJobInput> Jobs,
+    bool IsComplete = false);
 
 public sealed record CrawlRunDto(
     Guid Id,

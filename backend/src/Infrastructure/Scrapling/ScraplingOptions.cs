@@ -8,4 +8,6 @@ public sealed class ScraplingOptions
     public bool RobotsTxtObey { get; set; } = true;
     public int TimeoutSeconds { get; set; } = 120;
     public string ProxyUrl { get; set; } = string.Empty;
+    public int MaxPagesPerRun { get; set; } = 50;
+    public double DownloadDelaySeconds { get; set; } = 5;
 }

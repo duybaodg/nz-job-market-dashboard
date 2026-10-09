@@ -1,12 +1,9 @@
-import { BarChart3, BriefcaseBusiness, Building2, GraduationCap, Lightbulb, Map, WalletCards } from 'lucide-react'
+import { Activity, BarChart3, BriefcaseBusiness } from 'lucide-react'
 
 const navItems = [
-  { label: 'Overview', icon: BarChart3, active: true },
-  { label: 'Regions', icon: Map },
-  { label: 'Skills', icon: Lightbulb },
-  { label: 'Salary', icon: WalletCards },
-  { label: 'Companies', icon: Building2 },
-  { label: 'Graduate', icon: GraduationCap },
+  { label: 'Overview', icon: BarChart3, href: '#overview' },
+  { label: 'Market signals', icon: Activity, href: '#market-signals' },
+  { label: 'Latest jobs', icon: BriefcaseBusiness, href: '#jobs' },
 ]
 
 export function AppSidebar() {
@@ -18,14 +15,21 @@ export function AppSidebar() {
         </span>
         <span>NZ Jobs Intel</span>
       </div>
-      <nav>
+      <nav aria-label="Dashboard sections">
         {navItems.map((item) => (
-          <button key={item.label} className={item.active ? 'active' : ''} type="button">
+          <a key={item.label} className={item.href === '#overview' ? 'active' : ''} href={item.href}>
             <item.icon aria-hidden="true" />
             {item.label}
-          </button>
+          </a>
         ))}
       </nav>
+      <div className="sidebar-note">
+        <span className="live-dot" aria-hidden="true" />
+        <div>
+          <strong>Live data</strong>
+          <small>Daily source refresh</small>
+        </div>
+      </div>
     </aside>
   )
 }

@@ -14,3 +14,7 @@ export function formatSalaryRange(min: number | null, max: number | null) {
 
   return formatCurrency(min ?? max)
 }
+
+export function formatDate(value: string | null) {
+  return value ? new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' }).format(new Date(value)) : 'Unknown'
+}

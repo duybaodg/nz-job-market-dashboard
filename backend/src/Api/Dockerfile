@@ -11,5 +11,14 @@ RUN dotnet publish backend/src/Api/Api.csproj -c Release -o /app/publish --no-re
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
+COPY crawler ./crawler
+RUN python3 -m pip install --break-system-packages --no-cache-dir -e ./crawler \
+    && python3 -m pip install --break-system-packages --no-cache-dir msgspec patchright \
+    && python3 -m playwright install chromium \
+    && python3 -m playwright install-deps chromium
+ENV SCRAPLING_FETCHER_TYPE=dynamic
 ENTRYPOINT ["dotnet", "Api.dll"]

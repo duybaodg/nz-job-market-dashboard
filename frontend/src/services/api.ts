@@ -12,12 +12,13 @@ async function getJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function getJobs(params: { region?: string; skill?: string; search?: string }) {
+export function getJobs(params: { region?: string; skill?: string; search?: string; status?: string }) {
   const query = new URLSearchParams()
 
   if (params.region) query.set('region', params.region)
   if (params.skill) query.set('skill', params.skill)
   if (params.search) query.set('search', params.search)
+  if (params.status) query.set('status', params.status)
 
   const suffix = query.toString() ? `?${query.toString()}` : ''
   return getJson<Job[]>(`/api/jobs${suffix}`)

@@ -15,8 +15,8 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? configuration["DATABASE_URL"]
+        var connectionString = configuration["DATABASE_URL"]
+            ?? configuration.GetConnectionString("DefaultConnection")
             ?? "Host=localhost;Port=55432;Database=nz_job_market;Username=postgres;Password=postgres";
 
         services.AddDbContext<ApplicationDbContext>(options =>
@@ -51,6 +51,15 @@ public static class ServiceCollectionExtensions
                 ? timeoutSeconds
                 : 120;
             options.ProxyUrl = configuration["SCRAPLING_PROXY_URL"] ?? string.Empty;
+            options.MaxPagesPerRun = int.TryParse(configuration["CRAWLER_MAX_PAGES_PER_RUN"], out var maxPages)
+                ? Math.Max(maxPages, 1)
+                : 50;
+            options.DownloadDelaySeconds = double.TryParse(configuration["SCRAPLING_DOWNLOAD_DELAY_SECONDS"], System.Globalization.CultureInfo.InvariantCulture, out var delaySeconds)
+                ? Math.Max(delaySeconds, 0)
+                : 5;
+            options.TimeoutSeconds = Math.Max(
+                options.TimeoutSeconds,
+                (int)Math.Ceiling(options.MaxPagesPerRun * options.DownloadDelaySeconds) + 60);
         });
         services.AddScoped<IJobSourceAdapter, ScraplingJobAdapter>();
         services.AddScoped<IJobSourceAdapter, FirecrawlJobAdapter>();

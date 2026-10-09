@@ -11,5 +11,6 @@ TestResults/
 coverage/
 crawler/.venv/
 .codegraph
-/docs
+/docs/*
+!/docs/crawling-spec.md
 AGENTS.md

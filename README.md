@@ -1,12 +1,12 @@
 # NZ Job Market Intelligence Dashboard
 
-Analytics dashboard for New Zealand job-market trends. The first build uses seed data only: no live crawling, AI extraction, API keys, or authentication are enabled yet.
+Analytics dashboard for New Zealand job-market trends using live, normalized job listings. NZ Government Jobs and Halter crawling are active; AI extraction and authentication are not implemented.
 
 ## Stack
 
 - Frontend: React, TypeScript, Vite, Tailwind CSS, Recharts, TanStack Query, TanStack Table, Leaflet-ready structure
 - Backend: .NET 9 Web API, EF Core, PostgreSQL
-- Crawler: planned Python Scrapling worker, with existing Firecrawl plumbing available as optional fallback
+- Crawler: Python Scrapling worker, with Firecrawl plumbing available as optional fallback
 
 ## Local Development
 
@@ -54,7 +54,7 @@ GET /api/admin/crawl-runs/{id}
 
 ## Current Scope
 
-Implemented: monorepo foundation, PostgreSQL schema, EF migration, seed data, API endpoints, frontend overview dashboard, Firecrawl MVP plumbing.
+Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, frontend overview dashboard, scheduled Scrapling crawling, NZ Government Jobs parsing, and optional Firecrawl plumbing.
 
 Current crawler direction: the primary crawler is the Python Scrapling worker. Firecrawl remains disabled until `FIRECRAWL_API_KEY` is set and should be treated as fallback plumbing, not the main crawler path. The manual endpoint accepts:
 
@@ -72,4 +72,8 @@ python3.11 -m venv crawler/.venv
 crawler/.venv/bin/python -m pip install -e crawler
 ```
 
-Deferred: AI extraction, multi-source adapters, authentication, deployment.
+Next: expand to eight approved priority sources following `docs/09-priority-source-expansion-spec.md`. Deferred: AI extraction, authentication, and deployment.
+
+## Scheduled Crawling
+
+See `docs/crawling-spec.md`. Add an approved source to `job_sources` with `method = 'Scrapling'`, `parser = 'generic'`, a listing URL in `base_url`, a completed `terms_checked_at`, and `enabled = true`. The worker processes due sources sequentially using `CRAWLER_DELAY_SECONDS`; Scrapling waits `SCRAPLING_DOWNLOAD_DELAY_SECONDS` between pages and stops at `CRAWLER_MAX_PAGES_PER_RUN`.

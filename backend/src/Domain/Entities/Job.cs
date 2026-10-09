@@ -14,12 +14,16 @@ public sealed class Job
     public string EmploymentType { get; set; } = "Unknown";
     public string Seniority { get; set; } = "Unknown";
     public string WorkMode { get; set; } = "Unknown";
+    public string ExperienceBand { get; set; } = "Unknown";
     public string? Industry { get; set; }
     public string? DescriptionSummary { get; set; }
     public string Url { get; set; } = string.Empty;
     public string ContentHash { get; set; } = string.Empty;
     public DateTime? PostedDate { get; set; }
     public DateTime? ClosingDate { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime? ExpiredAt { get; set; }
+    public int MissingCrawlCount { get; set; }
     public DateTime FirstSeenAt { get; set; }
     public DateTime LastSeenAt { get; set; }
     public DateTime CreatedAt { get; set; }

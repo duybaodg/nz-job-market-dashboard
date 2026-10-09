@@ -101,6 +101,15 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("employment_type");
 
+                    b.Property<DateTime?>("ExpiredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expired_at");
+
+                    b.Property<string>("ExperienceBand")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("experience_band");
+
                     b.Property<DateTime>("FirstSeenAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("first_seen_at");
@@ -109,6 +118,10 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("industry");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
                     b.Property<DateTime>("LastSeenAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_seen_at");
@@ -116,6 +129,10 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<string>("Location")
                         .HasColumnType("text")
                         .HasColumnName("location");
+
+                    b.Property<int>("MissingCrawlCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("missing_crawl_count");
 
                     b.Property<DateTime?>("PostedDate")
                         .HasColumnType("timestamp with time zone")
@@ -176,152 +193,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasIndex("Region");
 
                     b.ToTable("jobs", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("11111111-1111-1111-1111-111111111111"),
-                            Company = "Koru Digital",
-                            ContentHash = "hash-1",
-                            CreatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DescriptionSummary = "React and .NET role for a junior developer.",
-                            EmploymentType = "Full-time",
-                            FirstSeenAt = new DateTime(2026, 7, 4, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Industry = "Technology",
-                            LastSeenAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Location = "Wellington",
-                            PostedDate = new DateTime(2026, 7, 4, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Region = "Wellington",
-                            SalaryMax = 78000m,
-                            SalaryMin = 65000m,
-                            Seniority = "Junior",
-                            Source = "Seed",
-                            SourceJobId = "seed-1",
-                            Title = "Junior Software Developer",
-                            UpdatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Url = "https://example.com/jobs/junior-software-developer",
-                            WorkMode = "Hybrid"
-                        },
-                        new
-                        {
-                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
-                            Company = "Harbour Systems",
-                            ContentHash = "hash-2",
-                            CreatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DescriptionSummary = "Senior backend role building APIs and data services.",
-                            EmploymentType = "Full-time",
-                            FirstSeenAt = new DateTime(2026, 7, 2, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Industry = "Technology",
-                            LastSeenAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Location = "Auckland",
-                            PostedDate = new DateTime(2026, 7, 2, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Region = "Auckland",
-                            SalaryMax = 150000m,
-                            SalaryMin = 125000m,
-                            Seniority = "Senior",
-                            Source = "Seed",
-                            SourceJobId = "seed-2",
-                            Title = "Senior .NET Engineer",
-                            UpdatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Url = "https://example.com/jobs/senior-dotnet-engineer",
-                            WorkMode = "Hybrid"
-                        },
-                        new
-                        {
-                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
-                            Company = "Southern Insights",
-                            ContentHash = "hash-3",
-                            CreatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DescriptionSummary = "Analytics role focused on SQL dashboards and reporting.",
-                            EmploymentType = "Full-time",
-                            FirstSeenAt = new DateTime(2026, 6, 30, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Industry = "Analytics",
-                            LastSeenAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Location = "Christchurch",
-                            PostedDate = new DateTime(2026, 6, 30, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Region = "Canterbury",
-                            SalaryMax = 95000m,
-                            SalaryMin = 80000m,
-                            Seniority = "Intermediate",
-                            Source = "Seed",
-                            SourceJobId = "seed-3",
-                            Title = "Data Analyst",
-                            UpdatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Url = "https://example.com/jobs/data-analyst",
-                            WorkMode = "On-site"
-                        },
-                        new
-                        {
-                            Id = new Guid("44444444-4444-4444-4444-444444444444"),
-                            Company = "Cloud Kiwi",
-                            ContentHash = "hash-4",
-                            CreatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DescriptionSummary = "Graduate cloud role using Azure and infrastructure automation.",
-                            EmploymentType = "Full-time",
-                            FirstSeenAt = new DateTime(2026, 7, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Industry = "Technology",
-                            LastSeenAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Location = "Hamilton",
-                            PostedDate = new DateTime(2026, 7, 3, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Region = "Waikato",
-                            SalaryMax = 72000m,
-                            SalaryMin = 62000m,
-                            Seniority = "Graduate",
-                            Source = "Seed",
-                            SourceJobId = "seed-4",
-                            Title = "Graduate Cloud Engineer",
-                            UpdatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Url = "https://example.com/jobs/graduate-cloud-engineer",
-                            WorkMode = "Remote"
-                        },
-                        new
-                        {
-                            Id = new Guid("55555555-5555-5555-5555-555555555555"),
-                            Company = "Tui Labs",
-                            ContentHash = "hash-5",
-                            CreatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DescriptionSummary = "React and TypeScript contract role.",
-                            EmploymentType = "Contract",
-                            FirstSeenAt = new DateTime(2026, 6, 27, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Industry = "Technology",
-                            LastSeenAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Location = "Auckland",
-                            PostedDate = new DateTime(2026, 6, 27, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Region = "Auckland",
-                            SalaryMax = 115000m,
-                            SalaryMin = 90000m,
-                            Seniority = "Intermediate",
-                            Source = "Seed",
-                            SourceJobId = "seed-5",
-                            Title = "Frontend Developer",
-                            UpdatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Url = "https://example.com/jobs/frontend-developer",
-                            WorkMode = "Remote"
-                        },
-                        new
-                        {
-                            Id = new Guid("66666666-6666-6666-6666-666666666666"),
-                            Company = "Health Data NZ",
-                            ContentHash = "hash-6",
-                            CreatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DescriptionSummary = "Business intelligence role using SQL and Power BI.",
-                            EmploymentType = "Full-time",
-                            FirstSeenAt = new DateTime(2026, 7, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Industry = "Healthcare",
-                            LastSeenAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Location = "Dunedin",
-                            PostedDate = new DateTime(2026, 7, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Region = "Otago",
-                            SalaryMax = 105000m,
-                            SalaryMin = 85000m,
-                            Seniority = "Intermediate",
-                            Source = "Seed",
-                            SourceJobId = "seed-6",
-                            Title = "BI Developer",
-                            UpdatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Url = "https://example.com/jobs/bi-developer",
-                            WorkMode = "Hybrid"
-                        });
                 });
 
             modelBuilder.Entity("Domain.Entities.JobSkill", b =>
@@ -355,120 +226,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasIndex("SkillName");
 
                     b.ToTable("job_skills", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0001-0000-0000-000000000001"),
-                            Confidence = 1m,
-                            JobId = new Guid("11111111-1111-1111-1111-111111111111"),
-                            SkillName = "React",
-                            SkillType = "Framework"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0002-0000-0000-000000000002"),
-                            Confidence = 1m,
-                            JobId = new Guid("11111111-1111-1111-1111-111111111111"),
-                            SkillName = ".NET",
-                            SkillType = "Framework"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0003-0000-0000-000000000003"),
-                            Confidence = 1m,
-                            JobId = new Guid("11111111-1111-1111-1111-111111111111"),
-                            SkillName = "TypeScript",
-                            SkillType = "Language"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0004-0000-0000-000000000004"),
-                            Confidence = 1m,
-                            JobId = new Guid("22222222-2222-2222-2222-222222222222"),
-                            SkillName = ".NET",
-                            SkillType = "Framework"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0005-0000-0000-000000000005"),
-                            Confidence = 1m,
-                            JobId = new Guid("22222222-2222-2222-2222-222222222222"),
-                            SkillName = "C#",
-                            SkillType = "Language"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0006-0000-0000-000000000006"),
-                            Confidence = 1m,
-                            JobId = new Guid("22222222-2222-2222-2222-222222222222"),
-                            SkillName = "PostgreSQL",
-                            SkillType = "Database"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0007-0000-0000-000000000007"),
-                            Confidence = 1m,
-                            JobId = new Guid("33333333-3333-3333-3333-333333333333"),
-                            SkillName = "SQL",
-                            SkillType = "Database"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0008-0000-0000-000000000008"),
-                            Confidence = 1m,
-                            JobId = new Guid("33333333-3333-3333-3333-333333333333"),
-                            SkillName = "Power BI",
-                            SkillType = "Tool"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0009-0000-0000-000000000009"),
-                            Confidence = 1m,
-                            JobId = new Guid("44444444-4444-4444-4444-444444444444"),
-                            SkillName = "Azure",
-                            SkillType = "Cloud"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0010-0000-0000-000000000010"),
-                            Confidence = 1m,
-                            JobId = new Guid("44444444-4444-4444-4444-444444444444"),
-                            SkillName = "Terraform",
-                            SkillType = "Tool"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0011-0000-0000-000000000011"),
-                            Confidence = 1m,
-                            JobId = new Guid("55555555-5555-5555-5555-555555555555"),
-                            SkillName = "React",
-                            SkillType = "Framework"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0012-0000-0000-000000000012"),
-                            Confidence = 1m,
-                            JobId = new Guid("55555555-5555-5555-5555-555555555555"),
-                            SkillName = "TypeScript",
-                            SkillType = "Language"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0013-0000-0000-000000000013"),
-                            Confidence = 1m,
-                            JobId = new Guid("66666666-6666-6666-6666-666666666666"),
-                            SkillName = "SQL",
-                            SkillType = "Database"
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaaaaaa-0014-0000-0000-000000000014"),
-                            Confidence = 1m,
-                            JobId = new Guid("66666666-6666-6666-6666-666666666666"),
-                            SkillName = "Power BI",
-                            SkillType = "Tool"
-                        });
                 });
 
             modelBuilder.Entity("Domain.Entities.JobSource", b =>
@@ -494,6 +251,10 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("enabled");
 
+                    b.Property<DateTime?>("LastCrawledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_crawled_at");
+
                     b.Property<string>("Method")
                         .IsRequired()
                         .HasColumnType("text")
@@ -504,26 +265,25 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<string>("Parser")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("parser");
+
+                    b.Property<DateTime?>("TermsCheckedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("terms_checked_at");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
 
-                    b.ToTable("job_sources", (string)null);
+                    b.HasIndex("Name")
+                        .IsUnique();
 
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("bbbbbbbb-0001-0000-0000-000000000001"),
-                            BaseUrl = "https://example.com/jobs",
-                            CrawlFrequencyMinutes = 1440,
-                            CreatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Enabled = true,
-                            Method = "Seed",
-                            Name = "Seed",
-                            UpdatedAt = new DateTime(2026, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc)
-                        });
+                    b.ToTable("job_sources", (string)null);
                 });
 
             modelBuilder.Entity("Domain.Entities.RawJobPage", b =>

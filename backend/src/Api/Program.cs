@@ -42,10 +42,11 @@ app.MapGet("/api/jobs", async (
         string? region,
         string? skill,
         string? search,
+        string? status,
         IJobService jobService,
         CancellationToken cancellationToken) =>
     {
-        var jobs = await jobService.GetJobsAsync(new JobListQuery(region, skill, search), cancellationToken);
+        var jobs = await jobService.GetJobsAsync(new JobListQuery(region, skill, search, status), cancellationToken);
         return Results.Ok(jobs);
     })
     .WithName("GetJobs");

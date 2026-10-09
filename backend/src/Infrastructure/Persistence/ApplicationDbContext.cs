@@ -20,7 +20,6 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         ConfigureRawJobPages(modelBuilder);
         ConfigureCrawlRuns(modelBuilder);
         ConfigureJobSources(modelBuilder);
-        SeedData(modelBuilder);
     }
 
     private static void ConfigureJobs(ModelBuilder modelBuilder)
@@ -41,12 +40,16 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(job => job.EmploymentType).HasColumnName("employment_type");
             entity.Property(job => job.Seniority).HasColumnName("seniority");
             entity.Property(job => job.WorkMode).HasColumnName("work_mode");
+            entity.Property(job => job.ExperienceBand).HasColumnName("experience_band");
             entity.Property(job => job.Industry).HasColumnName("industry");
             entity.Property(job => job.DescriptionSummary).HasColumnName("description_summary");
             entity.Property(job => job.Url).HasColumnName("url").IsRequired();
             entity.Property(job => job.ContentHash).HasColumnName("content_hash").IsRequired();
             entity.Property(job => job.PostedDate).HasColumnName("posted_date");
             entity.Property(job => job.ClosingDate).HasColumnName("closing_date");
+            entity.Property(job => job.IsActive).HasColumnName("is_active");
+            entity.Property(job => job.ExpiredAt).HasColumnName("expired_at");
+            entity.Property(job => job.MissingCrawlCount).HasColumnName("missing_crawl_count");
             entity.Property(job => job.FirstSeenAt).HasColumnName("first_seen_at");
             entity.Property(job => job.LastSeenAt).HasColumnName("last_seen_at");
             entity.Property(job => job.CreatedAt).HasColumnName("created_at");
@@ -121,117 +124,15 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(source => source.Name).HasColumnName("name").IsRequired();
             entity.Property(source => source.BaseUrl).HasColumnName("base_url");
             entity.Property(source => source.Method).HasColumnName("method").IsRequired();
+            entity.Property(source => source.Parser).HasColumnName("parser").IsRequired();
             entity.Property(source => source.Enabled).HasColumnName("enabled");
             entity.Property(source => source.CrawlFrequencyMinutes).HasColumnName("crawl_frequency_minutes");
+            entity.Property(source => source.LastCrawledAt).HasColumnName("last_crawled_at");
+            entity.Property(source => source.TermsCheckedAt).HasColumnName("terms_checked_at");
             entity.Property(source => source.CreatedAt).HasColumnName("created_at");
             entity.Property(source => source.UpdatedAt).HasColumnName("updated_at");
+            entity.HasIndex(source => source.Name).IsUnique();
         });
     }
 
-    private static void SeedData(ModelBuilder modelBuilder)
-    {
-        var now = new DateTime(2026, 7, 5, 0, 0, 0, DateTimeKind.Utc);
-
-        var job1 = Guid.Parse("11111111-1111-1111-1111-111111111111");
-        var job2 = Guid.Parse("22222222-2222-2222-2222-222222222222");
-        var job3 = Guid.Parse("33333333-3333-3333-3333-333333333333");
-        var job4 = Guid.Parse("44444444-4444-4444-4444-444444444444");
-        var job5 = Guid.Parse("55555555-5555-5555-5555-555555555555");
-        var job6 = Guid.Parse("66666666-6666-6666-6666-666666666666");
-
-        modelBuilder.Entity<Job>().HasData(
-            CreateJob(job1, "Seed", "seed-1", "Junior Software Developer", "Koru Digital", "Wellington", "Wellington", 65000, 78000, "Full-time", "Junior", "Hybrid", "Technology", "React and .NET role for a junior developer.", "https://example.com/jobs/junior-software-developer", "hash-1", now.AddDays(-1), now),
-            CreateJob(job2, "Seed", "seed-2", "Senior .NET Engineer", "Harbour Systems", "Auckland", "Auckland", 125000, 150000, "Full-time", "Senior", "Hybrid", "Technology", "Senior backend role building APIs and data services.", "https://example.com/jobs/senior-dotnet-engineer", "hash-2", now.AddDays(-3), now),
-            CreateJob(job3, "Seed", "seed-3", "Data Analyst", "Southern Insights", "Christchurch", "Canterbury", 80000, 95000, "Full-time", "Intermediate", "On-site", "Analytics", "Analytics role focused on SQL dashboards and reporting.", "https://example.com/jobs/data-analyst", "hash-3", now.AddDays(-5), now),
-            CreateJob(job4, "Seed", "seed-4", "Graduate Cloud Engineer", "Cloud Kiwi", "Hamilton", "Waikato", 62000, 72000, "Full-time", "Graduate", "Remote", "Technology", "Graduate cloud role using Azure and infrastructure automation.", "https://example.com/jobs/graduate-cloud-engineer", "hash-4", now.AddDays(-2), now),
-            CreateJob(job5, "Seed", "seed-5", "Frontend Developer", "Tui Labs", "Auckland", "Auckland", 90000, 115000, "Contract", "Intermediate", "Remote", "Technology", "React and TypeScript contract role.", "https://example.com/jobs/frontend-developer", "hash-5", now.AddDays(-8), now),
-            CreateJob(job6, "Seed", "seed-6", "BI Developer", "Health Data NZ", "Dunedin", "Otago", 85000, 105000, "Full-time", "Intermediate", "Hybrid", "Healthcare", "Business intelligence role using SQL and Power BI.", "https://example.com/jobs/bi-developer", "hash-6", now.AddDays(-4), now));
-
-        modelBuilder.Entity<JobSkill>().HasData(
-            CreateSkill("aaaaaaaa-0001-0000-0000-000000000001", job1, "React", "Framework"),
-            CreateSkill("aaaaaaaa-0002-0000-0000-000000000002", job1, ".NET", "Framework"),
-            CreateSkill("aaaaaaaa-0003-0000-0000-000000000003", job1, "TypeScript", "Language"),
-            CreateSkill("aaaaaaaa-0004-0000-0000-000000000004", job2, ".NET", "Framework"),
-            CreateSkill("aaaaaaaa-0005-0000-0000-000000000005", job2, "C#", "Language"),
-            CreateSkill("aaaaaaaa-0006-0000-0000-000000000006", job2, "PostgreSQL", "Database"),
-            CreateSkill("aaaaaaaa-0007-0000-0000-000000000007", job3, "SQL", "Database"),
-            CreateSkill("aaaaaaaa-0008-0000-0000-000000000008", job3, "Power BI", "Tool"),
-            CreateSkill("aaaaaaaa-0009-0000-0000-000000000009", job4, "Azure", "Cloud"),
-            CreateSkill("aaaaaaaa-0010-0000-0000-000000000010", job4, "Terraform", "Tool"),
-            CreateSkill("aaaaaaaa-0011-0000-0000-000000000011", job5, "React", "Framework"),
-            CreateSkill("aaaaaaaa-0012-0000-0000-000000000012", job5, "TypeScript", "Language"),
-            CreateSkill("aaaaaaaa-0013-0000-0000-000000000013", job6, "SQL", "Database"),
-            CreateSkill("aaaaaaaa-0014-0000-0000-000000000014", job6, "Power BI", "Tool"));
-
-        modelBuilder.Entity<JobSource>().HasData(
-            new JobSource
-            {
-                Id = Guid.Parse("bbbbbbbb-0001-0000-0000-000000000001"),
-                Name = "Seed",
-                BaseUrl = "https://example.com/jobs",
-                Method = "Seed",
-                Enabled = true,
-                CrawlFrequencyMinutes = 1440,
-                CreatedAt = now,
-                UpdatedAt = now
-            });
-    }
-
-    private static Job CreateJob(
-        Guid id,
-        string source,
-        string sourceJobId,
-        string title,
-        string company,
-        string location,
-        string region,
-        decimal salaryMin,
-        decimal salaryMax,
-        string employmentType,
-        string seniority,
-        string workMode,
-        string industry,
-        string summary,
-        string url,
-        string contentHash,
-        DateTime postedDate,
-        DateTime now)
-    {
-        return new Job
-        {
-            Id = id,
-            Source = source,
-            SourceJobId = sourceJobId,
-            Title = title,
-            Company = company,
-            Location = location,
-            Region = region,
-            SalaryMin = salaryMin,
-            SalaryMax = salaryMax,
-            EmploymentType = employmentType,
-            Seniority = seniority,
-            WorkMode = workMode,
-            Industry = industry,
-            DescriptionSummary = summary,
-            Url = url,
-            ContentHash = contentHash,
-            PostedDate = postedDate,
-            FirstSeenAt = postedDate,
-            LastSeenAt = now,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-    }
-
-    private static JobSkill CreateSkill(string id, Guid jobId, string skillName, string skillType)
-    {
-        return new JobSkill
-        {
-            Id = Guid.Parse(id),
-            JobId = jobId,
-            SkillName = skillName,
-            SkillType = skillType,
-            Confidence = 1
-        };
-    }
 }

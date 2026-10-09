@@ -15,7 +15,7 @@ public sealed class ScraplingJobAdapter(IOptions<ScraplingOptions> options) : IJ
 
     private readonly ScraplingOptions options = options.Value;
 
-    public string SourceName => "Scrapling";
+    public string Method => "Scrapling";
 
     public async Task<SourceFetchResult> FetchJobsAsync(
         JobSearchRequest request,
@@ -40,11 +40,17 @@ public sealed class ScraplingJobAdapter(IOptions<ScraplingOptions> options) : IJ
 
         process.StartInfo.ArgumentList.Add(scriptPath);
         process.StartInfo.ArgumentList.Add("--source");
-        process.StartInfo.ArgumentList.Add(SourceName);
+        process.StartInfo.ArgumentList.Add(request.Source);
         process.StartInfo.ArgumentList.Add("--url");
         process.StartInfo.ArgumentList.Add(request.Url);
+        process.StartInfo.ArgumentList.Add("--parser");
+        process.StartInfo.ArgumentList.Add(request.Parser);
         process.StartInfo.ArgumentList.Add("--fetcher-type");
         process.StartInfo.ArgumentList.Add(options.FetcherType);
+        process.StartInfo.ArgumentList.Add("--max-pages");
+        process.StartInfo.ArgumentList.Add(options.MaxPagesPerRun.ToString());
+        process.StartInfo.ArgumentList.Add("--delay-seconds");
+        process.StartInfo.ArgumentList.Add(options.DownloadDelaySeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         if (options.RobotsTxtObey)
         {

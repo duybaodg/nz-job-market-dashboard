@@ -4,7 +4,6 @@ import {
   BriefcaseBusiness,
   Building2,
   CalendarPlus,
-  Database,
   Lightbulb,
   MapPin,
   Percent,
@@ -25,7 +24,7 @@ import type { Job } from './types/api'
 
 const emptyFilters: JobFilters = {
   timeRange: '',
-  region: '',
+  location: '',
   skill: '',
   company: '',
   industry: '',
@@ -34,6 +33,9 @@ const emptyFilters: JobFilters = {
   workMode: '',
   employmentType: '',
   salaryBand: '',
+  experienceBand: '',
+  programmingLanguage: '',
+  status: 'active',
   search: '',
 }
 
@@ -84,12 +86,12 @@ function median(values: number[]) {
 
 function App() {
   const [filters, setFilters] = useState<JobFilters>(emptyFilters)
-  const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({}) })
+  const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all' }) })
   const allJobs = jobsQuery.data ?? emptyJobs
 
   const options = useMemo(
     () => ({
-      regions: unique(allJobs.map((job) => job.region)),
+      locations: unique(allJobs.map((job) => job.location)),
       skills: unique(allJobs.flatMap((job) => job.skills)),
       companies: unique(allJobs.map((job) => job.company)),
       industries: unique(allJobs.map((job) => job.industry)),
@@ -97,6 +99,7 @@ function App() {
       seniorities: unique(allJobs.map((job) => job.seniority)),
       workModes: unique(allJobs.map((job) => job.workMode)),
       employmentTypes: unique(allJobs.map((job) => job.employmentType)),
+      programmingLanguages: unique(allJobs.flatMap((job) => job.programmingLanguages)),
     }),
     [allJobs],
   )
@@ -112,7 +115,7 @@ function App() {
 
       return (
         (!earliestPostedDate || (postedTime != null && postedTime >= earliestPostedDate)) &&
-        (!filters.region || job.region === filters.region) &&
+        (!filters.location || job.location === filters.location) &&
         (!filters.skill || job.skills.includes(filters.skill)) &&
         (!filters.company || job.company === filters.company) &&
         (!filters.industry || job.industry === filters.industry) &&
@@ -121,9 +124,13 @@ function App() {
         (!filters.workMode || job.workMode === filters.workMode) &&
         (!filters.employmentType || job.employmentType === filters.employmentType) &&
         (!filters.salaryBand || inSalaryBand(job, filters.salaryBand)) &&
+        (!filters.experienceBand || job.experienceBand === filters.experienceBand) &&
+        (!filters.programmingLanguage || job.programmingLanguages.includes(filters.programmingLanguage)) &&
+        (filters.status === 'all' || job.isActive === (filters.status === 'active')) &&
         (!search ||
           job.title.toLowerCase().includes(search) ||
           job.company?.toLowerCase().includes(search) ||
+          job.descriptionSummary?.toLowerCase().includes(search) ||
           job.skills.some((skill) => skill.toLowerCase().includes(search)))
       )
     })
@@ -136,6 +143,10 @@ function App() {
       (skill) => skill,
     )[0]?.[0]
     const topRegion = countBy(jobs, (job) => job.region)[0]?.[0]
+    const topProgrammingLanguage = countBy(
+      jobs.flatMap((job) => job.programmingLanguages),
+      (language) => language,
+    )[0]?.[0]
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const weekStart = Date.now() - 7 * 24 * 60 * 60 * 1000
@@ -144,11 +155,12 @@ function App() {
       averageSalary:
         salaryValues.length === 0 ? null : salaryValues.reduce((total, value) => total + value, 0) / salaryValues.length,
       medianSalary: median(salaryValues),
-      newToday: jobs.filter((job) => job.postedDate && new Date(job.postedDate).getTime() >= today.getTime()).length,
-      newThisWeek: jobs.filter((job) => job.postedDate && new Date(job.postedDate).getTime() >= weekStart).length,
+      newToday: jobs.filter((job) => new Date(job.firstSeenAt).getTime() >= today.getTime()).length,
+      newThisWeek: jobs.filter((job) => new Date(job.firstSeenAt).getTime() >= weekStart).length,
       salaryCoverage: jobs.length === 0 ? 0 : Math.round((salaryValues.length / jobs.length) * 100),
       topRegion: topRegion ?? '-',
       topSkill: topSkill ?? '-',
+      topProgrammingLanguage: topProgrammingLanguage ?? '-',
       sourceCount: countBy(jobs, (job) => job.source).length,
     }
   }, [jobs])
@@ -163,7 +175,6 @@ function App() {
         .slice(0, 10)
         .map(([skillName, jobCount]) => ({ skillName, jobCount })),
       topCompanies: countBy(jobs, (job) => job.company).slice(0, 6),
-      sources: countBy(jobs, (job) => job.source),
     }),
     [jobs],
   )
@@ -172,10 +183,15 @@ function App() {
   const hasError = jobsQuery.isError
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" id="overview">
       <AppSidebar />
       <main>
-        <PageHeader />
+        <PageHeader
+          jobCount={allJobs.filter((job) => job.isActive).length}
+          sourceCount={unique(allJobs.map((job) => job.source)).length}
+          isRefreshing={jobsQuery.isFetching}
+          onRefresh={() => void jobsQuery.refetch()}
+        />
 
         {hasError ? (
           <section className="empty-state">
@@ -187,54 +203,36 @@ function App() {
           {...options}
           filters={filters}
           onFilterChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
+          onReset={() => setFilters(emptyFilters)}
         />
 
         <section className="stats-grid" aria-busy={isLoading}>
-          <StatCard icon={BriefcaseBusiness} label="Active jobs" value={jobs.length} detail="Filtered roles" />
-          <StatCard icon={CalendarPlus} label="New today" value={summary.newToday} detail="Posted date" />
-          <StatCard icon={CalendarPlus} label="New this week" value={summary.newThisWeek} detail="Posted date" />
-          <StatCard icon={WalletCards} label="Average salary" value={formatCurrency(summary.averageSalary)} detail="Salary midpoint" />
+          <StatCard icon={BriefcaseBusiness} label={filters.status === 'active' ? 'Active jobs' : 'Matching jobs'} value={jobs.length} detail="Filtered roles" />
+          <StatCard icon={CalendarPlus} label="New this week" value={summary.newThisWeek} detail="Fresh opportunities" />
           <StatCard icon={WalletCards} label="Median salary" value={formatCurrency(summary.medianSalary)} detail="Salary midpoint" />
           <StatCard icon={Percent} label="Salary coverage" value={`${summary.salaryCoverage}%`} detail="Jobs with salary" />
-          <StatCard icon={MapPin} label="Top region" value={summary.topRegion} detail="By job count" />
-          <StatCard icon={Lightbulb} label="Top skill" value={summary.topSkill} detail="By job count" />
         </section>
 
-        <section className="chart-grid">
-          <ChartCard title="Jobs by region" detail="Filtered roles by market">
+        <section className="market-pulse" aria-label="Market pulse">
+          <div><span>Top region</span><strong><MapPin aria-hidden="true" />{summary.topRegion}</strong></div>
+          <div><span>Top language</span><strong><Lightbulb aria-hidden="true" />{summary.topProgrammingLanguage}</strong></div>
+          <div><span>Average salary</span><strong><WalletCards aria-hidden="true" />{formatCurrency(summary.averageSalary)}</strong></div>
+          <div><span>New today</span><strong><CalendarPlus aria-hidden="true" />{summary.newToday}</strong></div>
+        </section>
+
+        <section className="chart-grid" id="market-signals">
+          <ChartCard title="Jobs by region" detail="Share of filtered roles">
             <JobsByRegionChart data={chartData.jobsByRegion} />
           </ChartCard>
           <ChartCard title="Top skills" detail="Demand across filtered listings">
             <TopSkillsChart data={chartData.topSkills} />
           </ChartCard>
-          <ChartCard title="Salary midpoint by role" detail="Filtered role salary signals">
+          <ChartCard title="Salary midpoint by role" detail="Median for the 10 most represented roles">
             <SalaryRangeChart jobs={jobs} />
           </ChartCard>
         </section>
 
         <section className="insight-grid">
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Data sources</h2>
-                <p>Boards and adapters represented in this view</p>
-              </div>
-              <Database aria-hidden="true" />
-            </div>
-            <div className="rank-list">
-              {chartData.sources.length === 0 ? (
-                <span className="muted">No sources in this view</span>
-              ) : (
-                chartData.sources.map(([source, count]) => (
-                  <div key={source} className="rank-row">
-                    <span>{source}</span>
-                    <strong>{count}</strong>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
           <section className="panel">
             <div className="panel-header">
               <div>
@@ -258,7 +256,7 @@ function App() {
           </section>
         </section>
 
-        <section className="panel">
+        <section className="panel jobs-panel" id="jobs">
           <div className="panel-header">
             <h2>Recent jobs</h2>
             <span>{jobs.length} roles</span>

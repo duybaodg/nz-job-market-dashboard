@@ -2,7 +2,7 @@ namespace Application.Crawling;
 
 public interface IJobSourceAdapter
 {
-    string SourceName { get; }
+    string Method { get; }
 
     Task<SourceFetchResult> FetchJobsAsync(
         JobSearchRequest request,

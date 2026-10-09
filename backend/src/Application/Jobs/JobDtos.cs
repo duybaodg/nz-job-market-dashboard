@@ -12,10 +12,17 @@ public sealed record JobDto(
     string EmploymentType,
     string Seniority,
     string WorkMode,
+    string ExperienceBand,
     string? Industry,
     string? DescriptionSummary,
     string Url,
     DateTime? PostedDate,
-    IReadOnlyList<string> Skills);
+    DateTime? ClosingDate,
+    DateTime FirstSeenAt,
+    DateTime LastSeenAt,
+    bool IsActive,
+    DateTime? ExpiredAt,
+    IReadOnlyList<string> Skills,
+    IReadOnlyList<string> ProgrammingLanguages);
 
-public sealed record JobListQuery(string? Region, string? Skill, string? Search);
+public sealed record JobListQuery(string? Region, string? Skill, string? Search, string? Status);

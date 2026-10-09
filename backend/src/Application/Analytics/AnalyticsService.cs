@@ -20,7 +20,7 @@ public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyti
 
         var salaries = await dbContext.Jobs
             .AsNoTracking()
-            .Where(job => job.SalaryMin.HasValue || job.SalaryMax.HasValue)
+            .Where(job => job.IsActive && (job.SalaryMin.HasValue || job.SalaryMax.HasValue))
             .Select(job => new { job.SalaryMin, job.SalaryMax })
             .ToListAsync(cancellationToken);
 
@@ -30,19 +30,20 @@ public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyti
             .ToList();
 
         return new OverviewDto(
-            await dbContext.Jobs.CountAsync(cancellationToken),
-            await dbContext.Jobs.CountAsync(job => job.FirstSeenAt >= today, cancellationToken),
-            await dbContext.Jobs.CountAsync(job => job.FirstSeenAt >= weekStart, cancellationToken),
-            await dbContext.Jobs.Where(job => job.Company != null).Select(job => job.Company).Distinct().CountAsync(cancellationToken),
+            await dbContext.Jobs.CountAsync(job => job.IsActive, cancellationToken),
+            await dbContext.Jobs.CountAsync(job => job.IsActive && job.FirstSeenAt >= today, cancellationToken),
+            await dbContext.Jobs.CountAsync(job => job.IsActive && job.FirstSeenAt >= weekStart, cancellationToken),
+            await dbContext.Jobs.Where(job => job.IsActive && job.Company != null).Select(job => job.Company).Distinct().CountAsync(cancellationToken),
             salaryMidpoints.Count == 0 ? null : salaryMidpoints.Average(),
             GetMedian(salaryMidpoints),
             await dbContext.Jobs
-                .Where(job => job.Region != null)
+                .Where(job => job.IsActive && job.Region != null)
                 .GroupBy(job => job.Region!)
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
                 .FirstOrDefaultAsync(cancellationToken),
             await dbContext.JobSkills
+                .Where(skill => skill.Job.IsActive)
                 .GroupBy(skill => skill.SkillName)
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
@@ -53,6 +54,7 @@ public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyti
     {
         return await dbContext.JobSkills
             .AsNoTracking()
+            .Where(skill => skill.Job.IsActive)
             .GroupBy(skill => skill.SkillName)
             .OrderByDescending(group => group.Count())
             .ThenBy(group => group.Key)
@@ -65,7 +67,7 @@ public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyti
     {
         return await dbContext.Jobs
             .AsNoTracking()
-            .Where(job => job.Region != null)
+            .Where(job => job.IsActive && job.Region != null)
             .GroupBy(job => job.Region!)
             .OrderByDescending(group => group.Count())
             .Select(group => new JobsByRegionDto(group.Key, group.Count()))

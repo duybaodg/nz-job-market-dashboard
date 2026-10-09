@@ -13,13 +13,17 @@ Manual worker run:
 
 ```bash
 crawler/.venv/bin/python crawler/adapters/scrapling/scrapling_worker.py \
-  --source Scrapling \
+  --source "Example Jobs" \
   --url https://example.com/jobs \
   --fetcher-type fetcher \
+  --max-pages 20 \
+  --delay-seconds 5 \
   --robots-txt-obey
 ```
 
-The worker writes JSON containing `rawPage` and `jobs` to stdout. The .NET `ScraplingJobAdapter` invokes this script for `POST /api/admin/crawl-runs` requests with `source` set to `Scrapling`.
+The worker follows listing pagination and job-detail links sequentially. It writes JSON containing `rawPages` and normalized `jobs` to stdout. The .NET adapter retains the configured website name as the job source.
+
+Available parsers are `generic`, `govt-nz`, `absolute-it`, `talent-army`, and `halter-ashby`. Halter uses Ashby's public JSON postings API and filters to New Zealand technology roles. Absolute IT and Talent Army remain disabled pending source-owner permission.
 
 Planned adapters:
 
