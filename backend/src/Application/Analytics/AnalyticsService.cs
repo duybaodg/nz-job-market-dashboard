@@ -8,6 +8,13 @@ public interface IAnalyticsService
     Task<OverviewDto> GetOverviewAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<SkillDemandDto>> GetTopSkillsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<JobsByRegionDto>> GetJobsByRegionAsync(CancellationToken cancellationToken);
+    Task<FreshnessDto> GetFreshnessAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>The freshness windows surfaced by the dashboard, in days.</summary>
+public static class FreshnessWindows
+{
+    public static readonly int[] All = [2, 7, 15];
 }
 
 public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyticsService
@@ -72,6 +79,25 @@ public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyti
             .OrderByDescending(group => group.Count())
             .Select(group => new JobsByRegionDto(group.Key, group.Count()))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<FreshnessDto> GetFreshnessAsync(CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var windows = new List<FreshnessWindowDto>();
+
+        foreach (var days in FreshnessWindows.All)
+        {
+            var cutoff = now.AddDays(-days);
+            var count = await dbContext.Jobs.CountAsync(
+                job => job.IsActive && (job.PostedDate ?? job.FirstSeenAt) >= cutoff,
+                cancellationToken);
+            windows.Add(new FreshnessWindowDto(days, count));
+        }
+
+        return new FreshnessDto(
+            await dbContext.Jobs.CountAsync(job => job.IsActive, cancellationToken),
+            windows);
     }
 
     private static decimal? GetMedian(IReadOnlyList<decimal> values)

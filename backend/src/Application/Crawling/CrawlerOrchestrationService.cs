@@ -13,15 +13,18 @@ public interface ICrawlerOrchestrationService
     Task<CrawlRunResultDto> StartCrawlRunAsync(StartCrawlRunRequest request, CancellationToken cancellationToken);
     Task<IReadOnlyList<CrawlRunDto>> GetCrawlRunsAsync(CancellationToken cancellationToken);
     Task<CrawlRunDto?> GetCrawlRunAsync(Guid id, CancellationToken cancellationToken);
+    Task<IReadOnlyList<JobSourceDto>> GetSourcesAsync(CancellationToken cancellationToken);
 }
 
 public sealed class CrawlerOrchestrationService(
     IApplicationDbContext dbContext,
     IEnumerable<IJobSourceAdapter> adapters,
     IDeduplicationService deduplicationService,
-    INormalisationService normalisationService)
+    INormalisationService normalisationService,
+    CrawlerLifecycleOptions? lifecycleOptions = null)
     : ICrawlerOrchestrationService
 {
+    private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
     private static readonly Regex SalaryRegex = new(@"\$?\s*(\d{2,3})(?:,\d{3}|k)?\s*(?:-|to|–)\s*\$?\s*(\d{2,3})(?:,\d{3}|k)?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex ExperienceRegex = new(
         @"(?:(?:at least|minimum(?: of)?|over|more than)\s+)?(\d{1,2})(?:\s*\+)?(?:\s*(?:-|to|–)\s*\d{1,2})?\s+years?"
@@ -157,6 +160,24 @@ public sealed class CrawlerOrchestrationService(
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<JobSourceDto>> GetSourcesAsync(CancellationToken cancellationToken)
+    {
+        return await dbContext.JobSources
+            .AsNoTracking()
+            .OrderBy(source => source.Name)
+            .Select(source => new JobSourceDto(
+                source.Id,
+                source.Name,
+                source.BaseUrl,
+                source.Method,
+                source.Parser,
+                source.Enabled,
+                source.CrawlFrequencyMinutes,
+                source.LastCrawledAt,
+                source.TermsCheckedAt))
+            .ToListAsync(cancellationToken);
+    }
+
     private async Task<int> SaveJobAsync(RawJobInput rawJob, CancellationToken cancellationToken)
     {
         var contentHash = deduplicationService.GenerateContentHash(rawJob);
@@ -229,6 +250,7 @@ public sealed class CrawlerOrchestrationService(
         CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
+        var staleCutoff = now.AddDays(-Math.Max(lifecycle.StaleAfterDays, 1));
         var seenUrls = result.Jobs.Select(job => job.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var activeJobs = await dbContext.Jobs
             .Where(job => job.Source == source && job.IsActive)
@@ -240,11 +262,16 @@ public sealed class CrawlerOrchestrationService(
             {
                 Expire(job, now);
             }
+            else if (job.LastSeenAt < staleCutoff)
+            {
+                // Not seen for the freshness window (2/7/15 days): assume filled.
+                Expire(job, now);
+            }
             else if (result.IsComplete && !seenUrls.Contains(job.Url))
             {
                 job.MissingCrawlCount++;
                 job.UpdatedAt = now;
-                if (job.MissingCrawlCount >= 2) Expire(job, now);
+                if (job.MissingCrawlCount >= Math.Max(lifecycle.MissingCrawlThreshold, 1)) Expire(job, now);
             }
         }
     }

@@ -19,7 +19,7 @@ import { SalaryRangeChart } from './components/charts/SalaryRangeChart'
 import { StatCard } from './components/dashboard/StatCard'
 import { TopSkillsChart } from './components/charts/TopSkillsChart'
 import { formatCurrency } from './lib/format'
-import { getJobs } from './services/api'
+import { getFreshness, getJobs } from './services/api'
 import type { Job } from './types/api'
 
 const emptyFilters: JobFilters = {
@@ -87,6 +87,7 @@ function median(values: number[]) {
 function App() {
   const [filters, setFilters] = useState<JobFilters>(emptyFilters)
   const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all' }) })
+  const freshnessQuery = useQuery({ queryKey: ['freshness'], queryFn: getFreshness })
   const allJobs = jobsQuery.data ?? emptyJobs
 
   const options = useMemo(
@@ -111,10 +112,14 @@ function App() {
       : null
 
     return allJobs.filter((job) => {
-      const postedTime = job.postedDate ? new Date(job.postedDate).getTime() : null
+      // Prefer the source's posted date, but fall back to when we first saw the
+      // job so freshly discovered postings are not hidden by missing metadata.
+      const postedTime = job.postedDate
+        ? new Date(job.postedDate).getTime()
+        : new Date(job.firstSeenAt).getTime()
 
       return (
-        (!earliestPostedDate || (postedTime != null && postedTime >= earliestPostedDate)) &&
+        (!earliestPostedDate || postedTime >= earliestPostedDate) &&
         (!filters.location || job.location === filters.location) &&
         (!filters.skill || job.skills.includes(filters.skill)) &&
         (!filters.company || job.company === filters.company) &&
@@ -233,6 +238,27 @@ function App() {
         </section>
 
         <section className="insight-grid">
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2>Posting freshness</h2>
+                <p>Active roles posted within the 2, 7 and 15 day windows</p>
+              </div>
+              <CalendarPlus aria-hidden="true" />
+            </div>
+            <div className="rank-list">
+              {(freshnessQuery.data?.windows ?? []).length === 0 ? (
+                <span className="muted">No freshness data yet</span>
+              ) : (
+                (freshnessQuery.data?.windows ?? []).map((window) => (
+                  <div key={window.days} className="rank-row">
+                    <span>Last {window.days} days</span>
+                    <strong>{window.jobCount}</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
           <section className="panel">
             <div className="panel-header">
               <div>

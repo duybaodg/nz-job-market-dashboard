@@ -1,5 +1,6 @@
 using Application.Common;
 using Application.Crawling;
+using Infrastructure.Crawling;
 using Infrastructure.Firecrawl;
 using Infrastructure.Persistence;
 using Infrastructure.Scrapling;
@@ -63,6 +64,17 @@ public static class ServiceCollectionExtensions
         });
         services.AddScoped<IJobSourceAdapter, ScraplingJobAdapter>();
         services.AddScoped<IJobSourceAdapter, FirecrawlJobAdapter>();
+        services.AddScoped<ISourceRegistrySynchronizer, SourceRegistrySynchronizer>();
+        services.AddSingleton<ISourcePriorityProvider, RegistrySourcePriorityProvider>();
+        services.AddSingleton(new CrawlerLifecycleOptions
+        {
+            StaleAfterDays = int.TryParse(configuration["CRAWLER_JOB_STALE_DAYS"], out var staleDays)
+                ? Math.Max(staleDays, 1)
+                : CrawlerLifecycleOptions.DefaultStaleAfterDays,
+            MissingCrawlThreshold = int.TryParse(configuration["CRAWLER_MISSING_CRAWL_THRESHOLD"], out var threshold)
+                ? Math.Max(threshold, 1)
+                : 2
+        });
 
         return services;
     }

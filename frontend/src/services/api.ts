@@ -1,4 +1,4 @@
-import type { Job, JobsByRegion, Overview, SkillDemand } from '../types/api'
+import type { Freshness, Job, JobsByRegion, Overview, SkillDemand } from '../types/api'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5050'
 
@@ -12,13 +12,20 @@ async function getJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function getJobs(params: { region?: string; skill?: string; search?: string; status?: string }) {
+export function getJobs(params: {
+  region?: string
+  skill?: string
+  search?: string
+  status?: string
+  days?: number | string
+}) {
   const query = new URLSearchParams()
 
   if (params.region) query.set('region', params.region)
   if (params.skill) query.set('skill', params.skill)
   if (params.search) query.set('search', params.search)
   if (params.status) query.set('status', params.status)
+  if (params.days) query.set('days', String(params.days))
 
   const suffix = query.toString() ? `?${query.toString()}` : ''
   return getJson<Job[]>(`/api/jobs${suffix}`)
@@ -34,4 +41,8 @@ export function getTopSkills() {
 
 export function getJobsByRegion() {
   return getJson<JobsByRegion[]>('/api/analytics/jobs-by-region')
+}
+
+export function getFreshness() {
+  return getJson<Freshness>('/api/analytics/freshness')
 }

@@ -97,7 +97,7 @@ export function FilterBar({
       <details className="advanced-filters">
         <summary><SlidersHorizontal aria-hidden="true" /> Advanced filters <span>{activeCount > 0 ? `${activeCount} active` : 'Optional'}</span></summary>
         <div className="advanced-filter-grid">
-          <label><span>Time range</span><select value={filters.timeRange} onChange={(event) => onFilterChange('timeRange', event.target.value)}><option value="">All time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label>
+          <label><span>Posted within</span><select value={filters.timeRange} onChange={(event) => onFilterChange('timeRange', event.target.value)}><option value="">All time</option><option value="2">Last 2 days</option><option value="7">Last 7 days</option><option value="15">Last 15 days</option></select></label>
           <label><span>Skill</span><select value={filters.skill} onChange={(event) => onFilterChange('skill', event.target.value)}><option value="">All skills</option>{skills.map((skill) => <option key={skill} value={skill}>{skill}</option>)}</select></label>
           <label><span>Company</span><select value={filters.company} onChange={(event) => onFilterChange('company', event.target.value)}><option value="">All companies</option>{companies.map((company) => <option key={company} value={company}>{company}</option>)}</select></label>
           <label><span>Industry</span><select value={filters.industry} onChange={(event) => onFilterChange('industry', event.target.value)}><option value="">All industries</option>{industries.map((industry) => <option key={industry} value={industry}>{industry}</option>)}</select></label>

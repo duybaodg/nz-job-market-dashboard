@@ -34,6 +34,8 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await dbContext.Database.MigrateAsync();
+    // Keep job_sources in step with crawler/sources/sites.json.
+    await scope.ServiceProvider.GetRequiredService<ISourceRegistrySynchronizer>().SyncAsync(CancellationToken.None);
 }
 
 app.UseCors("Frontend");
@@ -43,10 +45,11 @@ app.MapGet("/api/jobs", async (
         string? skill,
         string? search,
         string? status,
+        int? days,
         IJobService jobService,
         CancellationToken cancellationToken) =>
     {
-        var jobs = await jobService.GetJobsAsync(new JobListQuery(region, skill, search, status), cancellationToken);
+        var jobs = await jobService.GetJobsAsync(new JobListQuery(region, skill, search, status, days), cancellationToken);
         return Results.Ok(jobs);
     })
     .WithName("GetJobs");
@@ -79,6 +82,12 @@ app.MapGet("/api/analytics/jobs-by-region", async (
     Results.Ok(await analyticsService.GetJobsByRegionAsync(cancellationToken)))
     .WithName("GetJobsByRegion");
 
+app.MapGet("/api/analytics/freshness", async (
+        IAnalyticsService analyticsService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await analyticsService.GetFreshnessAsync(cancellationToken)))
+    .WithName("GetAnalyticsFreshness");
+
 app.MapPost("/api/admin/crawl-runs", async (
         StartCrawlRunRequest request,
         ICrawlerOrchestrationService crawlerService,
@@ -94,6 +103,12 @@ app.MapGet("/api/admin/crawl-runs", async (
         CancellationToken cancellationToken) =>
     Results.Ok(await crawlerService.GetCrawlRunsAsync(cancellationToken)))
     .WithName("GetCrawlRuns");
+
+app.MapGet("/api/admin/sources", async (
+        ICrawlerOrchestrationService crawlerService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await crawlerService.GetSourcesAsync(cancellationToken)))
+    .WithName("GetSources");
 
 app.MapGet("/api/admin/crawl-runs/{id:guid}", async (
         Guid id,

@@ -40,6 +40,14 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
                 (job.Company != null && job.Company.ToLower().Contains(search)));
         }
 
+        // "Fresh postings" windows: 2, 7 and 15 days. Fall back to FirstSeenAt when a
+        // source does not publish a posting date, so freshly discovered jobs still count.
+        if (query.Days is > 0)
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-query.Days.Value);
+            jobs = jobs.Where(job => (job.PostedDate ?? job.FirstSeenAt) >= cutoff);
+        }
+
         return await jobs
             .OrderByDescending(job => job.PostedDate ?? job.FirstSeenAt)
             .Select(job => new JobDto(

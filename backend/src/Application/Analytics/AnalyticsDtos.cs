@@ -13,3 +13,8 @@ public sealed record OverviewDto(
 public sealed record SkillDemandDto(string SkillName, int JobCount);
 
 public sealed record JobsByRegionDto(string Region, int JobCount);
+
+/// <summary>Fresh-posting counts for the 2, 7 and 15 day windows.</summary>
+public sealed record FreshnessWindowDto(int Days, int JobCount);
+
+public sealed record FreshnessDto(int TotalActiveJobs, IReadOnlyList<FreshnessWindowDto> Windows);

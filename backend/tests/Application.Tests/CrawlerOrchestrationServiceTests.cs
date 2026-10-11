@@ -118,7 +118,45 @@ public sealed class CrawlerOrchestrationServiceTests
         dbContext.Jobs.Single(job => job.Url.EndsWith("missing")).IsActive.Should().BeFalse();
     }
 
-    private static Job CreateJob(string url, DateTime? closingDate = null) => new()
+    [Fact]
+    public async Task StartCrawlRunAsync_expires_jobs_not_seen_within_the_freshness_window()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.Jobs.AddRange(
+            CreateJob("https://example.com/jobs/stale", lastSeenAt: DateTime.UtcNow.AddDays(-20)),
+            CreateJob("https://example.com/jobs/fresh", lastSeenAt: DateTime.UtcNow.AddDays(-3)));
+        await dbContext.SaveChangesAsync();
+        var service = new CrawlerOrchestrationService(
+            dbContext,
+            [new FakeJobSourceAdapter([])],
+            new DeduplicationService(),
+            new NormalisationService());
+
+        await service.StartCrawlRunAsync(new("Firecrawl", "https://example.com/search"), CancellationToken.None);
+
+        dbContext.Jobs.Single(job => job.Url.EndsWith("stale")).IsActive.Should().BeFalse();
+        dbContext.Jobs.Single(job => job.Url.EndsWith("fresh")).IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task StartCrawlRunAsync_honours_configured_staleness_window()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.Jobs.Add(CreateJob("https://example.com/jobs/stale", lastSeenAt: DateTime.UtcNow.AddDays(-3)));
+        await dbContext.SaveChangesAsync();
+        var service = new CrawlerOrchestrationService(
+            dbContext,
+            [new FakeJobSourceAdapter([])],
+            new DeduplicationService(),
+            new NormalisationService(),
+            new CrawlerLifecycleOptions { StaleAfterDays = 2 });
+
+        await service.StartCrawlRunAsync(new("Firecrawl", "https://example.com/search"), CancellationToken.None);
+
+        dbContext.Jobs.Single().IsActive.Should().BeFalse();
+    }
+
+    private static Job CreateJob(string url, DateTime? closingDate = null, DateTime? lastSeenAt = null) => new()
     {
         Id = Guid.NewGuid(),
         Source = "Firecrawl",
@@ -128,7 +166,7 @@ public sealed class CrawlerOrchestrationServiceTests
         ClosingDate = closingDate,
         IsActive = true,
         FirstSeenAt = DateTime.UtcNow,
-        LastSeenAt = DateTime.UtcNow,
+        LastSeenAt = lastSeenAt ?? DateTime.UtcNow,
         CreatedAt = DateTime.UtcNow,
         UpdatedAt = DateTime.UtcNow
     };

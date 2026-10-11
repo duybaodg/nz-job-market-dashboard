@@ -26,14 +26,18 @@ public sealed class CrawlWorker(
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
         var crawler = scope.ServiceProvider.GetRequiredService<ICrawlerOrchestrationService>();
+        var priority = scope.ServiceProvider.GetRequiredService<ISourcePriorityProvider>();
         var now = DateTime.UtcNow;
         var sources = await dbContext.JobSources
             .Where(source => source.Enabled && source.TermsCheckedAt != null && source.BaseUrl != null)
-            .OrderBy(source => source.Name)
             .ToListAsync(cancellationToken);
-        var dueSources = sources.Where(source =>
-            source.LastCrawledAt is null ||
-            source.LastCrawledAt <= now.AddMinutes(-Math.Max(source.CrawlFrequencyMinutes, 1)));
+        // Sources marked "last" in the registry (SEEK, Trade Me) are crawled after
+        // everything else, then alphabetically within each priority band.
+        var dueSources = SourceScheduler.OrderForCrawl(
+            sources.Where(source =>
+                source.LastCrawledAt is null ||
+                source.LastCrawledAt <= now.AddMinutes(-Math.Max(source.CrawlFrequencyMinutes, 1))),
+            priority);
 
         foreach (var source in dueSources)
         {

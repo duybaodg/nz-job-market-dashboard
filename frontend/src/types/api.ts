@@ -44,3 +44,13 @@ export type JobsByRegion = {
   region: string
   jobCount: number
 }
+
+export type FreshnessWindow = {
+  days: number
+  jobCount: number
+}
+
+export type Freshness = {
+  totalActiveJobs: number
+  windows: FreshnessWindow[]
+}

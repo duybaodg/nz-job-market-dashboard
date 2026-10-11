@@ -25,4 +25,8 @@ public sealed record JobDto(
     IReadOnlyList<string> Skills,
     IReadOnlyList<string> ProgrammingLanguages);
 
-public sealed record JobListQuery(string? Region, string? Skill, string? Search, string? Status);
+/// <summary>
+/// Job list filters. <c>Days</c> limits results to the freshest postings — the
+/// dashboard exposes 2, 7 and 15 day windows.
+/// </summary>
+public sealed record JobListQuery(string? Region, string? Skill, string? Search, string? Status, int? Days = null);

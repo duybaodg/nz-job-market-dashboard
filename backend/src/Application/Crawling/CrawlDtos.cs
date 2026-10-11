@@ -34,3 +34,14 @@ public sealed record CrawlRunResultDto(
     CrawlRunDto CrawlRun,
     bool Started,
     string Message);
+
+public sealed record JobSourceDto(
+    Guid Id,
+    string Name,
+    string? BaseUrl,
+    string Method,
+    string Parser,
+    bool Enabled,
+    int CrawlFrequencyMinutes,
+    DateTime? LastCrawledAt,
+    DateTime? TermsCheckedAt);
