@@ -590,24 +590,97 @@ def extract_salary(text: str) -> str | None:
     return clean_text(match.group(1)) if match else None
 
 
+MAX_LOCATION_LENGTH = 80
+MAX_LOCATION_SEGMENTS = 4
+
+#: Tokens that mark the end of a location and the start of a detail block
+#: ("Wellington Job type Permanent Specialisation …") or an ad sentence
+#: ("Nelson, Nelson Region, New Zealand We also welcome …"). Mirrors the .NET
+#: Application.Normalisation.LocationSanitiser.
+LOCATION_STOP_RE = re.compile(
+    r"""(?ix)
+    \s*
+    (?:
+        job\s+type
+      | job\s+description
+      | speciali[sz]ation
+      | reference
+      | discipline
+      | salary
+      | category
+      | posted
+      | employment\s+type
+      | work\s+type
+      | contract\s+type
+      | we\s+(?:also|are|have|offer|provide|believe|welcome)
+      | the\s+role
+      | about\s+(?:the|us|you|this)
+      | key\s+responsibilit\w*
+      | what\s+you
+      | apply\s+now
+      | please\s+(?:note|apply|contact)
+      | join\s+(?:our|us|the)
+    )\b
+    """
+)
+
+
+def sanitise_location(value: str | None, max_length: int = MAX_LOCATION_LENGTH) -> str | None:
+    """Reduce a raw location string to a place-shaped value.
+
+    Cuts at the first non-location token, then caps the result at a handful of
+    comma-separated segments and roughly ``max_length`` characters. Returns
+    ``None`` when nothing place-like remains. The .NET normalisation pass runs
+    the same logic again so a stale parser cannot leak description text into
+    the ``location`` column.
+    """
+    if not value:
+        return None
+
+    original = re.sub(r"\s+", " ", value).strip()
+    if not original:
+        return None
+
+    stop = LOCATION_STOP_RE.search(original)
+    if stop and stop.start() > 0:
+        original = original[: stop.start()]
+
+    if len(original) > max_length:
+        window = original[:max_length]
+        cut = max(window.rfind(","), window.rfind(";"))
+        if cut <= 0:
+            cut = window.rfind(" ")
+        original = window[:cut] if cut > 0 else window
+
+    segments = original.split(",")
+    if len(segments) > MAX_LOCATION_SEGMENTS:
+        original = ",".join(segments[:MAX_LOCATION_SEGMENTS])
+
+    clean = original.strip(" .,;|-")
+    return clean or None
+
+
 def extract_location(text: str) -> str | None:
     """Best-effort location for parsers with no explicit location field.
 
     Handles labelled fields ("Location: Auckland") and the common
     "Job in Christchurch Central, Canterbury - SEEK" / "Based in Wellington"
-    phrasings so the .NET region mapper has a signal to work with.
+    phrasings so the .NET region mapper has a signal to work with. The result
+    is always run through :func:`sanitise_location`, because a labelled field
+    can otherwise absorb the remainder of a single-line page dump
+    ("Location: Nelson, Nelson Region, New Zealand We also welcome …").
     """
     for label in ("Location", "Region", "Based in", "Located in"):
         labelled = extract_label(text, label)
         if labelled:
-            return labelled
+            return sanitise_location(labelled)
 
     match = re.search(
         r"(?:job\s+in|based\s+in|located\s+in)\s*:?\s*([^|\-–\n]+)",
         text,
         re.I,
     )
-    return clean_text(match.group(1)) if match else None
+    return sanitise_location(clean_text(match.group(1))) if match else None
 
 
 def extract_title(html: str, text: str) -> str:
@@ -1272,12 +1345,19 @@ def parse_comspek_detail(
 ) -> RawJobInput:
     """Parse Comspek International job detail pages (Volcanic ATS)."""
     title = html_group(html, r'<h1[^>]*class="[^"]*job-title[^"]*"[^>]*>(.*?)</h1>') or fallback_title
-    location = html_group(html, r'class="[^"]*job-location[^"]*"[^>]*>.*?<span[^>]*>Location</span>\s*(.*?)\s*</dd>')
+    # Live pages use <li class="flex-item job-location"><span>Location</span>Auckland</li>
+    # while older fixtures use <dd>. Stop at whichever closing tag comes first so
+    # the match cannot run on into the rest of the detail block.
+    location = html_group(
+        html,
+        r'class="[^"]*job-location[^"]*"[^>]*>.*?<span[^>]*>Location</span>\s*(.*?)\s*</(?:dd|li)>',
+    )
     if not location:
-        location = html_group(html, r'class="[^"]*job-location[^"]*"[^>]*>\s*(.*?)\s*</dd>')
-    job_type = html_group(html, r'class="[^"]*job-type[^"]*"[^>]*>\s*<span[^>]*>Job type</span>\s*(.*?)\s*</dd>')
-    ref = html_group(html, r'class="[^"]*job-ref[^"]*"[^>]*>.*?<span[^>]*>Reference</span>\s*(.*?)\s*</dd>')
-    posted = html_group(html, r'class="[^"]*date-posted[^"]*"[^>]*>\s*<span[^>]*>Posted</span>\s*(.*?)\s*</dd>')
+        location = html_group(html, r'class="[^"]*job-location[^"]*"[^>]*>\s*(.*?)\s*</(?:dd|li)>')
+    location = sanitise_location(location)
+    job_type = html_group(html, r'class="[^"]*job-type[^"]*"[^>]*>\s*<span[^>]*>Job type</span>\s*(.*?)\s*</(?:dd|li)>')
+    ref = html_group(html, r'class="[^"]*job-ref[^"]*"[^>]*>.*?<span[^>]*>Reference</span>\s*(.*?)\s*</(?:dd|li)>')
+    posted = html_group(html, r'class="[^"]*date-posted[^"]*"[^>]*>\s*<span[^>]*>Posted</span>\s*(.*?)\s*</(?:dd|li)>')
     description = html_group(html, r'class="[^"]*desc[^"]*"[^>]*>(.*?)(?:</div>\s*<(?:section|div))')
     if not description:
         description = html_group(html, r'class="[^"]*desc[^"]*"[^>]*>(.*?)</div>')
@@ -1822,7 +1902,9 @@ def parse_seek_listing(
                 sourceJobId=job_id.group(1) if job_id else None,
                 title=title,
                 company=field("jobCompany"),
-                location=field("jobLocation") or field("jobCardLocation") or extract_location(teaser or ""),
+                location=sanitise_location(
+                    field("jobLocation") or field("jobCardLocation") or extract_location(teaser or "")
+                ),
                 salaryText=extract_salary(chunk),
                 descriptionText=(description or "")[:12000] or None,
                 url=job_url,
@@ -1856,7 +1938,7 @@ def parse_seek_detail(
 
     title = clean_text(payload.get("jobTitle")) or extract_title(html, text) or fallback_title
     company = clean_text(payload.get("advertiserName")) or None
-    location = clean_text(payload.get("jobArea")) or clean_text(payload.get("jobLocation")) or None
+    location = sanitise_location(payload.get("jobArea") or payload.get("jobLocation"))
 
     employment = None
     work_types = re.search(r'"workTypes":\{[^}]*?"label":"([^"]+)"', html)

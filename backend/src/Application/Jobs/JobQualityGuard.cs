@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Jobs;
 
-public sealed record JobQualityGuardResult(int JunkRemoved, int RegionsNormalised);
+public sealed record JobQualityGuardResult(int JunkRemoved, int RegionsNormalised, int LocationsRepaired);
 
 /// <summary>
 /// Startup repair pass for data written by older worker versions:
@@ -91,6 +91,7 @@ public sealed class JobQualityGuard(
         var now = DateTime.UtcNow;
         var junkRemoved = 0;
         var regionsNormalised = 0;
+        var locationsRepaired = 0;
 
         foreach (var job in jobs)
         {
@@ -108,6 +109,19 @@ public sealed class JobQualityGuard(
                 continue;
             }
 
+            // One-off repair for rows written before the shared location
+            // sanitizer existed. Idempotent: a second run sees a clean
+            // location and leaves it alone.
+            var sanitised = LocationSanitiser.Sanitise(job.Location);
+            if (!string.Equals(job.Location, sanitised.Location, StringComparison.Ordinal))
+            {
+                job.Location = sanitised.Location;
+                job.DescriptionSummary = Summarise(
+                    LocationSanitiser.PrependRemainder(sanitised.RemovedRemainder, job.DescriptionSummary));
+                job.UpdatedAt = now;
+                locationsRepaired++;
+            }
+
             var region = normalisationService.ResolveRegion(job.Location, job.DescriptionSummary);
             if (!string.Equals(job.Region, region, StringComparison.Ordinal))
             {
@@ -117,16 +131,28 @@ public sealed class JobQualityGuard(
             }
         }
 
-        if (junkRemoved > 0 || regionsNormalised > 0)
+        if (junkRemoved > 0 || regionsNormalised > 0 || locationsRepaired > 0)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         logger.LogInformation(
-            "Job quality guard: removed {JunkRemoved} junk records, normalised {RegionsNormalised} regions.",
+            "Job quality guard: removed {JunkRemoved} junk records, normalised {RegionsNormalised} regions, repaired {LocationsRepaired} locations.",
             junkRemoved,
-            regionsNormalised);
-        return new JobQualityGuardResult(junkRemoved, regionsNormalised);
+            regionsNormalised,
+            locationsRepaired);
+        return new JobQualityGuardResult(junkRemoved, regionsNormalised, locationsRepaired);
+    }
+
+    private static string? Summarise(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var clean = System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", " ");
+        return clean.Length <= 240 ? clean : $"{clean[..237]}...";
     }
 
     private static RawJobInput ToRawJobInput(Job job)

@@ -9,6 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
 from adapters.scrapling.scrapling_worker import (  # noqa: E402
     RawJobInput,
     candidate_rejection_reason,
@@ -16,6 +18,8 @@ from adapters.scrapling.scrapling_worker import (  # noqa: E402
     extract_location,
     is_acceptable_candidate,
     page_title_from_html,
+    parse_comspek_detail,
+    sanitise_location,
 )
 
 
@@ -227,6 +231,63 @@ class LocationExtractionTests(unittest.TestCase):
 
     def test_missing_location_returns_none(self) -> None:
         self.assertIsNone(extract_location("Senior Data Engineer with Python and SQL"))
+
+
+class LocationSanitisationTests(unittest.TestCase):
+    """Round 2 regression: location fields must not absorb description text."""
+
+    SEEK_LOCATION = (
+        "Nelson, Nelson Region, New Zealand We also welcome applications from "
+        "qualified candidates based in Christchurch, Canterbury Region, New Zealand "
+        "🧠 Neurodiversity"
+    )
+    COMSPEK_LOCATION = (
+        "Wellington Job type Permanent Specialisation Team Leaders Reference "
+        "BH-2844 Job description Are you passionate about building world-class "
+        "engineering platforms"
+    )
+
+    def test_seek_location_stops_before_the_trailing_ad_sentence(self) -> None:
+        self.assertEqual(
+            "Nelson, Nelson Region, New Zealand", sanitise_location(self.SEEK_LOCATION)
+        )
+
+    def test_comspek_location_stops_before_the_detail_block(self) -> None:
+        self.assertEqual("Wellington", sanitise_location(self.COMSPEK_LOCATION))
+
+    def test_extract_location_does_not_absorb_a_single_line_dump(self) -> None:
+        text = (
+            "Location: Nelson, Nelson Region, New Zealand We also welcome applications "
+            "from qualified candidates based in Christchurch, Canterbury Region, New Zealand"
+        )
+        self.assertEqual("Nelson, Nelson Region, New Zealand", extract_location(text))
+
+    def test_long_multi_region_list_is_capped(self) -> None:
+        regions = (
+            "Wellington - Hutt Valley;Wellington - Kapiti;Wellington - Masterton;"
+            "Wellington - Porirua;Wellington - Tawa;Wellington - Upper Hutt;Wellington - Wellington"
+        )
+        result = sanitise_location(regions)
+        self.assertIsNotNone(result)
+        self.assertLessEqual(len(result), 80)
+        self.assertTrue(result.startswith("Wellington - Hutt Valley"))
+
+    def test_clean_locations_are_untouched(self) -> None:
+        for value in ("Auckland", "Christchurch, Canterbury, New Zealand", "Wellington CBD", "Remote"):
+            with self.subTest(value=value):
+                self.assertEqual(value, sanitise_location(value))
+
+    def test_comspek_li_markup_extracts_only_the_location(self) -> None:
+        fixture = (FIXTURES / "comspek_detail_li.html").read_text()
+        job = parse_comspek_detail(
+            "Comspek International",
+            "https://www.comspek.co.nz/job/network-security-engineer-684437",
+            fixture,
+            "",
+            "Network Security Engineer",
+        )
+        self.assertEqual("Wellington", job.location)
+        self.assertEqual("Network Security Engineer", job.title)
 
 
 class CrawlIntegrationTests(unittest.TestCase):

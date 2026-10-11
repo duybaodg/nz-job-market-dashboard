@@ -195,17 +195,29 @@ public sealed class CrawlerOrchestrationService(
         string? pageTitle,
         CancellationToken cancellationToken)
     {
+        // A location field can absorb the whole detail block (Comspek) or a
+        // trailing ad sentence (SEEK). Clean it for every parser and preserve
+        // the removed text in the description instead of discarding it.
+        var sanitisedLocation = LocationSanitiser.Sanitise(rawJob.Location);
+        var candidate = rawJob with
+        {
+            Location = sanitisedLocation.Location,
+            DescriptionText = LocationSanitiser.PrependRemainder(
+                sanitisedLocation.RemovedRemainder,
+                rawJob.DescriptionText)
+        };
+
         var validation = contentValidator.Validate(
-            rawJob,
+            candidate,
             new JobValidationContext(CrawlUrl: crawlUrl, PageTitle: pageTitle));
 
-        var contentHash = deduplicationService.GenerateContentHash(rawJob);
+        var contentHash = deduplicationService.GenerateContentHash(candidate);
         var existingJob = await dbContext.Jobs
-            .Include(job => job.Skills)
-            .FirstOrDefaultAsync(job =>
-                job.ContentHash == contentHash ||
-                (rawJob.SourceJobId != null && job.Source == rawJob.Source && job.SourceJobId == rawJob.SourceJobId) ||
-                job.Url == rawJob.Url,
+            .Include(existing => existing.Skills)
+            .FirstOrDefaultAsync(existing =>
+                existing.ContentHash == contentHash ||
+                (candidate.SourceJobId != null && existing.Source == candidate.Source && existing.SourceJobId == candidate.SourceJobId) ||
+                existing.Url == candidate.Url,
                 cancellationToken);
 
         if (!validation.IsAccepted)
@@ -225,46 +237,46 @@ public sealed class CrawlerOrchestrationService(
         {
             existingJob.LastSeenAt = DateTime.UtcNow;
             existingJob.UpdatedAt = DateTime.UtcNow;
-            existingJob.ClosingDate = rawJob.ClosingDate ?? existingJob.ClosingDate;
-            existingJob.Company = CleanOptional(rawJob.Company) ?? existingJob.Company;
-            existingJob.Location = CleanOptional(rawJob.Location) ?? existingJob.Location;
-            existingJob.DescriptionSummary = Summarise(rawJob.DescriptionText) ?? existingJob.DescriptionSummary;
+            existingJob.ClosingDate = candidate.ClosingDate ?? existingJob.ClosingDate;
+            existingJob.Company = CleanOptional(candidate.Company) ?? existingJob.Company;
+            existingJob.Location = CleanOptional(candidate.Location) ?? existingJob.Location;
+            existingJob.DescriptionSummary = Summarise(candidate.DescriptionText) ?? existingJob.DescriptionSummary;
             existingJob.Region = normalisationService.ResolveRegion(
                 existingJob.Location,
-                existingJob.DescriptionSummary ?? rawJob.DescriptionText);
-            existingJob.EmploymentType = InferEmploymentType(rawJob.DescriptionText);
-            existingJob.WorkMode = InferWorkMode(rawJob.DescriptionText);
-            existingJob.ExperienceBand = InferExperienceBand(rawJob.DescriptionText);
-            SetSkills(existingJob, rawJob);
+                existingJob.DescriptionSummary ?? candidate.DescriptionText);
+            existingJob.EmploymentType = InferEmploymentType(candidate.DescriptionText);
+            existingJob.WorkMode = InferWorkMode(candidate.DescriptionText);
+            existingJob.ExperienceBand = InferExperienceBand(candidate.DescriptionText);
+            SetSkills(existingJob, candidate);
             existingJob.IsActive = true;
             existingJob.ExpiredAt = null;
             existingJob.MissingCrawlCount = 0;
             return 0;
         }
 
-        var (salaryMin, salaryMax) = ParseSalary(rawJob.SalaryText);
+        var (salaryMin, salaryMax) = ParseSalary(candidate.SalaryText);
         var now = DateTime.UtcNow;
         var job = new Job
         {
             Id = Guid.NewGuid(),
-            Source = rawJob.Source,
-            SourceJobId = rawJob.SourceJobId,
-            Title = rawJob.Title.Trim(),
-            Company = CleanOptional(rawJob.Company),
-            Location = CleanOptional(rawJob.Location),
-            Region = normalisationService.ResolveRegion(rawJob.Location, rawJob.DescriptionText),
+            Source = candidate.Source,
+            SourceJobId = candidate.SourceJobId,
+            Title = candidate.Title.Trim(),
+            Company = CleanOptional(candidate.Company),
+            Location = CleanOptional(candidate.Location),
+            Region = normalisationService.ResolveRegion(candidate.Location, candidate.DescriptionText),
             SalaryMin = salaryMin,
             SalaryMax = salaryMax,
-            EmploymentType = InferEmploymentType(rawJob.DescriptionText),
-            Seniority = normalisationService.StandardiseSeniority(rawJob.Title),
-            WorkMode = InferWorkMode(rawJob.DescriptionText),
-            ExperienceBand = InferExperienceBand(rawJob.DescriptionText),
+            EmploymentType = InferEmploymentType(candidate.DescriptionText),
+            Seniority = normalisationService.StandardiseSeniority(candidate.Title),
+            WorkMode = InferWorkMode(candidate.DescriptionText),
+            ExperienceBand = InferExperienceBand(candidate.DescriptionText),
             Industry = "Unknown",
-            DescriptionSummary = Summarise(rawJob.DescriptionText),
-            Url = rawJob.Url,
+            DescriptionSummary = Summarise(candidate.DescriptionText),
+            Url = candidate.Url,
             ContentHash = contentHash,
-            PostedDate = rawJob.PostedDate,
-            ClosingDate = rawJob.ClosingDate,
+            PostedDate = candidate.PostedDate,
+            ClosingDate = candidate.ClosingDate,
             IsActive = true,
             FirstSeenAt = now,
             LastSeenAt = now,
@@ -272,7 +284,7 @@ public sealed class CrawlerOrchestrationService(
             UpdatedAt = now
         };
 
-        SetSkills(job, rawJob);
+        SetSkills(job, candidate);
 
         dbContext.Jobs.Add(job);
         return 1;

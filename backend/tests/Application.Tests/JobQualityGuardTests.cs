@@ -108,6 +108,28 @@ public sealed class JobQualityGuardRunTests
         dbContext.Jobs.Single().Region.Should().Be("New Zealand");
     }
 
+    [Fact]
+    public async Task RunAsync_repairs_contaminated_locations_and_preserves_the_remainder()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.Jobs.Add(CreateJob(
+            "Platform Engineer",
+            "https://acme.example/jobs/4",
+            location: "Wellington Job type Permanent Specialisation Team Leaders Reference BH-2844 Job description Are you passionate"));
+        await dbContext.SaveChangesAsync();
+
+        var guard = CreateGuard(dbContext);
+        var first = await guard.RunAsync(CancellationToken.None);
+        var second = await guard.RunAsync(CancellationToken.None);
+
+        first.LocationsRepaired.Should().Be(1);
+        second.LocationsRepaired.Should().Be(0);
+        var job = dbContext.Jobs.Single();
+        job.Location.Should().Be("Wellington");
+        job.Region.Should().Be("Wellington");
+        job.DescriptionSummary.Should().Contain("Job type Permanent");
+    }
+
     private static JobQualityGuard CreateGuard(ApplicationDbContext dbContext) => new(
         dbContext,
         new JobContentValidator(),
