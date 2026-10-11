@@ -73,7 +73,10 @@ public static class ServiceCollectionExtensions
                 : CrawlerLifecycleOptions.DefaultStaleAfterDays,
             MissingCrawlThreshold = int.TryParse(configuration["CRAWLER_MISSING_CRAWL_THRESHOLD"], out var threshold)
                 ? Math.Max(threshold, 1)
-                : 2
+                : 2,
+            RetentionDays = int.TryParse(configuration["CRAWLER_RETENTION_DAYS"], out var retentionDays)
+                ? Math.Max(retentionDays, 1)
+                : CrawlerLifecycleOptions.DefaultRetentionDays
         });
 
         return services;

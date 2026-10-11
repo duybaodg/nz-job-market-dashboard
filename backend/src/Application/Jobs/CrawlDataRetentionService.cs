@@ -1,0 +1,98 @@
+using System.Linq.Expressions;
+using Application.Common;
+using Application.Crawling;
+using Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace Application.Jobs;
+
+public sealed record CrawlDataRetentionResult(int JobsDeleted, int CrawlRunsDeleted, int RawPagesDeleted)
+{
+    public static CrawlDataRetentionResult Empty { get; } = new(0, 0, 0);
+}
+
+/// <summary>
+/// Hard-deletes crawl data older than the configured retention window
+/// (<c>CRAWLER_RETENTION_DAYS</c>, default 20 days):
+/// <list type="bullet">
+/// <item>job rows whose <c>last_seen_at</c> (falling back to <c>created_at</c>
+/// when <c>last_seen_at</c> was never written) is older than the window;</item>
+/// <item><c>crawl_runs</c> history older than the window, together with the
+/// <c>raw_job_pages</c> that hang off those runs (the FK has no cascade, so the
+/// pages must go first).</item>
+/// </list>
+/// Each delete is a single set-based <c>DELETE</c> with a simple range
+/// predicate, so a run over an empty window removes nothing and repeating the
+/// purge is a no-op.
+/// </summary>
+public interface ICrawlDataRetentionService
+{
+    Task<CrawlDataRetentionResult> PurgeAsync(CancellationToken cancellationToken);
+}
+
+public sealed class CrawlDataRetentionService(
+    IApplicationDbContext dbContext,
+    CrawlerLifecycleOptions lifecycleOptions,
+    ILogger<CrawlDataRetentionService> logger) : ICrawlDataRetentionService
+{
+    /// <summary>
+    /// Cutoff for the retention window. Rows whose reference timestamp is
+    /// <em>strictly older</em> than this instant are deleted; a row that is
+    /// exactly <paramref name="retentionDays"/> old is kept. A non-positive
+    /// window is clamped to one day so a misconfiguration cannot wipe live data.
+    /// </summary>
+    public static DateTime Cutoff(DateTime nowUtc, int retentionDays) =>
+        nowUtc.AddDays(-Math.Max(retentionDays, 1));
+
+    /// <summary>
+    /// In-memory equivalent of <see cref="ExpiredJob"/> (which is what the
+    /// database <c>DELETE</c> uses). Kept as the readable statement of the
+    /// boundary rule; unit tests pin both so they cannot drift.
+    /// </summary>
+    public static bool IsExpired(DateTime lastSeenAt, DateTime createdAt, DateTime nowUtc, int retentionDays)
+    {
+        var reference = lastSeenAt == default ? createdAt : lastSeenAt;
+        return reference < Cutoff(nowUtc, retentionDays);
+    }
+
+    /// <summary>Translatable predicate for the job retention <c>DELETE</c>.</summary>
+    public static Expression<Func<Job, bool>> ExpiredJob(DateTime cutoff) =>
+        job => (job.LastSeenAt != default(DateTime) && job.LastSeenAt < cutoff)
+            || (job.LastSeenAt == default(DateTime) && job.CreatedAt < cutoff);
+
+    /// <summary>Translatable predicate for the crawl-run retention <c>DELETE</c>.</summary>
+    public static Expression<Func<CrawlRun, bool>> ExpiredCrawlRun(DateTime cutoff) =>
+        run => run.StartedAt < cutoff;
+
+    public async Task<CrawlDataRetentionResult> PurgeAsync(CancellationToken cancellationToken)
+    {
+        var cutoff = Cutoff(DateTime.UtcNow, lifecycleOptions.RetentionDays);
+
+        // raw_job_pages is a child of crawl_runs with no cascade delete, so its
+        // rows must be removed before the runs they belong to. Old orphaned
+        // pages (never attached to a run) are removed by the same statement.
+        var rawPagesDeleted = await dbContext.RawJobPages
+            .Where(page => page.CrawledAt < cutoff
+                || dbContext.CrawlRuns.Any(run => run.Id == page.CrawlRunId && run.StartedAt < cutoff))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        var crawlRunsDeleted = await dbContext.CrawlRuns
+            .Where(ExpiredCrawlRun(cutoff))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        var jobsDeleted = await dbContext.Jobs
+            .Where(ExpiredJob(cutoff))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Retention purged {JobsDeleted} jobs, {CrawlRunsDeleted} crawl runs, {RawPagesDeleted} raw pages "
+            + "older than {RetentionDays} days.",
+            jobsDeleted,
+            crawlRunsDeleted,
+            rawPagesDeleted,
+            lifecycleOptions.RetentionDays);
+
+        return new CrawlDataRetentionResult(jobsDeleted, crawlRunsDeleted, rawPagesDeleted);
+    }
+}

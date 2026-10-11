@@ -1,5 +1,6 @@
 using Application.Common;
 using Application.Crawling;
+using Application.Jobs;
 using Microsoft.EntityFrameworkCore;
 
 namespace Worker;
@@ -16,8 +17,28 @@ public sealed class CrawlWorker(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            await PurgeExpiredDataAsync(stoppingToken);
             await CrawlDueSourcesAsync(stoppingToken);
             await Task.Delay(TimeSpan.FromSeconds(pollSeconds), stoppingToken);
+        }
+    }
+
+    /// <summary>
+    /// Runs the retention purge on every poll, alongside the crawl loop, so
+    /// expired jobs and crawl history do not accumulate on a long-lived worker.
+    /// </summary>
+    private async Task PurgeExpiredDataAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var retention = scope.ServiceProvider.GetRequiredService<ICrawlDataRetentionService>();
+            await retention.PurgeAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A retention failure must not stop crawling.
+            logger.LogError(exception, "Retention purge failed");
         }
     }
 

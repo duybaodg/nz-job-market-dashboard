@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IJobService, JobService>();
         services.AddScoped<IJobQualityGuard, JobQualityGuard>();
+        services.AddScoped<ICrawlDataRetentionService, CrawlDataRetentionService>();
         services.AddScoped<IJobContentValidator, JobContentValidator>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
         services.AddScoped<ICrawlerOrchestrationService, CrawlerOrchestrationService>();

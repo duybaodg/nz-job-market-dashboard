@@ -226,6 +226,7 @@ how to add a source.
 | `SCRAPLING_FETCHER_TYPE` | fetcher | Global fetcher; per-source `fetcher` overrides it |
 | `CRAWLER_JOB_STALE_DAYS` | 15 | Expire jobs not seen for this many days |
 | `CRAWLER_MISSING_CRAWL_THRESHOLD` | 2 | Expire after N complete crawls without the job |
+| `CRAWLER_RETENTION_DAYS` | 20 | Hard-delete jobs and crawl history older than this many days |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | – | Optional, required only for the Adzuna source |
 
 Per-source scheduling comes from each row's `crawl_frequency_minutes`.
