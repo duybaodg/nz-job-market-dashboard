@@ -50,7 +50,7 @@ public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyti
                 .Select(group => group.Key)
                 .FirstOrDefaultAsync(cancellationToken),
             await dbContext.JobSkills
-                .Where(skill => skill.Job.IsActive)
+                .Where(skill => skill.Job != null && skill.Job.IsActive)
                 .GroupBy(skill => skill.SkillName)
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
@@ -61,7 +61,7 @@ public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyti
     {
         return await dbContext.JobSkills
             .AsNoTracking()
-            .Where(skill => skill.Job.IsActive)
+            .Where(skill => skill.Job != null && skill.Job.IsActive)
             .GroupBy(skill => skill.SkillName)
             .OrderByDescending(group => group.Count())
             .ThenBy(group => group.Key)

@@ -13,6 +13,7 @@ from adapters.scrapling.scrapling_worker import (  # noqa: E402
     RawJobInput,
     candidate_rejection_reason,
     crawl,
+    extract_location,
     is_acceptable_candidate,
     page_title_from_html,
 )
@@ -193,6 +194,23 @@ class PageTitleHelperTests(unittest.TestCase):
         )
         self.assertIsNone(page_title_from_html("<html></html>"))
         self.assertIsNone(page_title_from_html(None))
+
+
+class LocationExtractionTests(unittest.TestCase):
+    def test_labelled_location_is_extracted(self) -> None:
+        self.assertEqual("Auckland", extract_location("Location: Auckland Salary: $100k"))
+
+    def test_seek_job_in_phrasing_is_extracted(self) -> None:
+        self.assertEqual(
+            "Christchurch Central, Canterbury",
+            extract_location("Service Desk Support Analyst Job in Christchurch Central, Canterbury - SEEK"),
+        )
+
+    def test_based_in_phrasing_is_extracted(self) -> None:
+        self.assertEqual("Wellington CBD", extract_location("Based in Wellington CBD"))
+
+    def test_missing_location_returns_none(self) -> None:
+        self.assertIsNone(extract_location("Senior Data Engineer with Python and SQL"))
 
 
 class CrawlIntegrationTests(unittest.TestCase):

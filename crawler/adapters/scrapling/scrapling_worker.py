@@ -572,6 +572,26 @@ def extract_salary(text: str) -> str | None:
     return clean_text(match.group(1)) if match else None
 
 
+def extract_location(text: str) -> str | None:
+    """Best-effort location for parsers with no explicit location field.
+
+    Handles labelled fields ("Location: Auckland") and the common
+    "Job in Christchurch Central, Canterbury - SEEK" / "Based in Wellington"
+    phrasings so the .NET region mapper has a signal to work with.
+    """
+    for label in ("Location", "Region", "Based in", "Located in"):
+        labelled = extract_label(text, label)
+        if labelled:
+            return labelled
+
+    match = re.search(
+        r"(?:job\s+in|based\s+in|located\s+in)\s*:?\s*([^|\-–\n]+)",
+        text,
+        re.I,
+    )
+    return clean_text(match.group(1)) if match else None
+
+
 def extract_title(html: str, text: str) -> str:
     h1 = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.I | re.S)
     if h1:
@@ -590,7 +610,7 @@ def extract_title(html: str, text: str) -> str:
 
 def parse_jobs(source: str, url: str, html: str, text: str) -> list[RawJobInput]:
     salary = extract_salary(text)
-    location = extract_label(text, "Location") or extract_label(text, "Region")
+    location = extract_location(text)
     company = extract_label(text, "Company") or extract_label(text, "Employer")
     jobs: list[RawJobInput] = []
     seen_urls: set[str] = set()
@@ -1784,7 +1804,7 @@ def parse_seek_listing(
                 sourceJobId=job_id.group(1) if job_id else None,
                 title=title,
                 company=field("jobCompany"),
-                location=field("jobLocation") or field("jobCardLocation"),
+                location=field("jobLocation") or field("jobCardLocation") or extract_location(teaser or ""),
                 salaryText=extract_salary(chunk),
                 descriptionText=(description or "")[:12000] or None,
                 url=job_url,

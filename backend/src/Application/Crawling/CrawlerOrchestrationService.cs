@@ -228,11 +228,13 @@ public sealed class CrawlerOrchestrationService(
             existingJob.ClosingDate = rawJob.ClosingDate ?? existingJob.ClosingDate;
             existingJob.Company = CleanOptional(rawJob.Company) ?? existingJob.Company;
             existingJob.Location = CleanOptional(rawJob.Location) ?? existingJob.Location;
-            existingJob.Region = normalisationService.StandardiseRegion(existingJob.Location);
+            existingJob.DescriptionSummary = Summarise(rawJob.DescriptionText) ?? existingJob.DescriptionSummary;
+            existingJob.Region = normalisationService.ResolveRegion(
+                existingJob.Location,
+                existingJob.DescriptionSummary ?? rawJob.DescriptionText);
             existingJob.EmploymentType = InferEmploymentType(rawJob.DescriptionText);
             existingJob.WorkMode = InferWorkMode(rawJob.DescriptionText);
             existingJob.ExperienceBand = InferExperienceBand(rawJob.DescriptionText);
-            existingJob.DescriptionSummary = Summarise(rawJob.DescriptionText);
             SetSkills(existingJob, rawJob);
             existingJob.IsActive = true;
             existingJob.ExpiredAt = null;
@@ -250,7 +252,7 @@ public sealed class CrawlerOrchestrationService(
             Title = rawJob.Title.Trim(),
             Company = CleanOptional(rawJob.Company),
             Location = CleanOptional(rawJob.Location),
-            Region = normalisationService.StandardiseRegion(rawJob.Location),
+            Region = normalisationService.ResolveRegion(rawJob.Location, rawJob.DescriptionText),
             SalaryMin = salaryMin,
             SalaryMax = salaryMax,
             EmploymentType = InferEmploymentType(rawJob.DescriptionText),

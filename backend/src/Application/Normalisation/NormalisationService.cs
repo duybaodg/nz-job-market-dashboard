@@ -1,30 +1,57 @@
+using System.Text.RegularExpressions;
+
 namespace Application.Normalisation;
 
 public interface INormalisationService
 {
+    /// <summary>
+    /// Maps a location string to a canonical NZ region. A missing location
+    /// resolves to the country-level default <c>New Zealand</c>; a location
+    /// that is present but not recognisable resolves to <c>Other</c>.
+    /// </summary>
     string StandardiseRegion(string? location);
+
+    /// <summary>
+    /// Region resolution used by ingestion and cleanup. When
+    /// <paramref name="location"/> is missing the surrounding
+    /// <paramref name="context"/> text is scanned for a recognisable NZ place
+    /// before falling back to <c>New Zealand</c>.
+    /// </summary>
+    string ResolveRegion(string? location, string? context = null);
+
     string StandardiseSeniority(string? title);
 }
 
 public sealed class NormalisationService : INormalisationService
 {
+    // City/suburb -> region. Region names are checked after cities so a string
+    // such as "Auckland, New Zealand" resolves to Auckland, not New Zealand.
+    // Both macron and non-macron spellings are accepted.
+    private static readonly (Regex Pattern, string Region)[] RegionRules = BuildRegionRules();
+
+    private static readonly Regex RemotePattern = Word(@"remote|work\s+from\s+home|wfh|anywhere");
+    private static readonly Regex NzWidePattern = Word(@"new\s+zealand|nz\-wide|nationwide|countrywide|national");
+    private static readonly Regex InternationalPattern = Word(
+        @"india|australia|united\s+states|usa|u\.s\.|united\s+kingdom|uk|canada|singapore|philippines|ireland|germany|japan|china|malaysia|vietnam|indonesia|south\s+africa|brazil|mexico|poland|spain|france|netherlands");
+
     public string StandardiseRegion(string? location)
     {
         if (string.IsNullOrWhiteSpace(location))
         {
-            return "Unknown";
+            return "New Zealand";
         }
 
-        var value = location.ToLowerInvariant();
+        return MatchRegion(location) ?? "Other";
+    }
 
-        if (value.Contains("auckland")) return "Auckland";
-        if (value.Contains("wellington")) return "Wellington";
-        if (value.Contains("christchurch") || value.Contains("canterbury")) return "Canterbury";
-        if (value.Contains("hamilton") || value.Contains("waikato")) return "Waikato";
-        if (value.Contains("dunedin") || value.Contains("otago")) return "Otago";
-        if (value.Contains("tauranga") || value.Contains("bay of plenty")) return "Bay of Plenty";
+    public string ResolveRegion(string? location, string? context = null)
+    {
+        if (!string.IsNullOrWhiteSpace(location))
+        {
+            return StandardiseRegion(location);
+        }
 
-        return "Other";
+        return MatchRegion(context) ?? "New Zealand";
     }
 
     public string StandardiseSeniority(string? title)
@@ -43,4 +70,56 @@ public sealed class NormalisationService : INormalisationService
 
         return "Intermediate";
     }
+
+    private static string? MatchRegion(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        foreach (var (pattern, region) in RegionRules)
+        {
+            if (pattern.IsMatch(value))
+            {
+                return region;
+            }
+        }
+
+        if (RemotePattern.IsMatch(value)) return "Remote";
+        if (NzWidePattern.IsMatch(value)) return "New Zealand";
+        if (InternationalPattern.IsMatch(value)) return "Other";
+
+        return null;
+    }
+
+    private static (Regex Pattern, string Region)[] BuildRegionRules()
+    {
+        static (Regex, string) Rule(string region, params string[] keywords) =>
+            (Word(string.Join("|", keywords.Select(Regex.Escape))), region);
+
+        return
+        [
+            Rule("Auckland", "auckland", "manukau", "north shore", "waitakere", "papakura", "pukekohe", "waiheke"),
+            Rule("Wellington", "wellington", "porirua", "lower hutt", "upper hutt", "kapiti", "kāpiti", "masterton", "paraparaumu"),
+            Rule("Canterbury", "christchurch", "canterbury", "timaru", "ashburton", "rangiora", "rolleston"),
+            Rule("Waikato", "hamilton", "waikato", "taupo", "taupō", "cambridge", "te awamutu", "tokoroa", "thames"),
+            Rule("Otago", "dunedin", "otago", "queenstown", "wanaka", "oamaru", "alexandra", "cromwell"),
+            Rule("Bay of Plenty", "tauranga", "bay of plenty", "rotorua", "whakatane", "whakatāne", "mount maunganui"),
+            Rule("Manawatū-Whanganui", "palmerston north", "manawatu", "manawatū", "whanganui", "wanganui", "levin", "feilding", "ohakune"),
+            Rule("Hawke's Bay", "hawke's bay", "hawkes bay", "hawke’s bay", "napier", "hastings", "havelock north"),
+            Rule("Taranaki", "new plymouth", "taranaki", "stratford", "hawera", "hāwera"),
+            Rule("Northland", "whangarei", "whangārei", "northland", "kerikeri", "kaitaia", "dargaville"),
+            Rule("Gisborne", "gisborne"),
+            Rule("Nelson", "nelson"),
+            Rule("Marlborough", "blenheim", "picton", "marlborough"),
+            Rule("Tasman", "tasman", "motueka"),
+            Rule("West Coast", "greymouth", "hokitika", "westport", "west coast"),
+            Rule("Southland", "invercargill", "southland", "gore"),
+        ];
+    }
+
+    private static Regex Word(string pattern) => new(
+        $@"(?<![\p{{L}}\d])(?:{pattern})(?![\p{{L}}\d])",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 }
