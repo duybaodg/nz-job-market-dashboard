@@ -14,6 +14,19 @@ public sealed class LocationSanitiserTests
         "Wellington Job type Permanent Specialisation Team Leaders Reference BH-2844 "
         + "Job description Are you passionate about building world-class engineering platforms";
 
+    // Newly-yielding sources observed live 2026-10-12 (Round 2 follow-up).
+    private const string GallagherContaminatedLocation =
+        "centives Career growth opportunities as eShepherd continues to scale globally";
+
+    private const string GallagherContaminatedLocationAlt =
+        "centives Career growth opportunities as we continue to scale globally Modern";
+
+    private const string TalentVaultContaminatedLocation =
+        "Auckland Industry: Information & Communication Technology Contact name: Steve";
+
+    private const string NzGovernmentMultiRegionLocation =
+        "Wellington - Hutt Valley;Wellington - Kapiti;Wellington - Masterton";
+
     [Fact]
     public void Sanitise_cuts_seek_location_at_the_trailing_ad_sentence()
     {
@@ -30,6 +43,46 @@ public sealed class LocationSanitiserTests
 
         result.Location.Should().Be("Wellington");
         result.RemovedRemainder.Should().StartWith("Job type Permanent");
+    }
+
+    [Fact]
+    public void Sanitise_rejects_a_gallagher_description_fragment_as_a_location()
+    {
+        var result = LocationSanitiser.Sanitise(GallagherContaminatedLocation);
+
+        result.Location.Should().BeNull();
+        result.RemovedRemainder.Should().Be(GallagherContaminatedLocation);
+    }
+
+    [Fact]
+    public void Sanitise_rejects_the_alternate_gallagher_fragment()
+    {
+        var result = LocationSanitiser.Sanitise(GallagherContaminatedLocationAlt);
+
+        result.Location.Should().BeNull();
+        result.RemovedRemainder.Should().Be(GallagherContaminatedLocationAlt);
+    }
+
+    [Fact]
+    public void Sanitise_cuts_talent_vault_location_before_the_industry_field()
+    {
+        var result = LocationSanitiser.Sanitise(TalentVaultContaminatedLocation);
+
+        result.Location.Should().Be("Auckland");
+        result.RemovedRemainder.Should().StartWith("Industry: Information & Communication Technology");
+    }
+
+    [Fact]
+    public void Sanitise_keeps_nz_government_multi_region_and_resolves_wellington()
+    {
+        var result = LocationSanitiser.Sanitise(NzGovernmentMultiRegionLocation);
+        var region = new NormalisationService().StandardiseRegion(result.Location);
+
+        result.Location.Should().NotBeNull();
+        result.Location!.Length.Should().BeLessThanOrEqualTo(LocationSanitiser.MaxLength);
+        result.Location.Should().StartWith("Wellington - Hutt Valley");
+        result.Location.Should().Contain("Kapiti").And.Contain("Masterton");
+        region.Should().Be("Wellington");
     }
 
     [Fact]

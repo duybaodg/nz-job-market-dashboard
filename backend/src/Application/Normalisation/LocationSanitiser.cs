@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Application.Normalisation;
@@ -16,18 +17,26 @@ public sealed record LocationSanitisation(string? Location, string? RemovedRemai
 /// Some sources put a whole detail block in the location field: Comspek
 /// (<c>"Wellington Job type Permanent Specialisation Team Leaders Reference
 /// BH-2844 Job description …"</c>) and SEEK (<c>"Nelson, Nelson Region, New
-/// Zealand We also welcome applications …"</c>). The region mapper then sees a
-/// giant string and the dashboard shows description text as a location.
+/// Zealand We also welcome applications …"</c>). Other sources capture a
+/// labelled field that runs into the next one (Talent Vault:
+/// <c>"Auckland Industry: … Contact name: …"</c>) or a description sentence
+/// (Gallagher: <c>"centives Career growth opportunities …"</c>). The region
+/// mapper then sees a giant string and the dashboard shows description text as
+/// a location.
 ///
 /// A location is truncated at the first non-location token (a labelled field
-/// such as "Job type"/"Specialisation"/"Reference"/"Job description", a sentence
-/// such as "We also …", a sentence boundary), then limited to a handful of
-/// comma-separated segments and roughly 80 characters. The removed text is not
+/// such as "Job type"/"Industry"/"Contact name", a sentence such as "We also …",
+/// a sentence boundary), then limited to a handful of comma-separated segments
+/// and <see cref="MaxLength"/> characters. A cut that leaves a bare
+/// mid-sentence fragment with no place name at all ("centives") is rejected
+/// outright. Semicolon-separated multi-region values
+/// ("Wellington - Hutt Valley;Wellington - Kapiti") are compacted by factoring
+/// the repeated prefix without losing any region. The removed text is not
 /// discarded: callers prepend it to the description.
 /// </summary>
 public static class LocationSanitiser
 {
-    public const int MaxLength = 80;
+    public const int MaxLength = 60;
     public const int MaxSegments = 4;
 
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
@@ -41,6 +50,7 @@ public static class LocationSanitiser
         (?:
             job\s+type
           | job\s+description
+          | job\s+category
           | speciali[sz]ation
           | reference
           | discipline
@@ -50,6 +60,13 @@ public static class LocationSanitiser
           | employment\s+type
           | work\s+type
           | contract\s+type
+          | industry
+          | contact\s+name
+          | contact\s+details
+          | contact
+          | career\s+growth
+          | closing\s+date
+          | department
           | we\s+(?:also|are|have|offer|provide|believe|welcome)
           | the\s+role
           | about\s+(?:the|us|you|this)
@@ -83,9 +100,23 @@ public static class LocationSanitiser
 
         var value = original;
         var marker = StopMarker.Match(value);
-        if (marker.Success && marker.Index > 0)
+        if (marker.Success)
         {
+            if (marker.Index == 0)
+            {
+                // The whole value is a description marker, not a location.
+                return new LocationSanitisation(null, original);
+            }
+
             value = value[..marker.Index];
+        }
+
+        // A stop-marker cut can leave a mid-sentence fragment with no place
+        // name ("centives" out of "...incentives Career growth ..."). Such a
+        // fragment must not be stored as a location.
+        if (!IsPlaceLike(value))
+        {
+            return new LocationSanitisation(null, original);
         }
 
         // Only look for a sentence boundary when the value is still too long;
@@ -100,6 +131,8 @@ public static class LocationSanitiser
         }
 
         value = LimitSegments(value);
+        var cutValue = value;
+        value = CollapseMultiRegion(value);
         value = HardCap(value);
         var clean = value.Trim().Trim('.', ',', ';', '|', '-', ' ', '\t');
 
@@ -108,9 +141,20 @@ public static class LocationSanitiser
             return new LocationSanitisation(null, original);
         }
 
-        var remainder = clean.Length < original.Length
-            ? original[clean.Length..].Trim().Trim(',', ';', '|', '-', ' ', '\t')
-            : string.Empty;
+        // Preserve whatever tail was removed. When the value was compacted
+        // (repeated multi-region prefix) the removed text is duplicate place
+        // information, not description, so nothing is prepended.
+        string? remainder = null;
+        if (clean.Length < original.Length && original.StartsWith(clean, StringComparison.Ordinal))
+        {
+            remainder = original[clean.Length..];
+        }
+        else if (cutValue.Length < original.Length && original.StartsWith(cutValue, StringComparison.Ordinal))
+        {
+            remainder = original[cutValue.Length..];
+        }
+
+        remainder = remainder?.Trim().Trim(',', ';', '|', '-', ' ', '\t');
 
         return new LocationSanitisation(clean, string.IsNullOrWhiteSpace(remainder) ? null : remainder);
     }
@@ -134,6 +178,114 @@ public static class LocationSanitiser
         }
 
         return string.IsNullOrEmpty(text) ? trimmed : $"{trimmed} {text}";
+    }
+
+    /// <summary>
+    /// A value is a plausible location when it is structured (comma/semicolon
+    /// separated), carries a proper noun (an upper-case letter) or names a
+    /// known place/work mode. A bare lower-case sentence fragment fails all
+    /// three tests and is discarded rather than shown as a location.
+    /// </summary>
+    private static bool IsPlaceLike(string value)
+    {
+        if (value.Length == 0)
+        {
+            return false;
+        }
+
+        if (value.IndexOfAny([',', ';']) >= 0)
+        {
+            return true;
+        }
+
+        foreach (var character in value)
+        {
+            if (char.IsUpper(character))
+            {
+                return true;
+            }
+        }
+
+        return NormalisationService.ContainsKnownPlace(value);
+    }
+
+    /// <summary>
+    /// Compacts a semicolon-separated multi-region value by factoring out the
+    /// shared prefix: "Wellington - Hutt Valley;Wellington - Kapiti;
+    /// Wellington - Masterton" becomes "Wellington - Hutt Valley; Kapiti;
+    /// Masterton". All region names are kept, so the region mapper still sees
+    /// Wellington and the value fits the length cap.
+    /// </summary>
+    private static string CollapseMultiRegion(string value)
+    {
+        if (!value.Contains(';'))
+        {
+            return value;
+        }
+
+        var segments = value
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Length < 2)
+        {
+            return value;
+        }
+
+        var prefix = LongestCommonPrefix(segments);
+        prefix = TrimToWordBoundary(prefix);
+        if (prefix.Length < 3)
+        {
+            return value;
+        }
+
+        var builder = new StringBuilder(segments[0]);
+        for (var index = 1; index < segments.Length; index++)
+        {
+            var segment = segments[index];
+            var remainder = segment.Length > prefix.Length
+                ? segment[prefix.Length..].TrimStart(' ', '-', '/', ',')
+                : string.Empty;
+
+            builder.Append("; ").Append(string.IsNullOrEmpty(remainder) ? segment : remainder);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string LongestCommonPrefix(IReadOnlyList<string> values)
+    {
+        var first = values[0];
+        var length = first.Length;
+        for (var index = 1; index < values.Count && length > 0; index++)
+        {
+            length = Math.Min(length, values[index].Length);
+            var compare = 0;
+            while (compare < length
+                && char.ToUpperInvariant(first[compare]) == char.ToUpperInvariant(values[index][compare]))
+            {
+                compare++;
+            }
+
+            length = compare;
+        }
+
+        return first[..length];
+    }
+
+    private static string TrimToWordBoundary(string prefix)
+    {
+        if (prefix.Length == 0)
+        {
+            return prefix;
+        }
+
+        var last = prefix[^1];
+        if (last == ' ' || last == '-' || last == '/' || last == ',')
+        {
+            return prefix;
+        }
+
+        var boundary = prefix.LastIndexOfAny([' ', '-', '/', ',']);
+        return boundary >= 0 ? prefix[..(boundary + 1)] : prefix;
     }
 
     private static int FindSentenceBoundary(string value)

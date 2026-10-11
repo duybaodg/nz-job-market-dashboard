@@ -573,7 +573,14 @@ def is_job_link(parser: str, title: str, url: str) -> bool:
 
 
 def extract_label(text: str, label: str) -> str | None:
-    match = re.search(rf"(?:\*\*)?{label}(?:\*\*)?\s*:\s*(.+?)(?:\s+(?:Category|Type|Apply|Sector|Posted|Work|Job|Employ|Salary|Location|Discipline|Reference):|$)", text, re.I)
+    match = re.search(
+        rf"(?:\*\*)?{label}(?:\*\*)?\s*:\s*(.+?)"
+        r"(?:\s+(?:Category|Type|Apply|Sector|Posted|Work|Job|Employ|Salary|Location|"
+        r"Discipline|Reference|Industry|Contact(?:\s+name)?|Career\s+growth|"
+        r"Closing\s+date|Department):|$)",
+        text,
+        re.I,
+    )
     return clean_text(match.group(1)) if match else None
 
 
@@ -590,7 +597,7 @@ def extract_salary(text: str) -> str | None:
     return clean_text(match.group(1)) if match else None
 
 
-MAX_LOCATION_LENGTH = 80
+MAX_LOCATION_LENGTH = 60
 MAX_LOCATION_SEGMENTS = 4
 
 #: Tokens that mark the end of a location and the start of a detail block
@@ -603,6 +610,7 @@ LOCATION_STOP_RE = re.compile(
     (?:
         job\s+type
       | job\s+description
+      | job\s+category
       | speciali[sz]ation
       | reference
       | discipline
@@ -612,6 +620,13 @@ LOCATION_STOP_RE = re.compile(
       | employment\s+type
       | work\s+type
       | contract\s+type
+      | industry
+      | contact\s+name
+      | contact\s+details
+      | contact
+      | career\s+growth
+      | closing\s+date
+      | department
       | we\s+(?:also|are|have|offer|provide|believe|welcome)
       | the\s+role
       | about\s+(?:the|us|you|this)
@@ -624,15 +639,107 @@ LOCATION_STOP_RE = re.compile(
     """
 )
 
+#: Known NZ places and work modes, mirrored from
+#: Application.Normalisation.NormalisationService. Used to reject a stop-marker
+#: cut that leaves a bare description fragment with no place name
+#: ("centives" out of "...incentives Career growth ...").
+_KNOWN_PLACE_RE = re.compile(
+    r"""(?ix)
+    (?<![\w])
+    (?:
+        auckland | manukau | north\ shore | waitakere | papakura | pukekohe | waiheke
+      | wellington | porirua | lower\ hutt | upper\ hutt | kapiti | kāpiti
+      | masterton | paraparaumu
+      | christchurch | canterbury | timaru | ashburton | rangiora | rolleston
+      | hamilton | waikato | taupo | taupō | cambridge | te\ awamutu | tokoroa | thames
+      | dunedin | otago | queenstown | wanaka | oamaru | alexandra | cromwell
+      | tauranga | bay\ of\ plenty | rotorua | whakatane | whakatāne | mount\ maunganui
+      | palmerston\ north | manawatu | manawatū | whanganui | wanganui | levin
+      | feilding | ohakune
+      | hawke'?s\ bay | napier | hastings | havelock\ north
+      | new\ plymouth | taranaki | stratford | hawera | hāwera
+      | whangarei | whangārei | northland | kerikeri | kaitaia | dargaville
+      | gisborne | nelson | blenheim | picton | marlborough | tasman | motueka
+      | greymouth | hokitika | westport | west\ coast | invercargill | southland | gore
+      | new\ zealand | nz | remote | work\ from\ home | wfh | anywhere
+      | nationwide | countrywide | national
+      | india | australia | united\ states | usa | united\ kingdom | uk | canada
+      | singapore | philippines | ireland | germany | japan | china | malaysia
+      | vietnam | indonesia | south\ africa | brazil | mexico | poland | spain
+      | france | netherlands
+    )
+    (?![\w])
+    """
+)
+
+
+def _looks_like_place(value: str) -> bool:
+    """True when a value could be a location rather than a sentence fragment.
+
+    Structured (comma/semicolon) values and values carrying a proper noun pass;
+    a bare lower-case fragment only passes when it names a known place or work
+    mode.
+    """
+    if not value:
+        return False
+    if "," in value or ";" in value:
+        return True
+    if any(character.isupper() for character in value):
+        return True
+    return _KNOWN_PLACE_RE.search(value) is not None
+
+
+def _trim_to_word_boundary(prefix: str) -> str:
+    if not prefix:
+        return prefix
+    if prefix[-1] in " -/,":
+        return prefix
+    cut = max(prefix.rfind(" "), prefix.rfind("-"), prefix.rfind("/"), prefix.rfind(","))
+    return prefix[: cut + 1] if cut >= 0 else prefix
+
+
+def _collapse_multi_region(value: str) -> str:
+    """Compact a semicolon list by factoring the shared prefix.
+
+    "Wellington - Hutt Valley;Wellington - Kapiti;Wellington - Masterton"
+    becomes "Wellington - Hutt Valley; Kapiti; Masterton"; every region name is
+    kept so the .NET region mapper still sees Wellington.
+    """
+    if ";" not in value:
+        return value
+
+    segments = [segment.strip() for segment in value.split(";") if segment.strip()]
+    if len(segments) < 2:
+        return value
+
+    prefix = segments[0]
+    for segment in segments[1:]:
+        limit = min(len(prefix), len(segment))
+        index = 0
+        while index < limit and prefix[index].lower() == segment[index].lower():
+            index += 1
+        prefix = prefix[:index]
+
+    prefix = _trim_to_word_boundary(prefix)
+    if len(prefix) < 3:
+        return value
+
+    parts = [segments[0]]
+    for segment in segments[1:]:
+        remainder = segment[len(prefix):].lstrip(" -/,") if len(segment) > len(prefix) else ""
+        parts.append(remainder or segment)
+    return "; ".join(parts)
+
 
 def sanitise_location(value: str | None, max_length: int = MAX_LOCATION_LENGTH) -> str | None:
     """Reduce a raw location string to a place-shaped value.
 
-    Cuts at the first non-location token, then caps the result at a handful of
-    comma-separated segments and roughly ``max_length`` characters. Returns
-    ``None`` when nothing place-like remains. The .NET normalisation pass runs
-    the same logic again so a stale parser cannot leak description text into
-    the ``location`` column.
+    Cuts at the first non-location token, rejects a bare fragment with no place
+    name, compacts semicolon multi-region lists, then caps the result at a
+    handful of comma-separated segments and roughly ``max_length`` characters.
+    Returns ``None`` when nothing place-like remains. The .NET normalisation
+    pass runs the same logic again so a stale parser cannot leak description
+    text into the ``location`` column.
     """
     if not value:
         return None
@@ -642,8 +749,15 @@ def sanitise_location(value: str | None, max_length: int = MAX_LOCATION_LENGTH) 
         return None
 
     stop = LOCATION_STOP_RE.search(original)
-    if stop and stop.start() > 0:
+    if stop:
+        if stop.start() == 0:
+            return None
         original = original[: stop.start()]
+
+    if not _looks_like_place(original):
+        return None
+
+    original = _collapse_multi_region(original)
 
     if len(original) > max_length:
         window = original[:max_length]
@@ -675,8 +789,10 @@ def extract_location(text: str) -> str | None:
         if labelled:
             return sanitise_location(labelled)
 
+    # The trailing word boundary is essential: without it "based in" matches
+    # inside "Performance-based incentives", extracting "centives …".
     match = re.search(
-        r"(?:job\s+in|based\s+in|located\s+in)\s*:?\s*([^|\-–\n]+)",
+        r"(?:job\s+in\b|based\s+in\b|located\s+in\b)\s*:?\s*([^|\-–\n]+)",
         text,
         re.I,
     )

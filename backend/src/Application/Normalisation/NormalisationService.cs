@@ -54,6 +54,14 @@ public sealed class NormalisationService : INormalisationService
         return MatchRegion(context) ?? "New Zealand";
     }
 
+    /// <summary>
+    /// True when the value names a recognisable place or work location (an NZ
+    /// region/city, a recognised country, remote or NZ-wide). Shared with
+    /// <see cref="LocationSanitiser"/> so a mid-sentence fragment is not
+    /// mistaken for a location.
+    /// </summary>
+    public static bool ContainsKnownPlace(string? value) => MatchRegion(value) is not null;
+
     public string StandardiseSeniority(string? title)
     {
         if (string.IsNullOrWhiteSpace(title))

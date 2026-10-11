@@ -2,6 +2,7 @@
 
 Fixtures are real junk records observed in the live API on 2026-10-11.
 """
+import json
 import os
 import sys
 import unittest
@@ -251,6 +252,11 @@ class LocationSanitisationTests(unittest.TestCase):
         "engineering platforms"
     )
 
+    #: Exact live strings from Round 2 follow-up (2026-10-12).
+    CONTAMINATION = json.loads(
+        (FIXTURES / "location_contamination.json").read_text()
+    )
+
     def test_seek_location_stops_before_the_trailing_ad_sentence(self) -> None:
         self.assertEqual(
             "Nelson, Nelson Region, New Zealand", sanitise_location(self.SEEK_LOCATION)
@@ -258,6 +264,32 @@ class LocationSanitisationTests(unittest.TestCase):
 
     def test_comspek_location_stops_before_the_detail_block(self) -> None:
         self.assertEqual("Wellington", sanitise_location(self.COMSPEK_LOCATION))
+
+    def test_gallagher_fragment_is_not_a_location(self) -> None:
+        for key in ("gallagher", "gallagher_alt"):
+            with self.subTest(key=key):
+                self.assertIsNone(sanitise_location(self.CONTAMINATION[key]))
+
+    def test_talent_vault_location_stops_before_the_industry_field(self) -> None:
+        self.assertEqual(
+            "Auckland", sanitise_location(self.CONTAMINATION["talent_vault"])
+        )
+
+    def test_extract_location_does_not_match_based_inside_a_word(self) -> None:
+        text = (
+            "We Offer Performance-based incentives Career growth opportunities as "
+            "eShepherd continues to scale globally"
+        )
+        self.assertIsNone(extract_location(text))
+
+    def test_nz_government_multi_region_keeps_every_region_and_caps_length(self) -> None:
+        result = sanitise_location(self.CONTAMINATION["nz_government_multi_region"])
+
+        self.assertIsNotNone(result)
+        self.assertLessEqual(len(result), 60)
+        self.assertTrue(result.startswith("Wellington - Hutt Valley"))
+        self.assertIn("Kapiti", result)
+        self.assertIn("Masterton", result)
 
     def test_extract_location_does_not_absorb_a_single_line_dump(self) -> None:
         text = (
@@ -273,7 +305,7 @@ class LocationSanitisationTests(unittest.TestCase):
         )
         result = sanitise_location(regions)
         self.assertIsNotNone(result)
-        self.assertLessEqual(len(result), 80)
+        self.assertLessEqual(len(result), 60)
         self.assertTrue(result.startswith("Wellington - Hutt Valley"))
 
     def test_clean_locations_are_untouched(self) -> None:

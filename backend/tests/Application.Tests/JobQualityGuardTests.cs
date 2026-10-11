@@ -130,6 +130,41 @@ public sealed class JobQualityGuardRunTests
         job.DescriptionSummary.Should().Contain("Job type Permanent");
     }
 
+    // Round 2 follow-up: the Phase A sanitizer left these exact live strings in
+    // place, so the previous repair pass treated them as already normalised.
+    // A pattern change must re-run the sanitizer over those rows.
+    [Fact]
+    public async Task RunAsync_reruns_sanitizer_on_rows_the_previous_pass_missed()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.Jobs.AddRange(
+            CreateJob(
+                "CloudOps Engineer - Software",
+                "https://careers.gallagher.com/jobs/1",
+                location: "centives Career growth opportunities as eShepherd continues to scale globally"),
+            CreateJob(
+                "Network Solutions Architect",
+                "https://www.talentvault.co.nz/job-details/1",
+                location: "Auckland Industry: Information & Communication Technology Contact name: Steve"));
+        await dbContext.SaveChangesAsync();
+
+        var guard = CreateGuard(dbContext);
+        var first = await guard.RunAsync(CancellationToken.None);
+        var second = await guard.RunAsync(CancellationToken.None);
+
+        first.LocationsRepaired.Should().Be(2);
+        second.LocationsRepaired.Should().Be(0);
+
+        var gallagher = dbContext.Jobs.Single(job => job.Source == "Acme" && job.Url.Contains("gallagher"));
+        gallagher.Location.Should().BeNull();
+        gallagher.DescriptionSummary.Should().Contain("Career growth");
+
+        var talentVault = dbContext.Jobs.Single(job => job.Url.Contains("talentvault"));
+        talentVault.Location.Should().Be("Auckland");
+        talentVault.Region.Should().Be("Auckland");
+        talentVault.DescriptionSummary.Should().Contain("Industry: Information & Communication Technology");
+    }
+
     private static JobQualityGuard CreateGuard(ApplicationDbContext dbContext) => new(
         dbContext,
         new JobContentValidator(),
