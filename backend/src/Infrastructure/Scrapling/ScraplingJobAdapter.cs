@@ -44,9 +44,11 @@ public sealed class ScraplingJobAdapter(IOptions<ScraplingOptions> options) : IJ
         process.StartInfo.ArgumentList.Add("--url");
         process.StartInfo.ArgumentList.Add(request.Url);
         process.StartInfo.ArgumentList.Add("--parser");
-        process.StartInfo.ArgumentList.Add(request.Parser);
+        // Map any registry/legacy parser value onto a CLI choice so argparse
+        // can never exit 2 with "invalid choice" (the Xero/Trade Me bug).
+        process.StartInfo.ArgumentList.Add(ScraplingCliContract.NormaliseParser(request.Parser));
         process.StartInfo.ArgumentList.Add("--fetcher-type");
-        process.StartInfo.ArgumentList.Add(options.FetcherType);
+        process.StartInfo.ArgumentList.Add(ScraplingCliContract.NormaliseFetcher(options.FetcherType));
         process.StartInfo.ArgumentList.Add("--max-pages");
         process.StartInfo.ArgumentList.Add(options.MaxPagesPerRun.ToString());
         process.StartInfo.ArgumentList.Add("--delay-seconds");

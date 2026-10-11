@@ -88,6 +88,34 @@ class AdapterArgvTests(unittest.TestCase):
             with self.subTest(site=site["name"], parser=site["parser"]):
                 self._parse(argv)
 
+    def test_every_enabled_registry_source_produces_a_valid_argv(self) -> None:
+        """The contract the worker depends on: enabled sources can always run."""
+        enabled = [site for site in load_sites() if site.get("enabled", True)]
+        self.assertTrue(enabled, "the registry should have at least one enabled source")
+        for site in enabled:
+            argv = self.adapter_argv(
+                site["name"],
+                site.get("jobs_url") or site.get("homepage") or "https://example.com",
+                site["parser"],
+                site.get("fetcher") or "http",
+            )
+            with self.subTest(site=site["name"]):
+                self._parse(argv)
+
+    def test_every_global_fetcher_choice_parses(self) -> None:
+        """The adapter sends the configured global fetcher, not the per-site one."""
+        for fetcher in FETCHER_CHOICES:
+            with self.subTest(fetcher=fetcher):
+                args = self._parse(
+                    self.adapter_argv("Example", "https://example.com/jobs", "generic", fetcher)
+                )
+                self.assertEqual(fetcher, args.fetcher_type)
+
+    def test_unknown_parser_value_is_rejected_by_argparse(self) -> None:
+        """Documents why the .NET adapter must map registry values (exit 2 bug)."""
+        with self.assertRaises(SystemExit):
+            self._parse(self.adapter_argv("Example", "https://example.com/jobs", "not-a-parser"))
+
 
 if __name__ == "__main__":
     unittest.main()
