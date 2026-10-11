@@ -1,5 +1,11 @@
+using Application.Deduplication;
 using Application.Jobs;
+using Application.Normalisation;
+using Domain.Entities;
 using FluentAssertions;
+using Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Application.Tests;
 
@@ -32,5 +38,111 @@ public sealed class JobQualityGuardTests
     public void IsLowQualityTitle_keeps_real_jobs(string title, string source)
     {
         JobQualityGuard.IsLowQualityTitle(title, source).Should().BeFalse();
+    }
+}
+
+public sealed class JobQualityGuardRunTests
+{
+    [Fact]
+    public async Task RunAsync_removes_junk_and_normalises_regions()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.JobSources.Add(new JobSource
+        {
+            Id = Guid.NewGuid(),
+            Name = "Acme",
+            BaseUrl = "https://acme.example/careers/",
+            Method = "Scrapling",
+            Parser = "generic"
+        });
+        dbContext.Jobs.AddRange(
+            CreateJob("404 Error: Page Not Found", "https://acme.example/jobs/missing"),
+            CreateJob(
+                "Recruitment and Executive Search | Tribe Group Find a Job",
+                "https://acme.example/jobs/hub"),
+            CreateJob(
+                "Service Desk Support Analyst",
+                "https://acme.example/jobs/1",
+                description: "Service Desk Support Analyst Job in Christchurch Central, Canterbury - SEEK"));
+        await dbContext.SaveChangesAsync();
+
+        var guard = CreateGuard(dbContext);
+        var result = await guard.RunAsync(CancellationToken.None);
+
+        result.JunkRemoved.Should().Be(2);
+        result.RegionsNormalised.Should().BeGreaterThan(0);
+        dbContext.Jobs.Should().ContainSingle();
+        dbContext.Jobs.Single().Region.Should().Be("Canterbury");
+    }
+
+    [Fact]
+    public async Task RunAsync_is_idempotent()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.Jobs.AddRange(
+            CreateJob("404 Error: Page Not Found", "https://acme.example/jobs/missing"),
+            CreateJob("Senior Data Engineer", "https://acme.example/jobs/2", location: "Hamilton"));
+        await dbContext.SaveChangesAsync();
+
+        var guard = CreateGuard(dbContext);
+        var first = await guard.RunAsync(CancellationToken.None);
+        var second = await guard.RunAsync(CancellationToken.None);
+
+        first.JunkRemoved.Should().Be(1);
+        first.RegionsNormalised.Should().Be(1);
+        second.JunkRemoved.Should().Be(0);
+        second.RegionsNormalised.Should().Be(0);
+        dbContext.Jobs.Should().ContainSingle();
+        dbContext.Jobs.Single().Region.Should().Be("Waikato");
+    }
+
+    [Fact]
+    public async Task RunAsync_defaults_missing_location_to_new_zealand()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.Jobs.Add(CreateJob("Senior Data Engineer", "https://acme.example/jobs/3"));
+        await dbContext.SaveChangesAsync();
+
+        await CreateGuard(dbContext).RunAsync(CancellationToken.None);
+
+        dbContext.Jobs.Single().Region.Should().Be("New Zealand");
+    }
+
+    private static JobQualityGuard CreateGuard(ApplicationDbContext dbContext) => new(
+        dbContext,
+        new JobContentValidator(),
+        new NormalisationService(),
+        NullLogger<JobQualityGuard>.Instance);
+
+    private static Job CreateJob(
+        string title,
+        string url,
+        string? location = null,
+        string? description = null) => new()
+    {
+        Id = Guid.NewGuid(),
+        Source = "Acme",
+        Title = title,
+        Url = url,
+        ContentHash = Guid.NewGuid().ToString(),
+        Location = location,
+        DescriptionSummary = description,
+        Region = "Unknown",
+        IsActive = true,
+        FirstSeenAt = DateTime.UtcNow,
+        LastSeenAt = DateTime.UtcNow,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+
+    private static ApplicationDbContext CreateDbContext()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        var dbContext = new ApplicationDbContext(options);
+        dbContext.Database.EnsureCreated();
+        return dbContext;
     }
 }

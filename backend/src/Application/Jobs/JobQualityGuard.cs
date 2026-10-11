@@ -1,23 +1,35 @@
 using System.Text.RegularExpressions;
 using Application.Common;
+using Application.Deduplication;
+using Application.Normalisation;
+using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Jobs;
 
+public sealed record JobQualityGuardResult(int JunkRemoved, int RegionsNormalised);
+
 /// <summary>
-/// Removes navigation/landing pages that generic extraction can mistake for jobs
-/// ("Careers - BNZ", "3 jobs found for engineering"). The crawler filters these
-/// at ingestion; this sweep repairs records created by older worker versions.
-/// Mirrors the Python <c>HUB_TITLE_RE</c> in the crawler worker.
+/// Startup repair pass for data written by older worker versions:
+/// <list type="bullet">
+/// <item>removes records the Phase-1 <see cref="IJobContentValidator"/> rejects
+/// (error/404 pages, articles, hub/landing pages);</item>
+/// <item>re-normalises <c>region</c> for every remaining record with the
+/// Phase-2 mapping.</item>
+/// </list>
+/// Both steps are idempotent: a second run finds nothing to remove and every
+/// region already matches, so it reports zero changes.
 /// </summary>
 public interface IJobQualityGuard
 {
-    Task<int> DeactivateLowQualityJobsAsync(CancellationToken cancellationToken);
+    Task<JobQualityGuardResult> RunAsync(CancellationToken cancellationToken);
 }
 
 public sealed class JobQualityGuard(
     IApplicationDbContext dbContext,
+    IJobContentValidator contentValidator,
+    INormalisationService normalisationService,
     ILogger<JobQualityGuard> logger) : IJobQualityGuard
 {
     private static readonly Regex HubTitle = new(
@@ -64,38 +76,77 @@ public sealed class JobQualityGuard(
         return source is not null && string.Equals(value, source.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
-    public async Task<int> DeactivateLowQualityJobsAsync(CancellationToken cancellationToken)
+    public async Task<JobQualityGuardResult> RunAsync(CancellationToken cancellationToken)
     {
-        var candidates = await dbContext.Jobs
+        var sourceList = await dbContext.JobSources
             .AsNoTracking()
-            .Where(job => job.IsActive)
-            .Select(job => new { job.Id, job.Title, job.Source })
+            .Select(source => new { source.Name, source.BaseUrl })
             .ToListAsync(cancellationToken);
+        var baseUrls = sourceList.ToDictionary(
+            source => source.Name,
+            source => source.BaseUrl,
+            StringComparer.OrdinalIgnoreCase);
 
-        var junkIds = candidates
-            .Where(job => IsLowQualityTitle(job.Title, job.Source))
-            .Select(job => job.Id)
-            .ToHashSet();
-
-        if (junkIds.Count == 0)
-        {
-            return 0;
-        }
-
-        var entities = await dbContext.Jobs
-            .Where(job => junkIds.Contains(job.Id))
-            .ToListAsync(cancellationToken);
-
+        var jobs = await dbContext.Jobs.ToListAsync(cancellationToken);
         var now = DateTime.UtcNow;
-        foreach (var job in entities)
+        var junkRemoved = 0;
+        var regionsNormalised = 0;
+
+        foreach (var job in jobs)
         {
-            job.IsActive = false;
-            job.ExpiredAt = now;
-            job.UpdatedAt = now;
+            baseUrls.TryGetValue(job.Source, out var baseUrl);
+            var validation = contentValidator.Validate(
+                ToRawJobInput(job),
+                new JobValidationContext(CrawlUrl: baseUrl));
+
+            if (!validation.IsAccepted)
+            {
+                // Hard-remove: the record is not a job at all, so it must not
+                // reappear through the status=all view either.
+                dbContext.Jobs.Remove(job);
+                junkRemoved++;
+                continue;
+            }
+
+            var region = normalisationService.ResolveRegion(job.Location, job.DescriptionSummary);
+            if (!string.Equals(job.Region, region, StringComparison.Ordinal))
+            {
+                job.Region = region;
+                job.UpdatedAt = now;
+                regionsNormalised++;
+            }
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Deactivated {Count} low-quality (hub/landing page) job records.", entities.Count);
-        return entities.Count;
+        if (junkRemoved > 0 || regionsNormalised > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        logger.LogInformation(
+            "Job quality guard: removed {JunkRemoved} junk records, normalised {RegionsNormalised} regions.",
+            junkRemoved,
+            regionsNormalised);
+        return new JobQualityGuardResult(junkRemoved, regionsNormalised);
+    }
+
+    private static RawJobInput ToRawJobInput(Job job)
+    {
+        string? salaryText = null;
+        if (job.SalaryMin is not null || job.SalaryMax is not null)
+        {
+            salaryText = $"${job.SalaryMin ?? job.SalaryMax} - ${job.SalaryMax ?? job.SalaryMin}";
+        }
+
+        return new RawJobInput(
+            job.Source,
+            job.SourceJobId,
+            job.Title,
+            job.Company,
+            job.Location,
+            salaryText,
+            job.DescriptionSummary,
+            job.Url,
+            job.PostedDate,
+            job.ClosingDate);
     }
 }
