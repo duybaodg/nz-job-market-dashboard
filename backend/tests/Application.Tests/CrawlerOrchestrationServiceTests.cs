@@ -156,6 +156,43 @@ public sealed class CrawlerOrchestrationServiceTests
         dbContext.Jobs.Single().IsActive.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task StartCrawlRunAsync_rejects_junk_candidates_before_saving()
+    {
+        await using var dbContext = CreateDbContext();
+        var junk = new RawJobInput(
+            "Firecrawl", null, "404 Error: Page Not Found", null, null, null,
+            "404 Error: Page Not Found", "https://example.com/jobs/missing", null, null);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([junk])], new DeduplicationService(), new NormalisationService());
+
+        var result = await service.StartCrawlRunAsync(
+            new StartCrawlRunRequest("Firecrawl", "https://example.com/search"), CancellationToken.None);
+
+        result.CrawlRun.Status.Should().Be("Completed");
+        result.CrawlRun.TotalJobsSaved.Should().Be(0);
+        dbContext.Jobs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task StartCrawlRunAsync_deactivates_previously_saved_junk()
+    {
+        await using var dbContext = CreateDbContext();
+        var existing = CreateJob("https://example.com/jobs/missing");
+        existing.Title = "404 Error: Page Not Found";
+        dbContext.Jobs.Add(existing);
+        await dbContext.SaveChangesAsync();
+        var raw = new RawJobInput(
+            "Firecrawl", null, "404 Error: Page Not Found", null, null, null,
+            "404 Error: Page Not Found", existing.Url, null, null);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([raw])], new DeduplicationService(), new NormalisationService());
+
+        await service.StartCrawlRunAsync(new("Firecrawl", "https://example.com/search"), CancellationToken.None);
+
+        dbContext.Jobs.Single(job => job.Url.EndsWith("missing")).IsActive.Should().BeFalse();
+    }
+
     private static Job CreateJob(string url, DateTime? closingDate = null, DateTime? lastSeenAt = null) => new()
     {
         Id = Guid.NewGuid(),

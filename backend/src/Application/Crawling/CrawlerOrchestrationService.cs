@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using System.Runtime.ExceptionServices;
 using Application.Common;
 using Application.Deduplication;
+using Application.Jobs;
 using Application.Normalisation;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -21,10 +22,15 @@ public sealed class CrawlerOrchestrationService(
     IEnumerable<IJobSourceAdapter> adapters,
     IDeduplicationService deduplicationService,
     INormalisationService normalisationService,
-    CrawlerLifecycleOptions? lifecycleOptions = null)
+    CrawlerLifecycleOptions? lifecycleOptions = null,
+    IJobContentValidator? jobContentValidator = null)
     : ICrawlerOrchestrationService
 {
     private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
+    private readonly IJobContentValidator contentValidator = jobContentValidator ?? new JobContentValidator();
+    private static readonly Regex HtmlTitleRegex = new(
+        @"<title[^>]*>(.*?)</title>",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
     private static readonly Regex SalaryRegex = new(@"\$?\s*(\d{2,3})(?:,\d{3}|k)?\s*(?:-|to|–)\s*\$?\s*(\d{2,3})(?:,\d{3}|k)?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex ExperienceRegex = new(
         @"(?:(?:at least|minimum(?: of)?|over|more than)\s+)?(\d{1,2})(?:\s*\+)?(?:\s*(?:-|to|–)\s*\d{1,2})?\s+years?"
@@ -89,10 +95,15 @@ public sealed class CrawlerOrchestrationService(
             }
 
             var savedCount = 0;
+            var pageTitles = result.RawPages
+                .Where(page => !string.IsNullOrWhiteSpace(page.Url))
+                .GroupBy(page => page.Url, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => ExtractHtmlTitle(group.First().RawHtml), StringComparer.OrdinalIgnoreCase);
 
             foreach (var rawJob in result.Jobs)
             {
-                savedCount += await SaveJobAsync(rawJob, cancellationToken);
+                pageTitles.TryGetValue(rawJob.Url ?? string.Empty, out var pageTitle);
+                savedCount += await SaveJobAsync(rawJob, request.Url, pageTitle, cancellationToken);
             }
 
             await ReconcileJobsAsync(source, result, cancellationToken);
@@ -178,8 +189,16 @@ public sealed class CrawlerOrchestrationService(
             .ToListAsync(cancellationToken);
     }
 
-    private async Task<int> SaveJobAsync(RawJobInput rawJob, CancellationToken cancellationToken)
+    private async Task<int> SaveJobAsync(
+        RawJobInput rawJob,
+        string crawlUrl,
+        string? pageTitle,
+        CancellationToken cancellationToken)
     {
+        var validation = contentValidator.Validate(
+            rawJob,
+            new JobValidationContext(CrawlUrl: crawlUrl, PageTitle: pageTitle));
+
         var contentHash = deduplicationService.GenerateContentHash(rawJob);
         var existingJob = await dbContext.Jobs
             .Include(job => job.Skills)
@@ -188,6 +207,19 @@ public sealed class CrawlerOrchestrationService(
                 (rawJob.SourceJobId != null && job.Source == rawJob.Source && job.SourceJobId == rawJob.SourceJobId) ||
                 job.Url == rawJob.Url,
                 cancellationToken);
+
+        if (!validation.IsAccepted)
+        {
+            // A rejected candidate must never be (re)activated, including when a
+            // previous worker version already saved it.
+            if (existingJob is not null && existingJob.IsActive)
+            {
+                Expire(existingJob, DateTime.UtcNow);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            return 0;
+        }
 
         if (existingJob is not null)
         {
@@ -296,6 +328,23 @@ public sealed class CrawlerOrchestrationService(
     private static string? CleanOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string? ExtractHtmlTitle(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return null;
+        }
+
+        var match = HtmlTitleRegex.Match(html);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var value = Regex.Replace(match.Groups[1].Value, @"\s+", " ").Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private static (decimal? Min, decimal? Max) ParseSalary(string? salaryText)

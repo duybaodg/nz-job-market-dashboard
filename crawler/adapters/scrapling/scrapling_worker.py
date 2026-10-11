@@ -216,6 +216,162 @@ def is_acceptable_job(job: RawJobInput) -> bool:
     )
 
 
+# --- Shared content-quality gate (mirrors Application.Jobs.JobContentValidator) ---
+
+ERROR_PAGE_RE = re.compile(
+    r"""(?ix)
+    \b404\b
+    | \berror\s*\(\s*404\s*\)
+    | \bpage\s+not\s+found\b
+    | \bpage\s+cannot\s+be\s+found\b
+    | \bpage\s+not\s+available\b
+    | \bpage\s+unavailable\b
+    | \bpage\s+does\s+not\s+exist\b
+    | \bnot\s+found\b
+    | \bsomething\s+went\s+wrong\b
+    | \binternal\s+server\s+error\b
+    | \bthe\s+page\s+you\s+are\s+looking\s+for\b
+    """
+)
+
+ARTICLE_PATH_RE = re.compile(r"/(?:advice|article|articles|blog|blogs|guides?)(?:/|$)", re.I)
+
+ARTICLE_TITLE_RE = re.compile(
+    r"""(?ix)
+    ^\s*(?:how\s+to\s+|why\s+\w|what\s+\w|when\s+\w
+          |top\s+\d+\b
+          |\d+\s+(?:good|best|great|amazing|reasons?|tips?|ways?|things?)\b)
+    """
+)
+
+JOB_SIGNAL_RE = re.compile(
+    r"\b(?:full[-\s]?time|part[-\s]?time|permanent|fixed[-\s]?term|contract|casual|internship|apply\s+now|salary|per\s+annum)\b",
+    re.I,
+)
+
+HUB_EXACT_RE = re.compile(
+    r"""(?ix)
+    ^\s*(?:home|careers?|jobs?|job\s+search|working\s+here|find\s+a\s+job
+          |search\s+results?|current\s+vacancies|job\s+vacancies|job\s+listings?
+          |vacancies)\s*$
+    | ^\s*(?:home|careers?|jobs?|job\s+search)\s*[-|–—:]\s*
+    """
+)
+
+HUB_PHRASE_RE = re.compile(
+    r"""(?ix)
+    \bpeople\s+and\s+careers\b
+    | \brecruitment\s+and\s+executive\s+search\b
+    | \bexecutive\s+search\b
+    | \bempowering\s+new\s+zealand\s+to\s+hire\b
+    | \brecruitment\s+specialists?\b
+    | \bjob\s+board\b
+    | \bcareers?\s+home\b
+    | \bjoin\s+(?:our|the)\s+team\b
+    | \b\d+\s+jobs?\s+found\b
+    | \bjob\s+search\b
+    | \bsearch\s+results?\b
+    | \bprogram\s+your\s+path\b
+    """
+)
+
+
+def page_title_from_html(html: str | None) -> str | None:
+    """Return the cleaned contents of the first <title> tag, if present."""
+    if not html:
+        return None
+    match = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
+    return clean_text(match.group(1)) if match else None
+
+
+def _path_of(url: str | None) -> str:
+    if not url:
+        return ""
+    try:
+        return urlparse(url).path or ""
+    except ValueError:
+        return url
+
+
+def _normalise_path(path: str | None) -> str:
+    trimmed = (path or "").rstrip("/")
+    return trimmed or "/"
+
+
+def _same_page(left: str | None, right: str | None) -> bool:
+    if not left or not right:
+        return False
+    try:
+        left_url, right_url = urlparse(left), urlparse(right)
+    except ValueError:
+        return left.rstrip("/") == right.rstrip("/")
+    if not left_url.netloc or not right_url.netloc:
+        return left.rstrip("/") == right.rstrip("/")
+    return (
+        left_url.netloc.lower() == right_url.netloc.lower()
+        and _normalise_path(left_url.path).lower() == _normalise_path(right_url.path).lower()
+    )
+
+
+def _has_job_signals(job: RawJobInput) -> bool:
+    if job.salaryText and job.salaryText.strip():
+        return True
+    if job.location and job.location.strip():
+        return True
+    if job.postedDate:
+        return True
+    if job.sourceJobId:
+        return True
+    return bool(JOB_SIGNAL_RE.search(job.descriptionText or ""))
+
+
+def candidate_rejection_reason(
+    job: RawJobInput,
+    crawl_url: str | None = None,
+    page_title: str | None = None,
+) -> str | None:
+    """Return a reason when a candidate is junk (error page, article, hub), else None.
+
+    Mirrors the .NET ``JobContentValidator`` so the worker and the API
+    admin crawl-run trigger enforce the same gate. Only strong signals are used.
+    """
+    title = (job.title or "").strip()
+    description = job.descriptionText or ""
+
+    if len(title) < 3:
+        return "empty or truncated title"
+
+    if ERROR_PAGE_RE.search(title):
+        return "error/404 page title"
+    if page_title and ERROR_PAGE_RE.search(page_title):
+        return "error/404 page <title>"
+    if 0 < len(description) <= 400 and ERROR_PAGE_RE.search(description):
+        return "error/404 page description"
+
+    if ARTICLE_PATH_RE.search(_path_of(job.url)):
+        return "article/advice url"
+    if ARTICLE_TITLE_RE.search(title) and not _has_job_signals(job):
+        return "article title without job signals"
+
+    if not job.postedDate and not (job.salaryText or "").strip():
+        if HUB_EXACT_RE.search(title) or HUB_PHRASE_RE.search(title):
+            return "hub/landing page title"
+        if job.source and title.lower() == job.source.strip().lower():
+            return "title equals source name"
+        if _same_page(job.url, crawl_url) and not (job.location or "").strip():
+            return "hub/landing page url"
+
+    return None
+
+
+def is_acceptable_candidate(
+    job: RawJobInput,
+    crawl_url: str | None = None,
+    page_title: str | None = None,
+) -> bool:
+    return candidate_rejection_reason(job, crawl_url, page_title) is None
+
+
 #: Parsers whose descriptions come from full HTML pages (navigation, footers,
 #: boilerplate). They must show the technology signal in the title itself.
 TITLE_ONLY_IT_PARSERS = frozenset({"generic", "jsonld", "hays", "pageup", "trade-me"})
@@ -2339,6 +2495,8 @@ def crawl(
                 inline = structured_job_to_raw(args.source, url, source_data, text, title_from_url(url))
                 if not is_acceptable_job(inline):
                     continue
+                if candidate_rejection_reason(inline, crawl_url=url, page_title=page_title_from_html(html)):
+                    continue
                 inline_jobs.setdefault(inline.url or url, inline)
 
         # Supplement candidates from listing-level parsers (sources where detail URLs
@@ -2362,6 +2520,7 @@ def crawl(
         sleeper(args.delay_seconds)
         html, text = fetch(url)
         pages.append(raw_page(args, url, html, text))
+        page_title = page_title_from_html(html)
         job = parse_job_detail(args.source, url, html, text, fallback_title, parser)
         if parser in TITLE_ONLY_IT_PARSERS:
             if parser in ("generic", "jsonld") and not is_probable_job_detail(url, job.title):
@@ -2375,6 +2534,10 @@ def crawl(
             if not accepted:
                 continue
         elif not is_acceptable_job(job):
+            continue
+
+        # Shared gate: reject error/404 pages, articles and hub/landing pages.
+        if candidate_rejection_reason(job, crawl_url=args.url, page_title=page_title):
             continue
 
         # Global boards (for example ANZ's Australian/NZ list) can be narrowed to
@@ -2400,7 +2563,10 @@ def crawl(
         if not is_listing:
             try:
                 job = parse_job_detail(args.source, first.url, html_chunk, text_chunk, "Untitled job", parser)
-                jobs.append(job)
+                if not candidate_rejection_reason(
+                    job, crawl_url=args.url, page_title=page_title_from_html(first.rawHtml)
+                ):
+                    jobs.append(job)
             except ValueError:
                 pass  # Parser rejected the page
 
