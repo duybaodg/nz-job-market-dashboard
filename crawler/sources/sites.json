@@ -459,7 +459,7 @@
       "homepage": "https://www.placeme.co.nz/",
       "jobs_url": "https://www.placeme.co.nz/jobs/",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "dynamic",
       "httpStatus": 200,
@@ -467,7 +467,7 @@
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "notes": "careers page has an invalid TLS certificate; browser fetch required"
+      "notes": "DISABLED 2026-10-12: TLS certificate is for dnspackage.com (domain parked/suspended), so every fetch fails with a hostname mismatch. Certificate verification is NOT disabled globally; re-enable only once the site serves a valid certificate."
     },
     {
       "name": "Presto Resourcing",

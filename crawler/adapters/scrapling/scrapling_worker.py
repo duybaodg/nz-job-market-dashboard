@@ -2677,52 +2677,56 @@ def _supplement_candidates(
     return out
 
 
+#: Parser values accepted on the CLI. Kept in one place so the test suite can
+#: cross-check them against crawler/sources/sites.json: a registry parser that
+#: is missing here makes argparse exit 2 and fails the source (the Xero /
+#: Trade Me Jobs bug).
+PARSER_CHOICES = (
+    "generic",
+    "jsonld",
+    "govt-nz",
+    "absolute-it",
+    "talent-army",
+    "halter-ashby",
+    "beyond-recruitment",
+    "consult-recruitment",
+    "comspek",
+    "salt",
+    "digital-garage",
+    "jobseek",
+    "airnz",
+    "linkedin",
+    "seek",
+    "trade-me",
+    "pageup",
+    "rss",
+    "hays",
+    "ashby",
+    "greenhouse",
+    "lever",
+    "workable",
+    "smartrecruiters",
+    "bamboohr",
+    "workday",
+    "adzuna",
+    "tribe",
+    "oracle",
+    "salesforce",
+)
+
+#: Fetcher back-ends accepted on the CLI.
+FETCHER_CHOICES = ("fetcher", "dynamic", "stealth", "http", "browser")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch and parse job pages with Scrapling.")
     parser.add_argument("--source", default="Scrapling")
     parser.add_argument("--url", required=True)
-    parser.add_argument(
-        "--parser",
-        choices=(
-            "generic",
-            "jsonld",
-            "govt-nz",
-            "absolute-it",
-            "talent-army",
-            "halter-ashby",
-            "beyond-recruitment",
-            "consult-recruitment",
-            "comspek",
-            "salt",
-            "digital-garage",
-            "jobseek",
-            "airnz",
-            "linkedin",
-            "seek",
-            "trade-me",
-            "pageup",
-            "rss",
-            "hays",
-            "ashby",
-            "greenhouse",
-            "lever",
-            "workable",
-            "smartrecruiters",
-            "bamboohr",
-            "workday",
-            "adzuna",
-            "tribe",
-            "oracle",
-            "salesforce",
-        ),
-        default="generic",
-    )
-    parser.add_argument(
-        "--fetcher-type", choices=("fetcher", "dynamic", "stealth", "http", "browser"), default="fetcher"
-    )
+    parser.add_argument("--parser", choices=PARSER_CHOICES, default="generic")
+    parser.add_argument("--fetcher-type", choices=FETCHER_CHOICES, default="fetcher")
     parser.add_argument(
         "--fetcher-override",
-        choices=("fetcher", "dynamic", "stealth", "http", "browser"),
+        choices=FETCHER_CHOICES,
         default="",
         help="force a fetcher even when the registry specifies one",
     )
