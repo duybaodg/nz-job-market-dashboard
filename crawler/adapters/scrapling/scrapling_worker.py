@@ -249,31 +249,36 @@ JOB_SIGNAL_RE = re.compile(
     re.I,
 )
 
-HUB_EXACT_RE = re.compile(
+HUB_STRONG_RE = re.compile(
     r"""(?ix)
-    ^\s*(?:home|careers?|jobs?|job\s+search|working\s+here|find\s+a\s+job
+    \bpeople\s+and\s+careers\b
+    | \brecruitment\s+and\s+executive\s+search\b
+    | \bempowering\s+new\s+zealand\s+to\s+hire\b
+    | \blaunch\s+your\b
+    | \bprogram\s+your\s+path\b
+    | \bjob\s+board\b
+    | \bcareers?\s+home\b
+    | \bjoin\s+(?:our|the)\s+team\b
+    | \b\d+\s+jobs?\s+found\b
+    | ^\s*(?:home|careers?|jobs?|job\s+search|working\s+here|find\s+a\s+job
           |search\s+results?|current\s+vacancies|job\s+vacancies|job\s+listings?
           |vacancies)\s*$
     | ^\s*(?:home|careers?|jobs?|job\s+search)\s*[-|–—:]\s*
     """
 )
 
-HUB_PHRASE_RE = re.compile(
+# Weaker phrasing that could also be a real title ("Executive Search Consultant").
+HUB_WEAK_RE = re.compile(
     r"""(?ix)
-    \bpeople\s+and\s+careers\b
-    | \brecruitment\s+and\s+executive\s+search\b
-    | \bexecutive\s+search\b
-    | \bempowering\s+new\s+zealand\s+to\s+hire\b
-    | \brecruitment\s+specialists?\b
-    | \bjob\s+board\b
-    | \bcareers?\s+home\b
-    | \bjoin\s+(?:our|the)\s+team\b
-    | \b\d+\s+jobs?\s+found\b
-    | \bjob\s+search\b
+    \bjob\s+search\b
     | \bsearch\s+results?\b
-    | \bprogram\s+your\s+path\b
+    | \bexecutive\s+search\b
+    | \brecruitment\s+specialists?\b
     """
 )
+
+# Employer-profile boilerplate ("10 opportunities New Zealand").
+HUB_DESCRIPTION_RE = re.compile(r"(?ix)\b\d+\s+opportunit(?:y|ies)\b")
 
 
 def page_title_from_html(html: str | None) -> str | None:
@@ -353,13 +358,26 @@ def candidate_rejection_reason(
     if ARTICLE_TITLE_RE.search(title) and not _has_job_signals(job):
         return "article title without job signals"
 
-    if not job.postedDate and not (job.salaryText or "").strip():
-        if HUB_EXACT_RE.search(title) or HUB_PHRASE_RE.search(title):
+    if HUB_STRONG_RE.search(title):
+        return "hub/landing page title"
+
+    if not job.postedDate:
+        if HUB_WEAK_RE.search(title):
             return "hub/landing page title"
         if job.source and title.lower() == job.source.strip().lower():
             return "title equals source name"
-        if _same_page(job.url, crawl_url) and not (job.location or "").strip():
+        if (
+            not (job.salaryText or "").strip()
+            and _same_page(job.url, crawl_url)
+            and not (job.location or "").strip()
+        ):
             return "hub/landing page url"
+        if (
+            not (job.salaryText or "").strip()
+            and not (job.location or "").strip()
+            and HUB_DESCRIPTION_RE.search(description)
+        ):
+            return "hub/landing page description"
 
     return None
 

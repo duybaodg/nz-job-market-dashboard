@@ -117,6 +117,28 @@ public sealed class JobContentValidatorTests
     }
 
     [Fact]
+    public void Rejects_strong_hub_titles_even_with_a_misparsed_salary()
+    {
+        var job = Job(
+            "4 jobs found for Consultant",
+            url: "https://www.randstad.co.nz/jobs/q-consultant/",
+            salary: "$60k - $70k");
+
+        _validator.Validate(job).IsAccepted.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Rejects_employer_profile_descriptions()
+    {
+        var job = Job(
+            "Readygrad",
+            url: "https://nz.gradconnection.com/employers/readygrad/",
+            description: "Readygrad 10 opportunities New Zealand Less than 100 employees Follow Website");
+
+        _validator.Validate(job).IsAccepted.Should().BeFalse();
+    }
+
+    [Fact]
     public void Keeps_real_jobs_including_one_missing_a_field()
     {
         var jobs = new[]

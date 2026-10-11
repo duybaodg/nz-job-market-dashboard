@@ -69,35 +69,42 @@ public sealed class JobContentValidator : IJobContentValidator
         @"(?i)\b(?:full[-\s]?time|part[-\s]?time|permanent|fixed[-\s]?term|contract|casual|internship|apply\s+now|salary|per\s+annum)\b",
         RegexOptions.Compiled);
 
-    // A title that is *only* a navigation label, or a navigation label followed
-    // by a separator ("Careers - BNZ"). Deliberately narrower than
-    // JobQualityGuard so a real title such as "Careers Advisor" survives.
-    private static readonly Regex HubExactPattern = new(
+    // Unambiguous navigation/listing titles. Rejected even when a salary or
+    // date was misparsed from the page.
+    private static readonly Regex HubStrongPattern = new(
         """
         (?ix)
-        ^\s*(?:home|careers?|jobs?|job\s+search|working\s+here|find\s+a\s+job
+        \bpeople\s+and\s+careers\b
+        | \brecruitment\s+and\s+executive\s+search\b
+        | \bempowering\s+new\s+zealand\s+to\s+hire\b
+        | \blaunch\s+your\b
+        | \bprogram\s+your\s+path\b
+        | \bjob\s+board\b
+        | \bcareers?\s+home\b
+        | \bjoin\s+(?:our|the)\s+team\b
+        | \b\d+\s+jobs?\s+found\b
+        | ^\s*(?:home|careers?|jobs?|job\s+search|working\s+here|find\s+a\s+job
               |search\s+results?|current\s+vacancies|job\s+vacancies|job\s+listings?
               |vacancies)\s*$
         | ^\s*(?:home|careers?|jobs?|job\s+search)\s*[-|–—:]\s*
         """,
         RegexOptions.Compiled | RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase);
 
-    private static readonly Regex HubPhrasePattern = new(
+    // Weaker navigation phrasing that could also appear in a real title
+    // ("Executive Search Consultant"), so only trusted with no date/salary.
+    private static readonly Regex HubWeakPattern = new(
         """
         (?ix)
-        \bpeople\s+and\s+careers\b
-        | \brecruitment\s+and\s+executive\s+search\b
-        | \bexecutive\s+search\b
-        | \bempowering\s+new\s+zealand\s+to\s+hire\b
-        | \brecruitment\s+specialists?\b
-        | \bjob\s+board\b
-        | \bcareers?\s+home\b
-        | \bjoin\s+(?:our|the)\s+team\b
-        | \b\d+\s+jobs?\s+found\b
-        | \bjob\s+search\b
+        \bjob\s+search\b
         | \bsearch\s+results?\b
-        | \bprogram\s+your\s+path\b
+        | \bexecutive\s+search\b
+        | \brecruitment\s+specialists?\b
         """,
+        RegexOptions.Compiled | RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase);
+
+    // Employer-profile boilerplate ("10 opportunities New Zealand").
+    private static readonly Regex HubDescriptionPattern = new(
+        @"(?ix)\b\d+\s+opportunit(?:y|ies)\b",
         RegexOptions.Compiled | RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase);
 
     public JobValidationResult Validate(RawJobInput job, JobValidationContext? context = null)
@@ -142,11 +149,18 @@ public sealed class JobContentValidator : IJobContentValidator
             return JobValidationResult.Reject("article title without job signals");
         }
 
-        // 3) Hub / landing pages: only when there is no posted date *and* no
-        //    salary, so a real posting that merely lacks one field still saves.
-        if (job.PostedDate is null && string.IsNullOrWhiteSpace(job.SalaryText))
+        // 3) Hub / landing pages. Strong navigation/listing titles are rejected
+        //    even when a salary or date was misparsed from the page; weaker
+        //    signals require no posted date and no salary so a real posting that
+        //    merely lacks one field still saves.
+        if (HubStrongPattern.IsMatch(title))
         {
-            if (HubExactPattern.IsMatch(title) || HubPhrasePattern.IsMatch(title))
+            return JobValidationResult.Reject("hub/landing page title");
+        }
+
+        if (job.PostedDate is null)
+        {
+            if (HubWeakPattern.IsMatch(title))
             {
                 return JobValidationResult.Reject("hub/landing page title");
             }
@@ -156,9 +170,18 @@ public sealed class JobContentValidator : IJobContentValidator
                 return JobValidationResult.Reject("title equals source name");
             }
 
-            if (SamePage(job.Url, context.CrawlUrl) && string.IsNullOrWhiteSpace(job.Location))
+            if (string.IsNullOrWhiteSpace(job.SalaryText) &&
+                SamePage(job.Url, context.CrawlUrl) &&
+                string.IsNullOrWhiteSpace(job.Location))
             {
                 return JobValidationResult.Reject("hub/landing page url");
+            }
+
+            if (string.IsNullOrWhiteSpace(job.SalaryText) &&
+                string.IsNullOrWhiteSpace(job.Location) &&
+                HubDescriptionPattern.IsMatch(description))
+            {
+                return JobValidationResult.Reject("hub/landing page description");
             }
         }
 

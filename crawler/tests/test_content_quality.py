@@ -153,6 +153,22 @@ class HubLandingTests(unittest.TestCase):
     def test_title_equal_to_source_name_is_rejected(self) -> None:
         self.assertIsNotNone(candidate_rejection_reason(job("Fonterra", source="Fonterra")))
 
+    def test_strong_hub_title_is_rejected_even_with_a_misparsed_salary(self) -> None:
+        candidate = job(
+            "4 jobs found for Consultant",
+            url="https://www.randstad.co.nz/jobs/q-consultant/",
+            salary="$60k - $70k",
+        )
+        self.assertIsNotNone(candidate_rejection_reason(candidate))
+
+    def test_employer_profile_description_is_rejected(self) -> None:
+        candidate = job(
+            "Readygrad",
+            url="https://nz.gradconnection.com/employers/readygrad/",
+            description="Readygrad 10 opportunities New Zealand Less than 100 employees Follow Website",
+        )
+        self.assertIsNotNone(candidate_rejection_reason(candidate))
+
     def test_careers_advisor_is_not_treated_as_a_hub_title(self) -> None:
         candidate = job(
             "Careers Advisor",
