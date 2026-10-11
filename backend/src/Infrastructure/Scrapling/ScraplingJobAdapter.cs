@@ -98,6 +98,13 @@ public sealed class ScraplingJobAdapter(IOptions<ScraplingOptions> options) : IJ
             TryKill(process);
             throw new InvalidOperationException($"Scrapling crawl timed out after {options.TimeoutSeconds} seconds.");
         }
+        catch (OperationCanceledException)
+        {
+            // The caller (HTTP request or worker shutdown) went away: kill the
+            // child so a slow site cannot leave an orphaned Python process.
+            TryKill(process);
+            throw;
+        }
 
         if (process.ExitCode != 0)
         {

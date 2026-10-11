@@ -117,6 +117,16 @@ public sealed class CrawlerOrchestrationService(
 
             return new CrawlRunResultDto(ToDto(crawlRun), true, "Crawl run completed.");
         }
+        catch (OperationCanceledException)
+        {
+            // A cancelled request (client disconnect / worker shutdown) must not
+            // leave the run stuck in "Running" forever.
+            crawlRun.Status = "Failed";
+            crawlRun.FinishedAt = DateTime.UtcNow;
+            crawlRun.ErrorMessage = "Crawl cancelled.";
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+            throw;
+        }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             try
