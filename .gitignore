@@ -9,6 +9,8 @@ node_modules/
 *.suo
 TestResults/
 coverage/
+__pycache__/
+*.pyc
 crawler/.venv/
 .codegraph
 /docs/*
