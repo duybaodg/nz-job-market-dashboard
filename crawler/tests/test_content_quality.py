@@ -2,10 +2,12 @@
 
 Fixtures are real junk records observed in the live API on 2026-10-11.
 """
+import os
 import sys
 import unittest
 from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -13,10 +15,12 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 from adapters.scrapling.scrapling_worker import (  # noqa: E402
     RawJobInput,
+    build_fetcher,
     candidate_rejection_reason,
     crawl,
     extract_location,
     is_acceptable_candidate,
+    linkedin_worker_paths,
     page_title_from_html,
     parse_comspek_detail,
     sanitise_location,
@@ -288,6 +292,39 @@ class LocationSanitisationTests(unittest.TestCase):
         )
         self.assertEqual("Wellington", job.location)
         self.assertEqual("Network Security Engineer", job.title)
+
+
+class LinkedInPathTests(unittest.TestCase):
+    """Round 2 regression: the helper path had a doubled ``adapters/`` segment."""
+
+    def test_linkedin_script_path_is_not_doubled(self) -> None:
+        _venv, script = linkedin_worker_paths()
+        self.assertTrue(
+            script.endswith(os.path.join("adapters", "linkedin", "linkedin_crawler.py")),
+            script,
+        )
+        self.assertNotIn(os.path.join("adapters", "adapters"), script)
+        self.assertTrue(os.path.exists(script), f"missing LinkedIn helper: {script}")
+
+
+class FetcherMappingTests(unittest.TestCase):
+    """The resolved per-site fetcher must win over the global --fetcher-type."""
+
+    def test_scrapling_backend_uses_the_resolved_fetcher(self) -> None:
+        args = base_args(fetcher_type="http", proxy_url="")
+        seen: list[str | None] = []
+
+        def fake_scrapling(_args, _url, fetcher_type=None):
+            seen.append(fetcher_type)
+            return "<html></html>", "text"
+
+        with patch(
+            "adapters.scrapling.scrapling_worker.fetch_with_scrapling", fake_scrapling
+        ):
+            fetch = build_fetcher(args, "dynamic")
+            fetch("https://example.com/jobs")
+
+        self.assertEqual(["dynamic"], seen)
 
 
 class CrawlIntegrationTests(unittest.TestCase):

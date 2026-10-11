@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from urllib.parse import urlparse
 
 Group = tuple[tuple[str, ...], tuple[tuple[bool, str], ...]]
@@ -65,12 +66,19 @@ def parse_robots(text: str) -> RobotsRules:
     return RobotsRules(tuple(groups))
 
 
+@lru_cache(maxsize=65_536)
 def _pattern_to_regex(pattern: str) -> re.Pattern[str] | None:
     if pattern == "":
         return None
     anchored_end = pattern.endswith("$")
     body = pattern[:-1] if anchored_end else pattern
     escaped = re.escape(body).replace(r"\*", ".*")
+    # Collapse runs of wildcards. Some real robots.txt files contain a rule such
+    # as "Disallow: /a/*****…" (Trade Me); translating every "*" literally gives
+    # a regex of ".*****…" that backtracks exponentially on a short path and
+    # hangs the whole crawl. ".*.*" and ".*" match the same language, so one
+    # wildcard per run is enough.
+    escaped = re.sub(r"(?:\.\*)+", ".*", escaped)
     return re.compile("^" + escaped + ("$" if anchored_end else ""))
 
 

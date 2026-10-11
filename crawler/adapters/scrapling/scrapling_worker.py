@@ -1000,11 +1000,17 @@ def is_probable_job_url(url: str) -> bool:
     return False
 
 
-def fetch_with_scrapling(args: argparse.Namespace, url: str) -> tuple[str, str]:
+def fetch_with_scrapling(
+    args: argparse.Namespace, url: str, fetcher_type: str | None = None
+) -> tuple[str, str]:
+    # Use the *resolved* fetcher (registry override or CLI), not args.fetcher_type:
+    # a per-site "dynamic"/"stealth" choice must select the matching Scrapling
+    # fetcher even when the global --fetcher-type is something else.
+    mode = fetcher_type or getattr(args, "fetcher_type", "fetcher")
     try:
-        if args.fetcher_type == "dynamic":
+        if mode == "dynamic":
             from scrapling.fetchers import DynamicFetcher as Fetcher
-        elif args.fetcher_type == "stealth":
+        elif mode == "stealth":
             from scrapling.fetchers import StealthyFetcher as Fetcher
         else:
             from scrapling.fetchers import Fetcher
@@ -1017,7 +1023,7 @@ def fetch_with_scrapling(args: argparse.Namespace, url: str) -> tuple[str, str]:
     if args.proxy_url:
         fetch_kwargs["proxy"] = args.proxy_url
 
-    is_dynamic = args.fetcher_type in ("dynamic", "stealth")
+    is_dynamic = mode in ("dynamic", "stealth")
     if is_dynamic:
         fetch_kwargs.setdefault("headless", True)
         page = Fetcher.fetch(**fetch_kwargs)
@@ -1705,15 +1711,27 @@ def parse_linkedin_job(
     )
 
 
+def linkedin_worker_paths() -> tuple[str, str]:
+    """Resolve the LinkedIn helper's venv interpreter and script path.
+
+    ``__file__`` lives at ``crawler/adapters/scrapling/scrapling_worker.py``, so
+    the package root is three directories up (``crawler/``). The helper is at
+    ``crawler/adapters/linkedin/linkedin_crawler.py`` — joining ``"adapters"``
+    onto the ``adapters/`` directory produced the doubled
+    ``adapters/adapters/linkedin/...`` path that broke the source.
+    """
+    crawler_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    venv_python = os.path.join(crawler_dir, ".venv", "bin", "python")
+    if not os.path.exists(venv_python):
+        venv_python = "python3"  # fallback
+    script = os.path.join(crawler_dir, "adapters", "linkedin", "linkedin_crawler.py")
+    return venv_python, script
+
+
 def run_linkedin_crawl(source: str, output_path: str, max_jobs: int = 80) -> list[RawJobInput]:
     """Run the LinkedIn crawler script and parse its JSON output."""
     import subprocess as _sp, json as _json, os as _os
-    # Find the venv Python
-    crawler_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-    venv_python = _os.path.join(crawler_dir, ".venv", "bin", "python")
-    if not _os.path.exists(venv_python):
-        venv_python = "python3"  # fallback
-    script = _os.path.join(crawler_dir, "adapters", "linkedin", "linkedin_crawler.py")
+    venv_python, script = linkedin_worker_paths()
     if not _os.path.exists(script):
         raise RuntimeError(f"LinkedIn crawler script not found: {script}")
     result = _sp.run(
@@ -2430,7 +2448,7 @@ def build_fetcher(args: argparse.Namespace, fetcher_type: str) -> Any:
     if fetcher_type == "browser":
         return lambda url: fetch_with_browser(args, url)
 
-    state = {"mode": "scrapling"}
+    state = {"mode": "scrapling", "fetcher": fetcher_type}
 
     def _fetch(url: str) -> tuple[str, str]:
         if state["mode"] == "http":
@@ -2438,7 +2456,7 @@ def build_fetcher(args: argparse.Namespace, fetcher_type: str) -> Any:
         if state["mode"] == "browser":
             return fetch_with_browser(args, url)
         try:
-            return fetch_with_scrapling(args, url)
+            return fetch_with_scrapling(args, url, state["fetcher"])
         except RuntimeError as exc:
             if "Scrapling is not installed" not in str(exc):
                 raise

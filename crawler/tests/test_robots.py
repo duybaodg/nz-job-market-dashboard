@@ -5,6 +5,7 @@ These cover the real rules that matter for this project: SEEK disallows
 ``/a/*?*`` query URL.  The stdlib parser gets all of these wrong.
 """
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -91,6 +92,20 @@ class RobotsTests(unittest.TestCase):
     def test_unmatched_paths_are_allowed(self) -> None:
         rules = parse_robots("User-agent: *\nDisallow: /secret\n")
         self.assertTrue(can_fetch(rules, self.ua, "https://example.com/public"))
+
+    def test_pathological_wildcard_run_does_not_backtrack(self) -> None:
+        # Trade Me's live robots.txt contains "Disallow: /a/*****…" with a long
+        # run of asterisks. Translating each "*" to ".*" produced a chain that
+        # backtracked exponentially and hung the crawl for minutes.
+        pattern = "/a/" + "*" * 400
+        rules = parse_robots(f"User-agent: *\nDisallow: {pattern}\n")
+
+        start = time.perf_counter()
+        allowed = can_fetch(rules, self.ua, "https://www.trademe.co.nz/a/jobs/it/search")
+        elapsed = time.perf_counter() - start
+
+        self.assertFalse(allowed)
+        self.assertLess(elapsed, 1.0, f"robots match took {elapsed:.2f}s")
 
 
 if __name__ == "__main__":

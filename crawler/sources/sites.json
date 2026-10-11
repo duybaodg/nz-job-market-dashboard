@@ -41,15 +41,15 @@
       "homepage": "https://www.trademe.co.nz/a/jobs",
       "jobs_url": "https://www.trademe.co.nz/a/jobs/it/search",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 10080,
       "strategy": "custom",
       "httpStatus": 200,
       "parser": "trade-me",
       "sitemapJobUrls": 0,
       "fetcher": "http",
-      "robotsAllows": true,
-      "notes": "robots.txt disallows query strings; tracking params stripped and detail pages use JSON-LD | deprioritised: crawled last, weekly",
+      "robotsAllows": false,
+      "notes": "robots.txt disallows query strings; tracking params stripped and detail pages use JSON-LD | deprioritised: crawled last, weekly | DISABLED 2026-10-12 (Round 2): parser/argv contract is fixed, but robots.txt 'Disallow: /a/' blocks the listing path /a/jobs/it/search; only /a/jobs/*/listing detail pages are allowed and there is no permitted discovery path. Do not bypass robots.",
       "priority": "last"
     },
     {
@@ -622,14 +622,15 @@
       "homepage": "https://www.sjs.co.nz/",
       "jobs_url": "https://www.sjs.co.nz/job-seeker/jobs",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "dynamic",
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 3,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "DISABLED 2026-10-12 (Round 2): listings are JS-only; the rendered DOM contains only site navigation (no job cards) and no public JSON API was found."
     },
     {
       "name": "GradConnection NZ",
@@ -761,7 +762,8 @@
       "parser": "jsonld",
       "sitemapJobUrls": 40,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "Round 2 triage: completed with 0 jobs - global board, JSON-LD parser works but sampled postings were US/non-IT; no NZ IT postings found."
     },
     {
       "name": "Serko",
@@ -1225,7 +1227,7 @@
       "homepage": "https://www.adzuna.co.nz/",
       "jobs_url": "https://www.adzuna.co.nz/search?q=IT",
       "platform": "adzuna",
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "api",
       "httpStatus": 200,
@@ -1233,7 +1235,7 @@
       "what": "IT",
       "country": "nz",
       "pages": 2,
-      "notes": "Requires ADZUNA_APP_ID / ADZUNA_APP_KEY env credentials",
+      "notes": "Requires ADZUNA_APP_ID / ADZUNA_APP_KEY env credentials | DISABLED 2026-10-12 (Round 2): needs ADZUNA_APP_ID/ADZUNA_APP_KEY (absent) and the web search path is robots-disallowed. Re-enable only with provisioned API credentials.",
       "sitemapJobUrls": 0,
       "fetcher": "http",
       "robotsAllows": false

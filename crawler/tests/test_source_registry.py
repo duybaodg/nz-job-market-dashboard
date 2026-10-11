@@ -118,7 +118,7 @@ class SourceRegistryTests(unittest.TestCase):
 
         calls: list[tuple[str, str]] = []
 
-        def boom(args, url):
+        def boom(args, url, fetcher_type=None):
             raise RuntimeError("Scrapling is not installed. Run `python -m pip install -e crawler`.")
 
         def browser(args, url):
@@ -181,7 +181,7 @@ class SourceRegistryTests(unittest.TestCase):
 
         calls: list[tuple[str, str]] = []
 
-        def boom(args, url):
+        def boom(args, url, fetcher_type=None):
             calls.append(("scrapling", url))
             raise RuntimeError("Scrapling is not installed. Run `python -m pip install -e crawler`.")
 
