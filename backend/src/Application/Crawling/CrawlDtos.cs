@@ -17,7 +17,16 @@ public sealed record RawJobPageInput(
 public sealed record SourceFetchResult(
     IReadOnlyList<RawJobPageInput> RawPages,
     IReadOnlyList<RawJobInput> Jobs,
-    bool IsComplete = false);
+    bool IsComplete = false,
+    CrawlRunStats? Stats = null);
+
+/// <summary>
+/// Candidate/kept counters returned by the Python worker. They let the
+/// orchestration log a clear "0 IT roles of N total" line for a healthy source
+/// whose board currently holds no technology roles (the Round 4 Group F ask),
+/// so an empty source is never mistaken for a crawl failure.
+/// </summary>
+public sealed record CrawlRunStats(int Candidates, int Kept);
 
 public sealed record CrawlRunDto(
     Guid Id,

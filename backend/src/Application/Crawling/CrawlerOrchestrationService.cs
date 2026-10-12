@@ -6,6 +6,7 @@ using Application.Jobs;
 using Application.Normalisation;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Crawling;
 
@@ -23,7 +24,8 @@ public sealed class CrawlerOrchestrationService(
     IDeduplicationService deduplicationService,
     INormalisationService normalisationService,
     CrawlerLifecycleOptions? lifecycleOptions = null,
-    IJobContentValidator? jobContentValidator = null)
+    IJobContentValidator? jobContentValidator = null,
+    ILogger<CrawlerOrchestrationService>? logger = null)
     : ICrawlerOrchestrationService
 {
     private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
@@ -130,6 +132,17 @@ public sealed class CrawlerOrchestrationService(
             crawlRun.TotalJobsFound = result.Jobs.Count;
             crawlRun.TotalJobsSaved = savedCount;
             await dbContext.SaveChangesAsync(cancellationToken);
+
+            // A healthy board with no technology roles must read as such, not as
+            // a silent zero/failure (Round 4 Group F).
+            if (result.Stats is not null)
+            {
+                logger?.LogInformation(
+                    "Source {Source}: {Kept} IT roles of {Total} total candidates.",
+                    source,
+                    result.Stats.Kept,
+                    result.Stats.Candidates);
+            }
 
             return new CrawlRunResultDto(ToDto(crawlRun), true, "Crawl run completed.");
         }

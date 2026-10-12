@@ -4,6 +4,7 @@ using Application.Normalisation;
 using FluentAssertions;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Domain.Entities;
 
 namespace Application.Tests;
@@ -289,6 +290,31 @@ public sealed class CrawlerOrchestrationServiceTests
         UpdatedAt = DateTime.UtcNow
     };
 
+    [Fact]
+    public async Task StartCrawlRunAsync_logs_zero_it_roles_for_a_healthy_empty_source()
+    {
+        await using var dbContext = CreateDbContext();
+        var logger = new ListLogger<CrawlerOrchestrationService>();
+        // 20 real vacancies on the board, none of them technology roles.
+        var adapter = new FakeJobSourceAdapter([], new CrawlRunStats(Candidates: 20, Kept: 0));
+        var service = new CrawlerOrchestrationService(
+            dbContext,
+            [adapter],
+            new DeduplicationService(),
+            new NormalisationService(),
+            null,
+            null,
+            logger);
+
+        var result = await service.StartCrawlRunAsync(
+            new StartCrawlRunRequest("Firecrawl", "https://example.com/search"),
+            CancellationToken.None);
+
+        result.CrawlRun.Status.Should().Be("Completed");
+        result.CrawlRun.TotalJobsFound.Should().Be(0);
+        logger.Messages.Should().Contain(message => message.Contains("0 IT roles of 20 total candidates"));
+    }
+
     private static ApplicationDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -300,7 +326,26 @@ public sealed class CrawlerOrchestrationServiceTests
         return dbContext;
     }
 
-    private sealed class FakeJobSourceAdapter(IReadOnlyList<RawJobInput>? resultJobs = null) : IJobSourceAdapter
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Messages.Add(formatter(state, exception));
+    }
+
+    private sealed class FakeJobSourceAdapter(
+        IReadOnlyList<RawJobInput>? resultJobs = null,
+        CrawlRunStats? stats = null) : IJobSourceAdapter
     {
         public string Method => "Firecrawl";
 
@@ -331,7 +376,8 @@ public sealed class CrawlerOrchestrationServiceTests
                     null)
             ];
 
-            return Task.FromResult(new SourceFetchResult([rawPage], jobs, true));
+            return Task.FromResult(new SourceFetchResult([rawPage], jobs, true, stats));
         }
     }
 }
+
