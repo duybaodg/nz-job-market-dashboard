@@ -1,13 +1,9 @@
-import { RefreshCw } from 'lucide-react'
-
 type PageHeaderProps = {
   jobCount: number
   sourceCount: number
-  isRefreshing: boolean
-  onRefresh: () => void
 }
 
-export function PageHeader({ jobCount, sourceCount, isRefreshing, onRefresh }: PageHeaderProps) {
+export function PageHeader({ jobCount, sourceCount }: PageHeaderProps) {
   return (
     <header className="page-header">
       <div>
@@ -20,10 +16,6 @@ export function PageHeader({ jobCount, sourceCount, isRefreshing, onRefresh }: P
           <span><i className="live-dot" aria-hidden="true" /> Live dataset</span>
           <strong>{jobCount} jobs · {sourceCount} sources</strong>
         </div>
-        <button className="refresh-button" type="button" onClick={onRefresh} disabled={isRefreshing}>
-          <RefreshCw aria-hidden="true" className={isRefreshing ? 'spinning' : ''} />
-          {isRefreshing ? 'Refreshing' : 'Refresh'}
-        </button>
       </div>
     </header>
   )

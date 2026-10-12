@@ -194,8 +194,6 @@ function App() {
         <PageHeader
           jobCount={allJobs.filter((job) => job.isActive).length}
           sourceCount={unique(allJobs.map((job) => job.source)).length}
-          isRefreshing={jobsQuery.isFetching}
-          onRefresh={() => void jobsQuery.refetch()}
         />
 
         {hasError ? (
@@ -208,7 +206,6 @@ function App() {
           {...options}
           filters={filters}
           onFilterChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
-          onReset={() => setFilters(emptyFilters)}
         />
 
         <section className="stats-grid" aria-busy={isLoading}>

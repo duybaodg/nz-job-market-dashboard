@@ -1,4 +1,4 @@
-import { RotateCcw, Search, SlidersHorizontal } from 'lucide-react'
+import { Search, SlidersHorizontal } from 'lucide-react'
 
 export type JobFilters = {
   timeRange: string
@@ -29,7 +29,6 @@ type FilterBarProps = {
   programmingLanguages: string[]
   filters: JobFilters
   onFilterChange: (name: keyof JobFilters, value: string) => void
-  onReset: () => void
 }
 
 export function FilterBar({
@@ -44,7 +43,6 @@ export function FilterBar({
   programmingLanguages,
   filters,
   onFilterChange,
-  onReset,
 }: FilterBarProps) {
   const activeCount = Object.entries(filters).filter(([name, value]) => value && !(name === 'status' && value === 'active')).length
 
@@ -55,9 +53,6 @@ export function FilterBar({
           <span className="eyebrow">Explore the market</span>
           <h2>Find the signal in the listings</h2>
         </div>
-        <button className="reset-button" type="button" onClick={onReset} disabled={activeCount === 0}>
-          <RotateCcw aria-hidden="true" /> Reset {activeCount > 0 ? `(${activeCount})` : ''}
-        </button>
       </div>
       <div className="primary-filters">
         <label className="search-filter">
