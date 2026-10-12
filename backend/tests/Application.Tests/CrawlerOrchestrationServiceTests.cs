@@ -193,6 +193,87 @@ public sealed class CrawlerOrchestrationServiceTests
         dbContext.Jobs.Single(job => job.Url.EndsWith("missing")).IsActive.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task StartCrawlRunAsync_refreshes_posted_date_and_salary_on_existing_job()
+    {
+        await using var dbContext = CreateDbContext();
+        var existing = CreateJob("https://example.com/jobs/refresh-salary");
+        dbContext.Jobs.Add(existing);
+        await dbContext.SaveChangesAsync();
+        var raw = new RawJobInput(
+            "Firecrawl", null, "Senior Software Engineer", "Example", "Auckland", "$115,000 – $125,000 per year",
+            "Build cloud platforms.", existing.Url, new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc), null);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([raw])], new DeduplicationService(), new NormalisationService());
+
+        await service.StartCrawlRunAsync(new("Firecrawl", "https://example.com/search"), CancellationToken.None);
+
+        var refreshed = dbContext.Jobs.Single();
+        refreshed.PostedDate.Should().Be(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
+        refreshed.SalaryMin.Should().Be(115000m);
+        refreshed.SalaryMax.Should().Be(125000m);
+        refreshed.Seniority.Should().Be("Senior");
+    }
+
+    [Fact]
+    public async Task StartCrawlRunAsync_parses_anchored_single_salary_on_insert()
+    {
+        await using var dbContext = CreateDbContext();
+        var raw = new RawJobInput(
+            "Firecrawl", null, "Platform Engineer", "Example", "Wellington", "$150,000 per year",
+            "Kubernetes and Terraform.", "https://example.com/jobs/single", null, null);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([raw])], new DeduplicationService(), new NormalisationService());
+
+        await service.StartCrawlRunAsync(new("Firecrawl", "https://example.com/search"), CancellationToken.None);
+
+        var job = dbContext.Jobs.Single();
+        job.SalaryMin.Should().Be(150000m);
+        job.SalaryMax.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("100-160")]
+    [InlineData("871-407")]
+    [InlineData("$50 per hour")]
+    [InlineData("Competitive salary")]
+    public async Task StartCrawlRunAsync_rejects_unanchored_or_hourly_salary_text(string salaryText)
+    {
+        await using var dbContext = CreateDbContext();
+        var raw = new RawJobInput(
+            "Firecrawl", null, "Software Developer", "Example", "Auckland", salaryText,
+            "React and TypeScript.", "https://example.com/jobs/no-salary", null, null);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([raw])], new DeduplicationService(), new NormalisationService());
+
+        await service.StartCrawlRunAsync(new("Firecrawl", "https://example.com/search"), CancellationToken.None);
+
+        var job = dbContext.Jobs.Single();
+        job.SalaryMin.Should().BeNull();
+        job.SalaryMax.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task StartCrawlRunAsync_does_not_clear_a_known_salary_when_refresh_is_missing()
+    {
+        await using var dbContext = CreateDbContext();
+        var existing = CreateJob("https://example.com/jobs/keep-salary");
+        existing.SalaryMin = 90000m;
+        existing.SalaryMax = 110000m;
+        dbContext.Jobs.Add(existing);
+        await dbContext.SaveChangesAsync();
+        var raw = new RawJobInput(
+            "Firecrawl", null, "Software Developer", "Example", "Auckland", null,
+            "React and TypeScript.", existing.Url, null, null);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([raw])], new DeduplicationService(), new NormalisationService());
+
+        await service.StartCrawlRunAsync(new("Firecrawl", "https://example.com/search"), CancellationToken.None);
+
+        dbContext.Jobs.Single().SalaryMin.Should().Be(90000m);
+        dbContext.Jobs.Single().SalaryMax.Should().Be(110000m);
+    }
+
     private static Job CreateJob(string url, DateTime? closingDate = null, DateTime? lastSeenAt = null) => new()
     {
         Id = Guid.NewGuid(),

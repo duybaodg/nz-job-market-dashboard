@@ -584,16 +584,36 @@ def extract_label(text: str, label: str) -> str | None:
     return clean_text(match.group(1)) if match else None
 
 
+#: Salary amounts must be anchored by a currency symbol, an explicit "k"
+#: suffix or a fully written 4-6 digit number; otherwise bare number pairs in ad
+#: teasers ("100-160") get misread as a salary. Mirrors the .NET
+#: CrawlerOrchestrationService.ParseSalary anchors.
+SALARY_FRAGMENT_RE = re.compile(
+    r"("
+    r"(?:\$|NZD)\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?\s*(?:-|to|–|—)\s*(?:\$|NZD)?\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?"
+    r"|\d{2,3}\s*[kK]\s*(?:-|to|–|—)\s*\$?\s*\d{2,3}\s*[kK]"
+    r"|(?:\$|NZD)\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?"
+    r"|\d{2,3}\s*[kK]"
+    r")",
+    re.I,
+)
+
+
 def extract_salary(text: str) -> str | None:
     labelled = extract_label(text, "Salary")
     if labelled:
-        return labelled
+        # A labelled value can run into the next field; keep only its leading
+        # salary-shaped fragment so "Salary: $120,000 Job type: Permanent" does
+        # not become the whole salary string.
+        labelled = clean_text(labelled)
+        fragment = SALARY_FRAGMENT_RE.search(labelled)
+        if fragment:
+            return clean_text(fragment.group(1))
+        if len(labelled) <= 40 and any(ch.isdigit() for ch in labelled):
+            return labelled
+        return None
 
-    match = re.search(
-        r"(\$?\s*\d{2,3}(?:,\d{3}|k)?\s*(?:-|to|–)\s*\$?\s*\d{2,3}(?:,\d{3}|k)?)",
-        text,
-        re.I,
-    )
+    match = SALARY_FRAGMENT_RE.search(text)
     return clean_text(match.group(1)) if match else None
 
 

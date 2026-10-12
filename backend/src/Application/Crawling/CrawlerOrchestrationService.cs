@@ -31,7 +31,23 @@ public sealed class CrawlerOrchestrationService(
     private static readonly Regex HtmlTitleRegex = new(
         @"<title[^>]*>(.*?)</title>",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
-    private static readonly Regex SalaryRegex = new(@"\$?\s*(\d{2,3})(?:,\d{3}|k)?\s*(?:-|to|–)\s*\$?\s*(\d{2,3})(?:,\d{3}|k)?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // A salary range must be anchored by a currency symbol, an explicit "k"
+    // suffix or a fully written 4-6 digit number on both sides. Without that
+    // anchor, bare number pairs such as "100-160" (a SEEK teaser fragment) were
+    // misread as a $100k-$160k salary.
+    private static readonly Regex SalaryRangeRegex = new(
+        @"(?<a>(?:\$|NZD)\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,3}\s*[kK]|\d{4,6})"
+        + @"\s*(?:-|–|—|to)\s*"
+        + @"(?<b>(?:\$|NZD)?\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,3}\s*[kK]|\d{4,6})",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // A single anchored amount ("$150,000", "NZD 120,000", "130k") is still a
+    // useful salary signal even though no range is stated.
+    private static readonly Regex SalarySingleRegex = new(
+        @"(?<a>(?:\$|NZD)\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,3}\s*[kK])",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex HourlyRateRegex = new(
+        @"(?ix)(?:per\s+hour|an?\s+hour|hourly|/\s*hr\b|per\s+day|daily|/\s*day\b)",
+        RegexOptions.Compiled);
     private static readonly Regex ExperienceRegex = new(
         @"(?:(?:at least|minimum(?: of)?|over|more than)\s+)?(\d{1,2})(?:\s*\+)?(?:\s*(?:-|to|–)\s*\d{1,2})?\s+years?"
         + @"|"
@@ -257,6 +273,16 @@ public sealed class CrawlerOrchestrationService(
             existingJob.EmploymentType = InferEmploymentType(candidate.DescriptionText);
             existingJob.WorkMode = InferWorkMode(candidate.DescriptionText);
             existingJob.ExperienceBand = InferExperienceBand(candidate.DescriptionText);
+            // Refresh the fields that a better parser or a re-crawl can now fill
+            // in; never overwrite a known value with a missing one.
+            existingJob.PostedDate = candidate.PostedDate ?? existingJob.PostedDate;
+            var (refreshedMin, refreshedMax) = ParseSalary(candidate.SalaryText);
+            existingJob.SalaryMin = refreshedMin ?? existingJob.SalaryMin;
+            existingJob.SalaryMax = refreshedMax ?? existingJob.SalaryMax;
+            if (!string.IsNullOrWhiteSpace(candidate.Title))
+            {
+                existingJob.Seniority = normalisationService.StandardiseSeniority(candidate.Title);
+            }
             SetSkills(existingJob, candidate);
             existingJob.IsActive = true;
             existingJob.ExpiredAt = null;
@@ -378,33 +404,50 @@ public sealed class CrawlerOrchestrationService(
             return (null, null);
         }
 
-        var match = SalaryRegex.Match(salaryText);
-        if (!match.Success)
+        // Hourly/daily rates are not annual salaries; annualising them would
+        // fabricate a figure (and the plausibility bounds would usually reject it
+        // anyway), so leave the field empty.
+        if (HourlyRateRegex.IsMatch(salaryText))
         {
             return (null, null);
         }
 
-        var min = ToSalary(match.Groups[1].Value);
-        var max = ToSalary(match.Groups[2].Value);
+        decimal? min = null;
+        decimal? max = null;
 
-        // Swap if min > max (parser got order wrong)
-        if (min > max)
+        var range = SalaryRangeRegex.Match(salaryText);
+        if (range.Success)
         {
-            (min, max) = (max, min);
+            min = ToSalary(range.Groups["a"].Value);
+            max = ToSalary(range.Groups["b"].Value);
+
+            // Swap if min > max (parser got order wrong)
+            if (min > max)
+            {
+                (min, max) = (max, min);
+            }
+        }
+        else
+        {
+            var single = SalarySingleRegex.Match(salaryText);
+            if (single.Success)
+            {
+                min = ToSalary(single.Groups["a"].Value);
+            }
         }
 
         // Sanity bounds: reject implausible NZ IT salaries
         const decimal maxPlausible = 500_000; // No NZ IT role pays >$500k annually
         const decimal minPlausible = 30_000;  // Below $30k is likely a misparse (daily rate, contract months, etc.)
 
-        if (min > maxPlausible || max > maxPlausible || min > maxPlausible)
+        if (min is not null && (min < minPlausible || min > maxPlausible))
         {
-            return (null, null);
+            min = null;
         }
 
-        if (min < minPlausible || max < minPlausible)
+        if (max is not null && (max < minPlausible || max > maxPlausible))
         {
-            return (null, null);
+            max = null;
         }
 
         return (min, max);
@@ -412,7 +455,27 @@ public sealed class CrawlerOrchestrationService(
 
     private static decimal ToSalary(string value)
     {
-        var number = decimal.Parse(value);
+        var cleaned = value
+            .Replace("$", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("NZD", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace(",", string.Empty)
+            .Replace(" ", string.Empty)
+            .Trim();
+
+        if (cleaned.EndsWith('k') || cleaned.EndsWith('K'))
+        {
+            cleaned = cleaned[..^1];
+        }
+
+        if (!decimal.TryParse(
+                cleaned,
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var number))
+        {
+            return 0m;
+        }
+
         // Numbers < 1000 are typically in "k" notation (e.g., 130 = $130k)
         return number < 1000 ? number * 1000 : number;
     }
