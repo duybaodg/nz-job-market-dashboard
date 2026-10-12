@@ -2613,6 +2613,20 @@ def build_fetcher(args: argparse.Namespace, fetcher_type: str) -> Any:
     return _fetch
 
 
+def resolve_max_pages(args: argparse.Namespace, source_config: dict[str, Any]) -> int:
+    """Cap the CLI ``--max-pages`` with a registry ``maxPages`` override.
+
+    JavaScript-rendered boards can have dozens of paginated listing URLs; a
+    single global limit of 50 makes the source exceed the adapter timeout. A
+    per-site cap keeps those crawls bounded and polite.
+    """
+    cli_value = int(getattr(args, "max_pages", 50) or 50)
+    configured = source_config.get("maxPages")
+    if isinstance(configured, int) and configured > 0:
+        return min(cli_value, configured)
+    return cli_value
+
+
 def crawl(
     args: argparse.Namespace,
     fetch: Any = None,
@@ -2622,6 +2636,7 @@ def crawl(
     parser = getattr(args, "parser", "generic")
     source_config = lookup_source(getattr(args, "source", None)) or {}
     platform = str(source_config.get("platform") or "").lower()
+    args.max_pages = resolve_max_pages(args, source_config)
 
     if fetch is None:
         # A per-site fetcher in the registry overrides the global default: static

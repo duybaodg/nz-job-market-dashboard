@@ -142,7 +142,8 @@
       "parser": "generic",
       "sitemapJobUrls": 40,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "maxPages": 12
     },
     {
       "name": "Talent Army",
@@ -282,7 +283,8 @@
         "https://www.hays.net.nz/job-search?q=devops",
         "https://www.hays.net.nz/job-search?q=infrastructure"
       ],
-      "notes": "Server-rendered /job-search with keyword slices; /job-detail pages carry JobPosting JSON-LD"
+      "notes": "Server-rendered /job-search with keyword slices; /job-detail pages carry JobPosting JSON-LD",
+      "maxPages": 12
     },
     {
       "name": "Robert Walters NZ",
@@ -350,7 +352,8 @@
       "httpStatus": 200,
       "sitemapJobUrls": 40,
       "fetcher": "http",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "maxPages": 12
     },
     {
       "name": "Comspek International",
@@ -382,7 +385,8 @@
       "httpStatus": 200,
       "sitemapJobUrls": 0,
       "fetcher": "http",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "maxPages": 12
     },
     {
       "name": "Talent International NZ",
@@ -432,7 +436,8 @@
       "sitemapJobUrls": 19,
       "fetcher": "http",
       "robotsAllows": true,
-      "notes": "Round 3: WordPress job board reachable; the live roles are non-IT (executive assistant, policy/regulatory analyst, groundskeeper), so the IT filter correctly yields 0."
+      "notes": "Round 3: WordPress job board reachable; the live roles are non-IT (executive assistant, policy/regulatory analyst, groundskeeper), so the IT filter correctly yields 0.",
+      "maxPages": 12
     },
     {
       "name": "Alpha Recruitment",
@@ -448,7 +453,8 @@
       "parser": "generic",
       "sitemapJobUrls": 40,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "maxPages": 12
     },
     {
       "name": "H2R Technology",
@@ -662,7 +668,8 @@
       "parser": "generic",
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "maxPages": 12
     },
     {
       "name": "Prosple NZ",
@@ -917,7 +924,8 @@
         "infrastructure",
         "client services",
         "information technology"
-      ]
+      ],
+      "maxPages": 3
     },
     {
       "name": "Spark NZ",
@@ -1019,7 +1027,8 @@
       "notes": "Round 3: Teamtailor board reachable (20 live roles) but all are dairy/farm roles; no IT openings at present.",
       "sitemapJobUrls": 1,
       "fetcher": "http",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "maxPages": 12
     },
     {
       "name": "Orion Health",
@@ -1220,7 +1229,8 @@
       "sitemapJobUrls": 29,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "notes": "jobs hosted on Eightfold (nab.eightfold.ai); browser-rendered listing"
+      "notes": "jobs hosted on Eightfold (nab.eightfold.ai); browser-rendered listing",
+      "maxPages": 12
     },
     {
       "name": "Westpac NZ",

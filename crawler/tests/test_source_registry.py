@@ -21,6 +21,7 @@ from adapters.scrapling.scrapling_worker import (  # noqa: E402
     parse_seek_listing,
     parse_structured_jobs,
     relative_days_ago,
+    resolve_max_pages,
     sanitize_href,
     pageup_date,
     structured_location,
@@ -79,6 +80,12 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertTrue(rocket_lab["departmentTerms"])
         self.assertEqual("workday", trimble["platform"])
         self.assertEqual("trimblecareers", trimble["site"])
+
+    def test_registry_max_pages_caps_the_cli_value(self) -> None:
+        self.assertEqual(12, resolve_max_pages(base_args(max_pages=50), {"maxPages": 12}))
+        self.assertEqual(8, resolve_max_pages(base_args(max_pages=8), {"maxPages": 12}))
+        self.assertEqual(50, resolve_max_pages(base_args(max_pages=50), {}))
+        self.assertEqual(50, resolve_max_pages(base_args(max_pages=50), {"maxPages": 0}))
 
     def test_round3_disables_sources_with_no_crawlable_listings(self) -> None:
         for name in ("WorkHere", "Younity", "Presto Resourcing", "H2R Technology",
