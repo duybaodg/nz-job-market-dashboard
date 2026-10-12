@@ -76,7 +76,7 @@
       "strategy": "blocked",
       "httpStatus": 403,
       "parser": "generic",
-      "notes": "probe status 403: HTTP Error 403: Forbidden",
+      "notes": "Round 4: nz.indeed.com/jobs returns HTTP 403 to plain HTTP and browser clients (bot block), and robots.txt additionally disallows the country /jobs/<CC>/ paths. Indeed exposes no public robots-permitted endpoint; its postings are only reachable via each employer's own ATS. Stays disabled.",
       "sitemapJobUrls": 0,
       "robotsAllows": true
     },
@@ -198,16 +198,18 @@
       "tier": 2,
       "category": "job-board",
       "homepage": "https://www.zeil.com/",
-      "jobs_url": "https://www.zeil.com/jobs",
+      "jobs_url": "https://www.zeil.com/jobs/new-zealand/information-technology",
       "platform": null,
-      "enabled": false,
+      "enabled": true,
       "frequency_minutes": 1440,
-      "strategy": "blocked",
-      "httpStatus": 405,
+      "strategy": "generic",
+      "httpStatus": 200,
       "parser": "generic",
-      "notes": "probe status 405: HTTP Error 405: Not Allowed",
-      "sitemapJobUrls": 0,
-      "robotsAllows": true
+      "notes": "Round 4 re-probe: the old /jobs URL is a JS SPA with no listings, but the industry landing page server-renders job links (/jobs/job/<id>/<slug>) and the detail pages carry the full advert. robots.txt allows / (only /reports and paging query strings are disallowed). Now yields.",
+      "sitemapJobUrls": 41,
+      "fetcher": "stealth",
+      "robotsAllows": true,
+      "maxPages": 12
     },
     {
       "name": "JobSeek",
@@ -291,16 +293,17 @@
       "tier": 2,
       "category": "recruiter",
       "homepage": "https://www.robertwalters.co.nz/",
-      "jobs_url": "https://www.robertwalters.co.nz/jobs/it.html",
+      "jobs_url": "https://www.robertwalters.co.nz/jobs.html",
       "platform": null,
-      "enabled": false,
+      "enabled": true,
       "frequency_minutes": 1440,
-      "strategy": "blocked",
-      "httpStatus": 403,
+      "strategy": "dynamic",
+      "httpStatus": 200,
       "parser": "generic",
-      "notes": "probe status 403: HTTP Error 403: Forbidden",
-      "sitemapJobUrls": 0,
-      "robotsAllows": true
+      "fetcher": "stealth",
+      "robotsAllows": true,
+      "maxPages": 12,
+      "notes": "Round 4: plain HTTP 403s (header-based block); StealthyFetcher renders the board. The old /jobs/it.html path is now a 404; /jobs.html lists all live roles including the informationtechnology category. robots.txt has no /jobs disallow."
     },
     {
       "name": "Tribe Recruitment",
@@ -336,7 +339,7 @@
       "sitemapJobUrls": 28,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "notes": "DISABLED 2026-10-12 (Round 3): younity.co.nz/it-jobs/ is a content hub; its listings are embedded LinkedIn/SEEK widgets (\"Listed by: LinkedIn Seek\") and the site exposes no own job data or public API."
+      "notes": "DISABLED 2026-10-12 (Round 3): younity.co.nz/it-jobs/ is a content hub; its listings are embedded LinkedIn/SEEK widgets (\"Listed by: LinkedIn Seek\") and the site exposes no own job data or public API. Round 4 re-probe: unchanged."
     },
     {
       "name": "Consult Recruitment",
@@ -353,7 +356,10 @@
       "sitemapJobUrls": 40,
       "fetcher": "http",
       "robotsAllows": true,
-      "maxPages": 12
+      "maxPages": 12,
+      "httpRetries": 5,
+      "retryOn403": true,
+      "notes": "Round 4: WP Engine/Cloudflare WAF answers a fraction of plain requests with 403 (not UA/Accept deterministic; IP-rate based). Worker now sends a document Accept header and retries 403 with backoff for this source. 29 live JobAdder roles on the board."
     },
     {
       "name": "Comspek International",
@@ -401,7 +407,7 @@
       "httpStatus": 404,
       "parser": "generic",
       "sitemapJobUrls": 29,
-      "notes": "site restructured: all NZ careers URLs return 404",
+      "notes": "site restructured: all NZ careers URLs return 404. Round 4 re-probe: the WordPress job sitemap is live (243 postings) but 0 are NZ — they are all Australian (bbb* requisitions); /nz/ still 404s. Stays disabled.",
       "fetcher": "dynamic",
       "robotsAllows": true
     },
@@ -471,7 +477,7 @@
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "notes": "DISABLED 2026-10-12 (Round 3): h2r.co.nz/career-portal/ is a WordPress login/registration form with no public vacancy list."
+      "notes": "DISABLED 2026-10-12 (Round 3): h2r.co.nz/career-portal/ is a WordPress login/registration form with no public vacancy list. Round 4 re-probe: wp-json/wp/v2/types exposes only post/page/attachment types (no job custom post type); nothing public to crawl."
     },
     {
       "name": "PlaceMe IT",
@@ -488,7 +494,7 @@
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "notes": "DISABLED 2026-10-12: TLS certificate is for dnspackage.com (domain parked/suspended), so every fetch fails with a hostname mismatch. Certificate verification is NOT disabled globally; re-enable only once the site serves a valid certificate."
+      "notes": "DISABLED 2026-10-12: TLS certificate is for dnspackage.com (domain parked/suspended), so every fetch fails with a hostname mismatch. Certificate verification is NOT disabled globally; re-enable only once the site serves a valid certificate. Round 4 re-probe: still a dnspackage.com certificate (curl exit 60)."
     },
     {
       "name": "Presto Resourcing",
@@ -505,7 +511,7 @@
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "notes": "DISABLED 2026-10-12 (Round 3): prestoresourcing.co.nz is a marketing site; the homepage has no job links and /jobs, /vacancies, /job-search all return 404. No public listings."
+      "notes": "DISABLED 2026-10-12 (Round 3): prestoresourcing.co.nz is a marketing site; the homepage has no job links and /jobs, /vacancies, /job-search all return 404. No public listings. Round 4 re-probe: homepage 200 but still no job links."
     },
     {
       "name": "Talent Vault",
@@ -652,7 +658,7 @@
       "sitemapJobUrls": 3,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "notes": "DISABLED 2026-10-12 (Round 2): listings are JS-only; the rendered DOM contains only site navigation (no job cards) and no public JSON API was found."
+      "notes": "DISABLED 2026-10-12 (Round 2): listings are JS-only; the rendered DOM contains only site navigation (no job cards) and no public JSON API was found. Round 4 re-probe: robots allows but the Next.js board fetches client-side (/api/js; /api/jobs 503) and sitemap.xml lists only top-level pages. Stays disabled."
     },
     {
       "name": "GradConnection NZ",
@@ -683,7 +689,7 @@
       "strategy": "blocked",
       "httpStatus": 403,
       "parser": "generic",
-      "notes": "probe status 403: HTTP Error 403: Forbidden",
+      "notes": "Round 4: robots allows but every path (/, /search-jobs) is behind a Cloudflare 'Just a moment...' JS challenge (HTTP 403), and /graduate-jobs now 404s. Not crawlable without defeating bot protection; stays disabled.",
       "sitemapJobUrls": 0,
       "robotsAllows": null
     },
@@ -702,7 +708,7 @@
       "sitemapJobUrls": 13,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "notes": "DISABLED 2026-10-12 (Round 3): its job board at app.summeroftech.co.nz/jobs redirects to /candidates/sign_in — listings require a candidate login."
+      "notes": "DISABLED 2026-10-12 (Round 3): its job board at app.summeroftech.co.nz/jobs redirects to /candidates/sign_in — listings require a candidate login. Round 4: app.summeroftech.co.nz/robots.txt is 'User-agent: * / Disallow: /' (DENY) and the marketing host's robots disallows /search and /api/. Stays disabled."
     },
     {
       "name": "Xero",
@@ -729,16 +735,18 @@
       "tier": 4,
       "category": "company",
       "homepage": "https://datacom.com/nz/en/careers",
-      "jobs_url": "https://datacom.com/nz/en/careers",
+      "jobs_url": "https://datacom.com/nz/en/careers/search",
       "platform": null,
-      "enabled": false,
+      "enabled": true,
       "frequency_minutes": 1440,
-      "strategy": "blocked",
-      "httpStatus": 403,
+      "strategy": "dynamic",
+      "httpStatus": 200,
       "parser": "generic",
-      "notes": "probe status 403: HTTP Error 403: Forbidden",
-      "sitemapJobUrls": 0,
-      "robotsAllows": true
+      "sitemapJobUrls": 12,
+      "fetcher": "dynamic",
+      "robotsAllows": true,
+      "maxPages": 12,
+      "notes": "Round 4: datacom.com 403s plain clients (Akamai) but renders with the Scrapling dynamic (Playwright) fetcher. The AEM careers search board lists /nz/en/careers/search/job?id=... detail pages. robots.txt allows / and only disallows /search?* and /content/datacom/. NOT SmartRecruiters: api.smartrecruiters.com robots.txt is 'User-agent: * / Disallow: /', so that API is off-limits."
     },
     {
       "name": "Fisher & Paykel",
@@ -889,7 +897,7 @@
       "strategy": "blocked",
       "httpStatus": 522,
       "parser": "generic",
-      "notes": "probe status 522: HTTP Error 522: <none>",
+      "notes": "Round 4 re-probe: still HTTP 522 (Cloudflare cannot reach the origin). Stays disabled.",
       "sitemapJobUrls": 0,
       "robotsAllows": null
     },
@@ -966,34 +974,18 @@
       "tier": 4,
       "category": "company",
       "homepage": "https://careers.airnewzealand.co.nz/",
-      "jobs_url": "https://api.smartrecruiters.com/v1/companies/airnewzealand/postings?limit=100",
-      "platform": "smartrecruiters",
-      "parser": "smartrecruiters",
+      "jobs_url": "https://jobs.smartrecruiters.com/AirNewZealand",
+      "platform": null,
+      "parser": "generic",
       "enabled": true,
       "frequency_minutes": 1440,
-      "strategy": "api",
+      "strategy": "generic",
       "httpStatus": 200,
-      "sitemapJobUrls": 35,
+      "sitemapJobUrls": 24,
       "fetcher": "http",
       "robotsAllows": true,
-      "notes": "SmartRecruiters board (token airnewzealand), ~31 NZ roles",
-      "token": "airnewzealand",
-      "company": "Air New Zealand",
-      "locationTerms": [
-        "New Zealand",
-        "Auckland",
-        "Wellington",
-        "Christchurch",
-        "Hamilton",
-        "Tauranga",
-        "Dunedin",
-        "Palmerston North",
-        "Napier",
-        "Nelson",
-        "Queenstown",
-        "Rotorua",
-        "NZ"
-      ]
+      "notes": "Round 4: moved off the SmartRecruiters JSON API because api.smartrecruiters.com/robots.txt is 'User-agent: * / Disallow: /' for our bot. The public board host jobs.smartrecruiters.com has no usable robots.txt (default allow) and server-renders the same postings. Pagination is followed; the IT filter keeps the technology titles. Title/location on this host are noisier than the API's.",
+      "maxPages": 30
     },
     {
       "name": "Fonterra",
@@ -1022,10 +1014,10 @@
       "enabled": true,
       "frequency_minutes": 1440,
       "strategy": "generic",
-      "httpStatus": 404,
+      "httpStatus": 200,
       "parser": "generic",
-      "notes": "Round 3: Teamtailor board reachable (20 live roles) but all are dairy/farm roles; no IT openings at present.",
-      "sitemapJobUrls": 1,
+      "notes": "Round 4: Teamtailor board on careers.lic.co.nz is healthy and robots-allowed (robots only disallows /jobs/internal/, /app/ etc.); 20 live roles, all dairy/farm/science. The IT filter correctly yields 0, so this is empty-but-healthy, not a failure. Kept enabled (contra the plan's optional disable) so a future IT opening is picked up.",
+      "sitemapJobUrls": 20,
       "fetcher": "http",
       "robotsAllows": true,
       "maxPages": 12
@@ -1201,18 +1193,18 @@
       "name": "ASB",
       "tier": 4,
       "category": "company",
-      "homepage": "https://www.asb.co.nz/careers.html",
-      "jobs_url": "https://www.asb.co.nz/careers.html",
+      "homepage": "https://www.asb.co.nz/careers",
+      "jobs_url": "https://www.asb.co.nz/careers",
       "platform": null,
       "enabled": false,
       "frequency_minutes": 1440,
-      "strategy": "dynamic",
+      "strategy": "blocked",
       "httpStatus": 404,
       "parser": "generic",
-      "notes": "HTTP 403 to automated clients; needs licensed feed or proxy",
+      "notes": "Round 4: ASB jobs are served by a Snaphire board at careers.asbgroup.co.nz, whose robots.txt ends with 'User-agent: * / Disallow: /' (DENY, verified with the project robots matcher). The old www.asb.co.nz/careers.html URL 404s even in a browser and /careers is a marketing page with no listings. No robots-permitted ATS endpoint found; must not crawl.",
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": false
     },
     {
       "name": "BNZ",
@@ -1237,16 +1229,22 @@
       "tier": 4,
       "category": "company",
       "homepage": "https://www.westpac.co.nz/about-us/careers/",
-      "jobs_url": "https://www.westpac.co.nz/about-us/careers/",
-      "platform": null,
-      "enabled": false,
+      "jobs_url": "https://westpacnz.wd105.myworkdayjobs.com/Westpac_Careers",
+      "platform": "workday",
+      "enabled": true,
       "frequency_minutes": 1440,
-      "strategy": "blocked",
-      "httpStatus": 403,
-      "parser": "generic",
-      "notes": "probe status 403: HTTP Error 403: Forbidden",
-      "sitemapJobUrls": 0,
-      "robotsAllows": null
+      "strategy": "api",
+      "httpStatus": 200,
+      "parser": "workday",
+      "sitemapJobUrls": 16,
+      "fetcher": "http",
+      "robotsAllows": true,
+      "host": "westpacnz.wd105.myworkdayjobs.com",
+      "tenant": "westpacnz",
+      "site": "Westpac_Careers",
+      "company": "Westpac NZ",
+      "limit": 100,
+      "notes": "Round 4: the westpac.co.nz careers page 403s plain clients but names its public Workday tenant (westpacnz.wd105/Westpac_Careers). robots.txt allows /Westpac_Careers/ and the CXS API; 16 live NZ roles incl. data/infrastructure/UX. No locationTerms: Workday locationsText uses branch names, and the tenant is NZ-only."
     },
     {
       "name": "NZ Police",
@@ -1280,7 +1278,7 @@
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "notes": "DISABLED 2026-10-12 (Round 3): www.myjobspace.co.nz redirects to jobspace.co.nz which now answers automated clients with a 405 'Human Verification' page. Crawling would require bypassing bot protection."
+      "notes": "DISABLED 2026-10-12 (Round 3): www.myjobspace.co.nz redirects to jobspace.co.nz which now answers automated clients with a 405 'Human Verification' page. Crawling would require bypassing bot protection. Round 4 re-probe: still 405 Human Verification."
     },
     {
       "name": "Adzuna NZ",
