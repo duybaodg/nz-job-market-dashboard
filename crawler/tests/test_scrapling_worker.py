@@ -11,6 +11,7 @@ from argparse import Namespace
 
 from adapters.scrapling.scrapling_worker import (
     DEFAULT_HTML_ACCEPT,
+    clean_job_title,
     crawl,
     extract_links,
     fetch_with_http,
@@ -595,4 +596,58 @@ class ScraplingHttpFetchTests(unittest.TestCase):
                     crawl(args, fetch=lambda url: ("", ""), api_fetch=lambda *a, **k: {})
 
         self.assertIn("Robots.txt", str(context.exception))
+
+
+class ScraplingTitleAndUrlFilterTests(unittest.TestCase):
+    """Round 4: clean noisy board titles and skip navigation/solution links."""
+
+    def test_clean_job_title_strips_source_prefix_and_site_suffix(self) -> None:
+        self.assertEqual(
+            "Senior Platform Engineer (Connected Aircraft)",
+            clean_job_title(
+                "Air New Zealand Senior Platform Engineer (Connected Aircraft) | SmartRecruiters",
+                "Air New Zealand",
+            ),
+        )
+        self.assertEqual(
+            "Cybersecurity Consultant - CyberArk EPM",
+            clean_job_title("Cybersecurity Consultant - CyberArk EPM | Datacom", "Datacom"),
+        )
+        self.assertEqual(
+            "Senior Cloud Engineer",
+            clean_job_title("Senior Cloud Engineer | Wellington Central FULL_TIME Job", "Robert Walters NZ"),
+        )
+
+    def test_generic_crawl_honours_job_url_contains_filter(self) -> None:
+        listing = (
+            '<a href="/nz/en/solutions/application-services/software-engineering">Software engineering</a>'
+            '<a href="/nz/en/careers/search/job?id=1">Data Engineer</a>'
+        )
+        pages = {
+            "https://datacom.example/nz/en/careers/search": (listing, "jobs"),
+            "https://datacom.example/nz/en/careers/search/job?id=1": (
+                "<h1>Data Engineer</h1>",
+                "Data platform role using Azure and Sentinel.",
+            ),
+        }
+        args = Namespace(
+            source="Datacom",
+            url="https://datacom.example/nz/en/careers/search",
+            parser="generic",
+            fetcher_type="http",
+            fetcher_override="",
+            max_pages=10,
+            delay_seconds=0,
+            robots_txt_obey=False,
+            proxy_url="",
+            user_agent="test",
+        )
+
+        with mock.patch(
+            "adapters.scrapling.scrapling_worker.lookup_source",
+            return_value={"jobUrlContains": "/careers/search/job"},
+        ):
+            result = crawl(args, fetch=lambda url: pages.get(url, ("", "")), sleeper=lambda _: None)
+
+        self.assertEqual(["Data Engineer"], [job["title"] for job in result["jobs"]])
 

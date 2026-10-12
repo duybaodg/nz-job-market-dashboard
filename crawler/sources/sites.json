@@ -746,7 +746,8 @@
       "fetcher": "dynamic",
       "robotsAllows": true,
       "maxPages": 12,
-      "notes": "Round 4: datacom.com 403s plain clients (Akamai) but renders with the Scrapling dynamic (Playwright) fetcher. The AEM careers search board lists /nz/en/careers/search/job?id=... detail pages. robots.txt allows / and only disallows /search?* and /content/datacom/. NOT SmartRecruiters: api.smartrecruiters.com robots.txt is 'User-agent: * / Disallow: /', so that API is off-limits."
+      "jobUrlContains": "/careers/search/job",
+      "notes": "Round 4: datacom.com 403s plain clients (Akamai) but renders with the Scrapling dynamic (Playwright) fetcher. The AEM careers search board lists /nz/en/careers/search/job?id=... detail pages; jobUrlContains keeps navigation/solution pages (e.g. 'Software engineering') out. robots.txt allows / and only disallows /search?* and /content/datacom/. NOT SmartRecruiters: api.smartrecruiters.com robots.txt is 'User-agent: * / Disallow: /', so that API is off-limits."
     },
     {
       "name": "Fisher & Paykel",
@@ -984,7 +985,8 @@
       "sitemapJobUrls": 24,
       "fetcher": "http",
       "robotsAllows": true,
-      "notes": "Round 4: moved off the SmartRecruiters JSON API because api.smartrecruiters.com/robots.txt is 'User-agent: * / Disallow: /' for our bot. The public board host jobs.smartrecruiters.com has no usable robots.txt (default allow) and server-renders the same postings. Pagination is followed; the IT filter keeps the technology titles. Title/location on this host are noisier than the API's.",
+      "jobUrlContains": "/airnewzealand/",
+      "notes": "Round 4: moved off the SmartRecruiters JSON API because api.smartrecruiters.com/robots.txt is 'User-agent: * / Disallow: /' for our bot. The public board host jobs.smartrecruiters.com has no usable robots.txt (default allow) and server-renders the same postings. jobUrlContains narrows to real postings; the worker strips the ' | SmartRecruiters' title suffix.",
       "maxPages": 30
     },
     {

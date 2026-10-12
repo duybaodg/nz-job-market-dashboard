@@ -65,6 +65,12 @@ DEFAULT_HTTP_USER_AGENT = (
 #: a browser Accept header succeeds.
 DEFAULT_HTML_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 
+#: Lower-case board/site names that appear as a trailing " - <name>" in a page
+#: <title>; stripped by :func:`clean_job_title`.
+TITLE_SITE_SUFFIXES = frozenset(
+    {"smartrecruiters", "seek", "linkedin", "jobadder", "jobs", "job search", "careers"}
+)
+
 HALTER_TECH_TERMS = (
     "software",
     "developer",
@@ -825,6 +831,28 @@ def extract_location(text: str) -> str | None:
     return sanitise_location(clean_text(match.group(1))) if match else None
 
 
+def clean_job_title(title: str, source: str | None = None) -> str:
+    """Remove a board's site suffix and the source-name prefix from a page title.
+
+    SmartRecruiters titles pages as "Air New Zealand <role> | SmartRecruiters"
+    and Datacom as "<role> | Datacom"; both should read as just the role.
+    """
+    value = clean_text(title or "")
+    if "|" in value:
+        head = value.split("|", 1)[0].strip()
+        if head:
+            value = head
+    if " - " in value:
+        head, _, tail = value.rpartition(" - ")
+        if tail.strip().lower() in TITLE_SITE_SUFFIXES:
+            value = head.strip()
+    if source:
+        prefix = source.strip()
+        if prefix and value.lower().startswith(prefix.lower() + " "):
+            value = value[len(prefix):].strip()
+    return value or clean_text(title or "")
+
+
 def extract_title(html: str, text: str) -> str:
     h1 = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.I | re.S)
     if h1:
@@ -1369,6 +1397,7 @@ def parse_job_detail(
     title = extract_title(html, text)
     if title == "Untitled job" or len(title) > 160:
         title = fallback_title
+    title = clean_job_title(title, source)
 
     return RawJobInput(
         source=source,
@@ -2797,6 +2826,10 @@ def crawl(
     candidates: dict[str, str] = {}
     inline_jobs: dict[str, RawJobInput] = {}
     pages: list[RawJobPageInput] = []
+    # Some boards mix job links with navigation/solution links that happen to
+    # carry a technology-looking label (Datacom's "Software engineering" service
+    # page). A registry ``jobUrlContains`` narrows candidates to real postings.
+    job_url_filter = str(source_config.get("jobUrlContains") or "").lower()
 
     while listing_queue and len(pages) < args.max_pages:
         url = listing_queue.pop(0)
@@ -2816,7 +2849,11 @@ def crawl(
 
         for title, job_url in extract_links(html, url):
             job_url = normalize_job_url(parser, job_url)
-            if same_site(args.url, job_url) and is_job_link(parser, title, job_url):
+            if (
+                same_site(args.url, job_url)
+                and is_job_link(parser, title, job_url)
+                and (not job_url_filter or job_url_filter in job_url.lower())
+            ):
                 candidates.setdefault(job_url, title)
         for next_url in extract_next_links(html, url):
             if next_url not in visited and next_url not in listing_queue:
@@ -2837,11 +2874,16 @@ def crawl(
         # aren't standard <a> links but are embedded in JS/JSON/data attributes)
         supplementary_candidates = _supplement_candidates(args, url, html)
         for job_url, fallback_title in supplementary_candidates:
+            if job_url_filter and job_url_filter not in job_url.lower():
+                continue
             if job_url not in candidates:
                 candidates[job_url] = fallback_title
 
     for job_url, fallback_title in sitemap_candidates.items():
-        candidates.setdefault(normalize_job_url(parser, job_url), fallback_title)
+        normalized = normalize_job_url(parser, job_url)
+        if job_url_filter and job_url_filter not in normalized.lower():
+            continue
+        candidates.setdefault(normalized, fallback_title)
 
     jobs: list[RawJobInput] = list(inline_jobs.values())
     for url, fallback_title in candidates.items():
