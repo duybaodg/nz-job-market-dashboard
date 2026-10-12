@@ -16,6 +16,7 @@ from adapters.scrapling.platform_api import (  # noqa: E402
     tribe_jobs,
     ashby_jobs,
     bamboohr_jobs,
+    crawl_platform,
     greenhouse_jobs,
     iso_date,
     lever_jobs,
@@ -91,6 +92,7 @@ class PlatformApiTests(unittest.TestCase):
                     "location": {"name": "Wellington, NZ"},
                     "content": "<p>Manage <strong>Kubernetes</strong></p>",
                     "first_published": "2026-08-18T00:00:00Z",
+                    "departments": [{"name": "2600 Software"}],
                 }
             ]
         }
@@ -100,6 +102,52 @@ class PlatformApiTests(unittest.TestCase):
         self.assertEqual("Wellington, NZ", jobs[0]["location"])
         self.assertEqual("Manage Kubernetes", jobs[0]["descriptionText"])
         self.assertEqual("123", jobs[0]["sourceJobId"])
+        self.assertEqual("2600 Software", jobs[0]["department"])
+
+    def test_crawl_platform_filters_by_location_and_department(self) -> None:
+        payload = {
+            "jobs": [
+                {
+                    "id": 1,
+                    "title": "Senior Software Engineer",
+                    "absolute_url": "https://boards.greenhouse.io/acme/jobs/1",
+                    "location": {"name": "Auckland, NZ"},
+                    "content": "<p>Build software</p>",
+                    "departments": [{"name": "2600 Software"}],
+                },
+                {
+                    "id": 2,
+                    "title": "Aerodynamics Analyst",
+                    "absolute_url": "https://boards.greenhouse.io/acme/jobs/2",
+                    "location": {"name": "Auckland, NZ"},
+                    "content": "<p>Analyse flight data</p>",
+                    "departments": [{"name": "2249 Neutron - Integrated Analysis"}],
+                },
+                {
+                    "id": 3,
+                    "title": "Senior Software Engineer",
+                    "absolute_url": "https://boards.greenhouse.io/acme/jobs/3",
+                    "location": {"name": "Long Beach, CA"},
+                    "content": "<p>Build software</p>",
+                    "departments": [{"name": "2600 Software"}],
+                },
+            ]
+        }
+
+        jobs = crawl_platform(
+            "greenhouse",
+            fetcher(payload),
+            source="Acme",
+            config={
+                "token": "acme",
+                "locationTerms": ["New Zealand", "Auckland", "NZ"],
+                "departmentTerms": ["software", "infrastructure"],
+            },
+        )
+
+        self.assertEqual(["Senior Software Engineer"], [job["title"] for job in jobs])
+        # The filter-only "department" key must not leak into RawJobInput kwargs.
+        self.assertNotIn("department", jobs[0])
 
     def test_lever_mapper(self) -> None:
         payload = [

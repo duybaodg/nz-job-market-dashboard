@@ -60,6 +60,33 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertEqual("bamboohr", jade["platform"])
         self.assertEqual("jadeworld", jade["token"])
 
+    def test_round3_re_enables_trade_me_on_an_allowed_path(self) -> None:
+        trade_me = lookup_source("trade me jobs")
+
+        self.assertIsNotNone(trade_me)
+        self.assertTrue(trade_me["enabled"])
+        self.assertEqual("https://www.trademe.co.nz/a/jobs/it", trade_me["jobs_url"])
+        # Robots disallows query-string search/pagination, so discovery must use
+        # path-based subcategories only.
+        self.assertTrue(all("?" not in url for url in trade_me.get("listingUrls", [])))
+
+    def test_round3_moves_rocket_lab_and_trimble_to_public_ats_apis(self) -> None:
+        rocket_lab = lookup_source("rocket lab")
+        trimble = lookup_source("trimble")
+
+        self.assertEqual("greenhouse", rocket_lab["platform"])
+        self.assertEqual("rocketlab", rocket_lab["token"])
+        self.assertTrue(rocket_lab["departmentTerms"])
+        self.assertEqual("workday", trimble["platform"])
+        self.assertEqual("trimblecareers", trimble["site"])
+
+    def test_round3_disables_sources_with_no_crawlable_listings(self) -> None:
+        for name in ("WorkHere", "Younity", "Presto Resourcing", "H2R Technology",
+                     "Summer of Tech", "Orion Health", "MyJobSpace"):
+            site = lookup_source(name)
+            self.assertFalse(site["enabled"], name)
+            self.assertIn("Round 3", site.get("notes", ""), name)
+
     def test_title_from_url_produces_readable_fallback(self) -> None:
         self.assertEqual(
             "Senior Software Engineer",

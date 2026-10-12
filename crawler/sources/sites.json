@@ -39,18 +39,30 @@
       "tier": 1,
       "category": "job-board",
       "homepage": "https://www.trademe.co.nz/a/jobs",
-      "jobs_url": "https://www.trademe.co.nz/a/jobs/it/search",
+      "jobs_url": "https://www.trademe.co.nz/a/jobs/it",
       "platform": null,
-      "enabled": false,
+      "enabled": true,
       "frequency_minutes": 10080,
       "strategy": "custom",
       "httpStatus": 200,
       "parser": "trade-me",
       "sitemapJobUrls": 0,
       "fetcher": "http",
-      "robotsAllows": false,
-      "notes": "robots.txt disallows query strings; tracking params stripped and detail pages use JSON-LD | deprioritised: crawled last, weekly | DISABLED 2026-10-12 (Round 2): parser/argv contract is fixed, but robots.txt 'Disallow: /a/' blocks the listing path /a/jobs/it/search; only /a/jobs/*/listing detail pages are allowed and there is no permitted discovery path. Do not bypass robots.",
-      "priority": "last"
+      "robotsAllows": true,
+      "notes": "RE-ENABLED 2026-10-12 (Round 3): robots.txt allows /a/jobs/it and the /a/jobs/**/listing detail pages; only query-string search/pagination paths are disallowed. Tracking ?rsqid= is stripped before the detail fetch so every URL is allowed; discovery uses the allowed subcategory paths, never ?page=.",
+      "priority": "last",
+      "listingUrls": [
+        "https://www.trademe.co.nz/a/jobs/it/programming-development",
+        "https://www.trademe.co.nz/a/jobs/it/business-systems-analysts",
+        "https://www.trademe.co.nz/a/jobs/it/management",
+        "https://www.trademe.co.nz/a/jobs/it/security",
+        "https://www.trademe.co.nz/a/jobs/it/testing",
+        "https://www.trademe.co.nz/a/jobs/it/functional-consultants",
+        "https://www.trademe.co.nz/a/jobs/it/web-design",
+        "https://www.trademe.co.nz/a/jobs/it/project-management",
+        "https://www.trademe.co.nz/a/jobs/it/architects",
+        "https://www.trademe.co.nz/a/jobs/it/sales-pre-sales"
+      ]
     },
     {
       "name": "Indeed NZ",
@@ -219,14 +231,15 @@
       "homepage": "https://www.workhere.co.nz/",
       "jobs_url": "https://www.workhere.co.nz/",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "dynamic",
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "DISABLED 2026-10-12 (Round 3): workhere.co.nz is a marketing/landing page (Haines). The rendered DOM has no job links and /jobs, /api/jobs return 404. It is not a job board."
     },
     {
       "name": "Randstad NZ",
@@ -313,14 +326,15 @@
       "homepage": "https://www.younity.co.nz/",
       "jobs_url": "https://younity.co.nz/jobseekers/",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "dynamic",
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 28,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "DISABLED 2026-10-12 (Round 3): younity.co.nz/it-jobs/ is a content hub; its listings are embedded LinkedIn/SEEK widgets (\"Listed by: LinkedIn Seek\") and the site exposes no own job data or public API."
     },
     {
       "name": "Consult Recruitment",
@@ -418,7 +432,7 @@
       "sitemapJobUrls": 19,
       "fetcher": "http",
       "robotsAllows": true,
-      "notes": "WordPress job board, /job/{ref}-{slug} detail pages"
+      "notes": "Round 3: WordPress job board reachable; the live roles are non-IT (executive assistant, policy/regulatory analyst, groundskeeper), so the IT filter correctly yields 0."
     },
     {
       "name": "Alpha Recruitment",
@@ -443,14 +457,15 @@
       "homepage": "https://www.h2r.co.nz/",
       "jobs_url": "https://www.h2r.co.nz/career-portal/",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "dynamic",
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "DISABLED 2026-10-12 (Round 3): h2r.co.nz/career-portal/ is a WordPress login/registration form with no public vacancy list."
     },
     {
       "name": "PlaceMe IT",
@@ -476,14 +491,15 @@
       "homepage": "https://www.prestoresourcing.co.nz/",
       "jobs_url": "https://www.prestoresourcing.co.nz/",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "dynamic",
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "DISABLED 2026-10-12 (Round 3): prestoresourcing.co.nz is a marketing site; the homepage has no job links and /jobs, /vacancies, /job-search all return 404. No public listings."
     },
     {
       "name": "Talent Vault",
@@ -575,7 +591,7 @@
       "company": "Inland Revenue",
       "countryCode": "NZ",
       "limit": 200,
-      "notes": "Oracle Recruiting Cloud Candidate Experience API (site CX_1001)"
+      "notes": "Round 3: Oracle API reachable; the single live requisition ('Intelligence & Insight Specialist') is not a technology title, so the IT filter correctly yields 0."
     },
     {
       "name": "MPI Careers",
@@ -671,14 +687,15 @@
       "homepage": "https://www.summeroftech.co.nz/",
       "jobs_url": "https://www.summeroftech.co.nz/",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "dynamic",
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 13,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "DISABLED 2026-10-12 (Round 3): its job board at app.summeroftech.co.nz/jobs redirects to /candidates/sign_in — listings require a candidate login."
     },
     {
       "name": "Xero",
@@ -873,17 +890,34 @@
       "name": "Rocket Lab",
       "tier": 4,
       "category": "company",
-      "homepage": "https://www.rocketlabusa.com/careers/",
-      "jobs_url": "https://www.rocketlabusa.com/careers/",
-      "platform": null,
+      "homepage": "https://www.rocketlabcorp.com/careers/",
+      "jobs_url": "https://boards-api.greenhouse.io/v1/boards/rocketlab/jobs?content=true",
+      "platform": "greenhouse",
       "enabled": true,
       "frequency_minutes": 1440,
-      "strategy": "dynamic",
+      "strategy": "api",
       "httpStatus": 200,
-      "parser": "generic",
-      "sitemapJobUrls": 40,
-      "fetcher": "dynamic",
-      "robotsAllows": true
+      "parser": "greenhouse",
+      "sitemapJobUrls": 0,
+      "fetcher": "http",
+      "robotsAllows": true,
+      "notes": "Switched to the public Greenhouse board (token 'rocketlab') in Round 3 after rocketlabcorp.com/careers/positions returned HTTP 403 to automated clients. locationTerms keep the NZ sites (Auckland/Mahia); the shared IT filter drops the many non-technology roles.",
+      "token": "rocketlab",
+      "company": "Rocket Lab",
+      "locationTerms": [
+        "New Zealand",
+        "Auckland",
+        "Mahia",
+        "Wellington",
+        "Christchurch",
+        "NZ"
+      ],
+      "departmentTerms": [
+        "software",
+        "infrastructure",
+        "client services",
+        "information technology"
+      ]
     },
     {
       "name": "Spark NZ",
@@ -968,7 +1002,7 @@
       "sitemapJobUrls": 0,
       "fetcher": "http",
       "robotsAllows": true,
-      "notes": "SuccessFactors RSS feed (careers.fonterra.com) lists every vacancy"
+      "notes": "Round 3: SuccessFactors RSS feed reachable; the live feed has no IT-titled roles, so the IT filter correctly yields 0."
     },
     {
       "name": "LIC",
@@ -982,7 +1016,7 @@
       "strategy": "generic",
       "httpStatus": 404,
       "parser": "generic",
-      "notes": "LIC PageUp careers board",
+      "notes": "Round 3: Teamtailor board reachable (20 live roles) but all are dairy/farm roles; no IT openings at present.",
       "sitemapJobUrls": 1,
       "fetcher": "http",
       "robotsAllows": true
@@ -994,14 +1028,15 @@
       "homepage": "https://orionhealth.com/nz/company/careers/",
       "jobs_url": "https://orionhealth.com/nz/company/careers/",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "dynamic",
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 6,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "DISABLED 2026-10-12 (Round 3): the embedded Greenhouse board ('orionhealthcareers') referenced by orionhealth.com/nz/job-search/ is inactive (404 on the public board API), and the WordPress job-search page renders no listings. No public vacancies to crawl."
     },
     {
       "name": "Trade Me",
@@ -1078,16 +1113,31 @@
       "tier": 4,
       "category": "company",
       "homepage": "https://www.trimble.com/en/our-company/careers",
-      "jobs_url": "https://www.trimble.com/en/our-company/careers",
-      "platform": null,
+      "jobs_url": "https://trimble.wd1.myworkdayjobs.com/trimblecareers",
+      "platform": "workday",
       "enabled": true,
       "frequency_minutes": 1440,
-      "strategy": "dynamic",
+      "strategy": "api",
       "httpStatus": 200,
-      "parser": "generic",
-      "sitemapJobUrls": 22,
-      "fetcher": "dynamic",
-      "robotsAllows": true
+      "parser": "workday",
+      "sitemapJobUrls": 3,
+      "fetcher": "http",
+      "robotsAllows": true,
+      "notes": "Switched to the public Workday tenant (trimble.wd1/trimblecareers) in Round 3: the old trimble.com/en/our-company/careers page returns 404. locationTerms keep the New Zealand roles.",
+      "host": "trimble.wd1.myworkdayjobs.com",
+      "tenant": "trimble",
+      "site": "trimblecareers",
+      "company": "Trimble",
+      "limit": 200,
+      "locationTerms": [
+        "New Zealand",
+        "Auckland",
+        "Christchurch",
+        "Wellington",
+        "Hamilton",
+        "Tauranga",
+        "Dunedin"
+      ]
     },
     {
       "name": "Ryman Healthcare",
@@ -1202,7 +1252,8 @@
       "parser": "generic",
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "Round 3: careers.newcops.govt.nz PageUp board renders with a browser; the single live vacancy ('Recruit Application', category Executive) is not a technology role, so it is filtered out."
     },
     {
       "name": "MyJobSpace",
@@ -1211,14 +1262,15 @@
       "homepage": "https://www.myjobspace.co.nz/",
       "jobs_url": "https://www.myjobspace.co.nz/jobs",
       "platform": null,
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "dynamic",
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "DISABLED 2026-10-12 (Round 3): www.myjobspace.co.nz redirects to jobspace.co.nz which now answers automated clients with a 405 'Human Verification' page. Crawling would require bypassing bot protection."
     },
     {
       "name": "Adzuna NZ",

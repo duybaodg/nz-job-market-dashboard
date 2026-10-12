@@ -101,6 +101,7 @@ def make_job(
     description: str | None = None,
     posted_date: str | None = None,
     closing_date: str | None = None,
+    department: str | None = None,
 ) -> dict[str, Any]:
     return {
         "source": source,
@@ -113,6 +114,10 @@ def make_job(
         "url": url,
         "postedDate": posted_date,
         "closingDate": closing_date,
+        # Not part of RawJobInput: used by crawl_platform to narrow broad boards
+        # (for example Rocket Lab's engineering-heavy Greenhouse board) and
+        # stripped again before the rows reach the worker.
+        "department": clean_text(department) or None,
     }
 
 
@@ -214,6 +219,15 @@ def greenhouse_jobs(
         location = value.get("location") or {}
         if isinstance(location, Mapping):
             location = location.get("name")
+        departments = value.get("departments")
+        department = None
+        if isinstance(departments, list):
+            names = [
+                str(item.get("name"))
+                for item in departments
+                if isinstance(item, Mapping) and item.get("name")
+            ]
+            department = "; ".join(names) if names else None
         jobs.append(
             make_job(
                 source=source,
@@ -224,6 +238,7 @@ def greenhouse_jobs(
                 description=value.get("content"),
                 url=str(value.get("absolute_url") or ""),
                 posted_date=iso_date(value.get("first_published") or value.get("updated_at")),
+                department=department,
             )
         )
     return [job for job in jobs if job["url"]]
@@ -681,6 +696,16 @@ def crawl_platform(
             for job in jobs
             if any(term in (job.get("location") or "").lower() for term in location_terms)
         ]
+    department_terms = [str(term).lower() for term in (config.get("departmentTerms") or [])]
+    if department_terms:
+        jobs = [
+            job
+            for job in jobs
+            if any(term in (job.get("department") or "").lower() for term in department_terms)
+        ]
+    # "department" is filter-only metadata; RawJobInput does not accept it.
+    for job in jobs:
+        job.pop("department", None)
     return jobs
 
 
