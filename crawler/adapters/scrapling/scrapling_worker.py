@@ -59,6 +59,12 @@ DEFAULT_HTTP_USER_AGENT = (
     "Mozilla/5.0 (compatible; NZJobMarketDashboardBot/0.2; +https://example.invalid/bot)"
 )
 
+#: HTML pages must be requested with a document ``Accept`` header. Some WAFs
+#: (WP Engine/Cloudflare in front of Consult Recruitment) answer a page request
+#: carrying the JSON-ish API Accept with a hard 403, while the same request with
+#: a browser Accept header succeeds.
+DEFAULT_HTML_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
 HALTER_TECH_TERMS = (
     "software",
     "developer",
@@ -892,6 +898,7 @@ def load_robots(origin: str) -> RobotsRules:
             user_agent=DEFAULT_HTTP_USER_AGENT,
             timeout=20,
             retries=0,
+            accept="text/plain,*/*;q=0.8",
         )
         rules = parse_robots(text)
     except Exception:  # noqa: BLE001 - no robots.txt (or unreachable) means no restriction
@@ -948,15 +955,19 @@ def http_request(
     user_agent: str | None = None,
     timeout: int = 40,
     retries: int = 2,
+    accept: str | None = None,
+    retry_on_403: bool = False,
 ) -> str:
     """Minimal urllib client used for JSON APIs and static pages.
 
     Scrapling is the primary browser runtime, but public ATS APIs and plain HTML
     endpoints need no browser, so the worker can run without the heavy Playwright
     dependency (and CI/tests stay fast).  429/503 responses are retried with
-    exponential backoff, honouring ``Retry-After``.  If a server answers with
-    brotli and no brotli decoder is installed, the request is retried once asking
-    for an identity encoding so we never parse compressed bytes as text.
+    exponential backoff, honouring ``Retry-After``.  A flaky bot-tolerant site can
+    also opt in to retrying 403 via ``retry_on_403`` (used by Consult
+    Recruitment).  If a server answers with brotli and no brotli decoder is
+    installed, the request is retried once asking for an identity encoding so we
+    never parse compressed bytes as text.
     """
     import ssl
     import urllib.error
@@ -965,7 +976,7 @@ def http_request(
     data = None
     base_headers = {
         "User-Agent": user_agent or DEFAULT_HTTP_USER_AGENT,
-        "Accept": "application/json, text/html;q=0.9, */*;q=0.8",
+        "Accept": accept or "application/json, text/html;q=0.9, */*;q=0.8",
         "Accept-Language": "en-NZ,en;q=0.9",
     }
     if payload is not None:
@@ -999,9 +1010,16 @@ def http_request(
                 url = urljoin(url, location.strip())
                 redirects += 1
                 continue
-            elif exc.code in (429, 503) and attempt < retries:
+            elif (exc.code in (429, 503) or (exc.code == 403 and retry_on_403)) and attempt < retries:
                 retry_after = (exc.headers.get("Retry-After") or "").strip()
-                delay = float(retry_after) if retry_after.replace(".", "", 1).isdigit() else min(5 * (2**attempt), 60)
+                if retry_after.replace(".", "", 1).isdigit():
+                    delay = float(retry_after)
+                elif exc.code == 403:
+                    # Flaky bot-management: back off quickly but repeatedly rather
+                    # than waiting a full minute for a transient challenge.
+                    delay = min(2 * (2**attempt), 30)
+                else:
+                    delay = min(5 * (2**attempt), 60)
                 time.sleep(delay)
                 attempt += 1
                 continue
@@ -1036,11 +1054,23 @@ def json_fetch(url: str, method: str = "GET", payload: dict[str, Any] | None = N
 def fetch_with_http(args: argparse.Namespace, url: str) -> tuple[str, str]:
     """Static HTML fetcher used for sites that need no JavaScript rendering.
 
-    Page fetches deliberately do not retry: a slow or challenged page must not
-    stall a whole crawl run. Rate-limit retries belong to the JSON API client.
+    Page fetches do not retry by default: a slow or challenged page must not
+    stall a whole crawl run. A registry entry may opt in to retries for a
+    flaky bot-tolerant host via ``httpRetries``/``retryOn403`` (Consult
+    Recruitment's WAF answers 403 for a fraction of requests). The document
+    ``Accept`` header is deliberate; see :data:`DEFAULT_HTML_ACCEPT`.
     """
     timeout = int(getattr(args, "fetch_timeout", 30) or 30)
-    html = http_request(url, user_agent=getattr(args, "user_agent", None), timeout=timeout, retries=0)
+    config = lookup_source(getattr(args, "source", None)) or {}
+    retries = int(config.get("httpRetries", 0) or 0)
+    html = http_request(
+        url,
+        user_agent=getattr(args, "user_agent", None),
+        timeout=timeout,
+        retries=retries,
+        accept=DEFAULT_HTML_ACCEPT,
+        retry_on_403=bool(config.get("retryOn403")),
+    )
     return html, clean_text(html)
 
 
@@ -1162,6 +1192,13 @@ def fetch_with_scrapling(
     is_dynamic = mode in ("dynamic", "stealth")
     if is_dynamic:
         fetch_kwargs.setdefault("headless", True)
+        # Wait for the SPA's network to settle. Several boards (Robert Walters,
+        # Datacom, ZEIL) only render the posting list after their XHR finishes;
+        # an early snapshot looks empty and is easily mistaken for a bot block.
+        fetch_kwargs.setdefault("network_idle", True)
+        fetch_kwargs.setdefault(
+            "timeout", max(int(getattr(args, "browser_timeout", 45) or 45), 45) * 1000
+        )
         page = Fetcher.fetch(**fetch_kwargs)
     else:
         page = Fetcher.get(**fetch_kwargs)
@@ -1233,8 +1270,12 @@ def structured_job_to_raw(
 ) -> RawJobInput:
     """Map a Schema.org JobPosting dict onto the shared raw job shape."""
     location = structured_location(source_data)
-    company = (source_data.get("hiringOrganization") or {}).get("name")
-    source_job_id = (source_data.get("identifier") or {}).get("value")
+    organization = source_data.get("hiringOrganization") or {}
+    company = organization.get("name") if isinstance(organization, dict) else organization
+    # Schema.org allows "identifier" to be a plain string as well as an object
+    # (ZEIL emits a bare string), so guard the nested lookup.
+    identifier = source_data.get("identifier") or {}
+    source_job_id = identifier.get("value") if isinstance(identifier, dict) else identifier
     employment_type = str(source_data.get("employmentType") or "")
     if isinstance(employment_type, list):
         employment_type = employment_type[0] if employment_type else ""
@@ -2660,6 +2701,7 @@ def crawl(
             "rawPages": [asdict(raw_page(args, args.url, html, text))],
             "jobs": [asdict(job) for job in jobs],
             "isComplete": True,
+            "stats": {"candidates": len(jobs), "kept": len(jobs)},
         }
 
     if parser == "seek":
@@ -2691,6 +2733,7 @@ def crawl(
             "rawPages": [asdict(page) for page in seek_pages],
             "jobs": [asdict(job) for job in seek_jobs],
             "isComplete": True,
+            "stats": {"candidates": len(seen_ids), "kept": len(seek_jobs)},
         }
 
     if parser == "rss":
@@ -2698,15 +2741,17 @@ def crawl(
         if args.robots_txt_obey and not obeys_robots(args.url, args.user_agent):
             raise RuntimeError(f"Robots.txt does not allow crawling {args.url}")
         xml, xml_text = fetch(args.url)
+        parsed_rss = parse_rss_jobs(args.source, xml or xml_text)
         rss_jobs = [
             job
-            for job in parse_rss_jobs(args.source, xml or xml_text)
+            for job in parsed_rss
             if is_plausible_job_title(job.title, args.source) and looks_like_it_job(job.title, "")
         ]
         return {
             "rawPages": [asdict(raw_page(args, args.url, xml, xml_text))],
             "jobs": [asdict(job) for job in rss_jobs],
             "isComplete": True,
+            "stats": {"candidates": len(parsed_rss), "kept": len(rss_jobs)},
         }
 
     if parser == "linkedin":
@@ -2863,6 +2908,11 @@ def crawl(
         "rawPages": [asdict(page) for page in pages],
         "jobs": [asdict(job) for job in jobs],
         "isComplete": not listing_queue and len(jobs) == len(candidates),
+        # Candidates counts link-discovered plus inline JSON-LD adverts; kept is
+        # the number that survived the IT/technology and content gates. The
+        # orchestration logs "0 IT roles of N total" from this so an
+        # empty-but-healthy source is visibly not a failure.
+        "stats": {"candidates": len(candidates) + len(inline_jobs), "kept": len(jobs)},
     }
 
 
@@ -2873,6 +2923,12 @@ def _crawl_api_platform(
     api_fetch: Any,
 ) -> dict[str, Any]:
     """Fetch and normalise jobs straight from a public ATS JSON API."""
+    # Public ATS APIs are still fetched over HTTP, so robots still applies. This
+    # is why Air New Zealand moved off api.smartrecruiters.com (whose robots.txt
+    # is "User-agent: * / Disallow: /") to the public board host.
+    if getattr(args, "robots_txt_obey", False) and not obeys_robots(args.url, args.user_agent):
+        raise RuntimeError(f"Robots.txt does not allow crawling {args.url}")
+
     config = dict(source_config)
     if platform == "adzuna":
         config.setdefault("appId", os.environ.get("ADZUNA_APP_ID", ""))
@@ -2904,6 +2960,7 @@ def _crawl_api_platform(
         "rawPages": [asdict(page) for page in raw_pages],
         "jobs": [asdict(job) for job in jobs],
         "isComplete": True,
+        "stats": {"candidates": len(raw_jobs), "kept": len(jobs)},
     }
 
 

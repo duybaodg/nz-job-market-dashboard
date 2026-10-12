@@ -1,14 +1,20 @@
 import sys
 import unittest
+import urllib.error
+from email.message import Message
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from argparse import Namespace
 
 from adapters.scrapling.scrapling_worker import (
+    DEFAULT_HTML_ACCEPT,
     crawl,
     extract_links,
+    fetch_with_http,
+    http_request,
     is_job_link,
     parse_airnz_detail,
     parse_airnz_listing,
@@ -99,6 +105,9 @@ class ScraplingWorkerParserTests(unittest.TestCase):
         self.assertEqual([2, 2, 2], delays)
         self.assertTrue(all(job["source"] == "Example Jobs" for job in result["jobs"]))
         self.assertTrue(result["isComplete"])
+        # Group F: the worker reports how many candidates were seen vs kept so the
+        # orchestration can log "0 IT roles of N total" for empty-but-healthy sources.
+        self.assertEqual({"candidates": 2, "kept": 2}, result["stats"])
 
     def test_govt_nz_parser_uses_jobposting_json(self) -> None:
         html = """
@@ -495,3 +504,95 @@ class ScraplingWorkerParserTests(unittest.TestCase):
             is_job_link("airnz", "Browse Jobs",
                        "https://careers.airnewzealand.co.nz/jobs")
         )
+
+
+class _FakeResponse:
+    def __init__(self, body: bytes = b"<html>ok</html>") -> None:
+        self._body = body
+        self.headers = Message()
+        self.headers["Content-Encoding"] = ""
+        self.headers["Content-Type"] = "text/html; charset=utf-8"
+
+    def read(self) -> bytes:
+        return self._body
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *args: object) -> bool:
+        return False
+
+
+def _status_error(code: int) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError("https://example.com/page", code, "blocked", Message(), None)
+
+
+class ScraplingHttpFetchTests(unittest.TestCase):
+    """Round 4: flaky-WAF handling for Consult Recruitment (HTTP 403)."""
+
+    def test_http_request_retries_403_when_opted_in(self) -> None:
+        attempts = {"count": 0}
+
+        def fake_urlopen(request, timeout=None, context=None):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise _status_error(403)
+            return _FakeResponse()
+
+        with mock.patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            with mock.patch("time.sleep") as sleeper:
+                text = http_request(
+                    "https://example.com/page", retries=2, retry_on_403=True
+                )
+
+        self.assertEqual(2, attempts["count"])
+        self.assertIn("ok", text)
+        sleeper.assert_called_once()
+
+    def test_http_request_does_not_retry_403_by_default(self) -> None:
+        with mock.patch("urllib.request.urlopen", side_effect=_status_error(403)):
+            with mock.patch("time.sleep") as sleeper:
+                with self.assertRaises(RuntimeError):
+                    http_request("https://example.com/page", retries=3)
+        sleeper.assert_not_called()
+
+    def test_fetch_with_http_uses_document_accept_and_registry_retry(self) -> None:
+        args = Namespace(source="Consult Recruitment", user_agent="test", fetch_timeout=10)
+
+        with mock.patch(
+            "adapters.scrapling.scrapling_worker.http_request",
+            return_value="<html>jobs</html>",
+        ) as request:
+            fetch_with_http(args, "https://www.consult.co.nz/jobs/")
+
+        kwargs = request.call_args.kwargs
+        self.assertEqual(DEFAULT_HTML_ACCEPT, kwargs["accept"])
+        self.assertTrue(kwargs["retry_on_403"])
+        self.assertGreaterEqual(kwargs["retries"], 1)
+
+    def test_api_platform_refuses_robots_disallowed_url(self) -> None:
+        args = Namespace(
+            source="Air New Zealand",
+            url="https://api.smartrecruiters.com/v1/companies/airnewzealand/postings",
+            parser="smartrecruiters",
+            fetcher_type="http",
+            fetcher_override="",
+            max_pages=1,
+            delay_seconds=0,
+            robots_txt_obey=True,
+            proxy_url="",
+            user_agent="test",
+        )
+
+        with mock.patch(
+            "adapters.scrapling.scrapling_worker.lookup_source",
+            return_value={"platform": "smartrecruiters", "token": "airnewzealand"},
+        ):
+            with mock.patch(
+                "adapters.scrapling.scrapling_worker.obeys_robots", return_value=False
+            ):
+                with self.assertRaises(RuntimeError) as context:
+                    crawl(args, fetch=lambda url: ("", ""), api_fetch=lambda *a, **k: {})
+
+        self.assertIn("Robots.txt", str(context.exception))
+
