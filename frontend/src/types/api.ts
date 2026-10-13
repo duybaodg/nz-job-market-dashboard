@@ -54,3 +54,37 @@ export type Freshness = {
   totalActiveJobs: number
   windows: FreshnessWindow[]
 }
+
+export type SourceHealthState = 'healthy' | 'empty' | 'degraded' | 'stale' | 'disabled' | 'never-run'
+
+export type SourceHealth = {
+  source: string
+  enabled: boolean
+  parser: string
+  method: string
+  lastCrawledAt: string | null
+  lastStatus: string | null
+  lastError: string | null
+  consecutiveFailures: number
+  consecutiveZeroYield: number
+  jobsYielded: number
+  state: SourceHealthState
+  degradeReason: string | null
+  crawlFrequencyMinutes: number
+}
+
+export type HealthSummary = {
+  healthy: number
+  degraded: number
+  stale: number
+  empty: number
+  disabled: number
+  neverRun: number
+  totalSources: number
+}
+
+export type HealthReport = {
+  generatedAt: string
+  summary: HealthSummary
+  sources: SourceHealth[]
+}

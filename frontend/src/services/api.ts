@@ -1,4 +1,4 @@
-import type { Freshness, Job, JobsByRegion, Overview, SkillDemand } from '../types/api'
+import type { Freshness, HealthReport, Job, JobsByRegion, Overview, SkillDemand } from '../types/api'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5050'
 
@@ -45,4 +45,8 @@ export function getJobsByRegion() {
 
 export function getFreshness() {
   return getJson<Freshness>('/api/analytics/freshness')
+}
+
+export function getHealth() {
+  return getJson<HealthReport>('/api/admin/health')
 }

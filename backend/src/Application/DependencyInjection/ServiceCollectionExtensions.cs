@@ -1,6 +1,7 @@
 using Application.Analytics;
 using Application.Crawling;
 using Application.Deduplication;
+using Application.Health;
 using Application.Jobs;
 using Application.Normalisation;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +20,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICrawlerOrchestrationService, CrawlerOrchestrationService>();
         services.AddScoped<INormalisationService, NormalisationService>();
         services.AddScoped<IDeduplicationService, DeduplicationService>();
+        services.AddSingleton<HealthReportCache>();
+        services.AddScoped<IHealthService, HealthService>();
 
         return services;
     }

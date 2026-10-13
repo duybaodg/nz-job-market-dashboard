@@ -1,6 +1,7 @@
 using Application.Analytics;
 using Application.Crawling;
 using Application.DependencyInjection;
+using Application.Health;
 using Application.Jobs;
 using Infrastructure.DependencyInjection;
 using Infrastructure.Persistence;
@@ -109,6 +110,12 @@ app.MapGet("/api/admin/sources", async (
         CancellationToken cancellationToken) =>
     Results.Ok(await crawlerService.GetSourcesAsync(cancellationToken)))
     .WithName("GetSources");
+
+app.MapGet("/api/admin/health", async (
+        IHealthService healthService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await healthService.GetHealthAsync(cancellationToken)))
+    .WithName("GetHealth");
 
 app.MapGet("/api/admin/crawl-runs/{id:guid}", async (
         Guid id,

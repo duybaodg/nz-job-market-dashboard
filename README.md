@@ -144,8 +144,14 @@ docker compose exec postgres psql -U postgres -d nz_job_market \
 ```bash
 curl -s http://localhost:5050/api/admin/crawl-runs | python3 -m json.tool   # recent runs + errors
 curl -s http://localhost:5050/api/admin/sources   | python3 -m json.tool   # enabled/disabled, parser, frequency
+curl -s http://localhost:5050/api/admin/health    | python3 -m json.tool   # health state per source
 ./scripts/verify-deployment.sh http://localhost:5050                       # end-to-end smoke check
 ```
+
+The **Crawler Health** page (`/health`, linked from the sidebar) turns the health
+endpoint into summary cards and a sortable, filterable per-source table with
+degraded/stale sources first. It is read-only: it never triggers a crawl or a
+write.
 
 Job-level results appear in the dashboard and via `GET /api/jobs`. `/api/jobs`
 only returns jobs, not crawl errors, so check `/api/admin/crawl-runs` when a
@@ -179,6 +185,7 @@ POST /api/admin/crawl-runs
 GET /api/admin/crawl-runs
 GET /api/admin/crawl-runs/{id}
 GET /api/admin/sources
+GET /api/admin/health                  # per-source crawler health (30s in-memory cache, read-only)
 ```
 
 ## Job freshness windows (2 / 7 / 15 days)

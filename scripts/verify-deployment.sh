@@ -68,6 +68,26 @@ for source, count in Counter(j["source"] for j in data).most_common(10):
 '
 fi
 
+printf '%-28s ' "crawler health"
+health=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/health" 2>/dev/null || true)
+if [[ -z "$health" ]]; then
+  echo "FAIL"
+  fail=1
+else
+  echo "$health" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+order = ["healthy", "degraded", "stale", "empty", "disabled", "never-run"]
+counts = {state: sum(1 for source in data["sources"] if source["state"] == state) for state in order}
+print("OK (" + ", ".join(state + "=" + str(counts[state]) for state in order) + ")")
+for state in ("degraded", "stale"):
+    names = [source["source"] for source in data["sources"] if source["state"] == state]
+    if names:
+        print("  " + state + ": " + ", ".join(names))
+print("  total sources: " + str(data["summary"]["totalSources"]))
+'
+fi
+
 echo
 if [[ "$fail" -ne 0 ]]; then
   echo "Some checks failed. If sources are missing, the worker may still be on its first pass."
