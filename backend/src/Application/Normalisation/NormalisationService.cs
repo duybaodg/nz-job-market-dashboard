@@ -7,7 +7,9 @@ public interface INormalisationService
     /// <summary>
     /// Maps a location string to a canonical NZ region. A missing location
     /// resolves to the country-level default <c>New Zealand</c>; a location
-    /// that is present but not recognisable resolves to <c>Other</c>.
+    /// that is present and recognisably non-NZ resolves to
+    /// <c>International</c>; any other present but unrecognisable value stays
+    /// <c>Other</c> so it remains distinguishable from a data hole.
     /// </summary>
     string StandardiseRegion(string? location);
 
@@ -56,9 +58,7 @@ public sealed class NormalisationService : INormalisationService
 
     /// <summary>
     /// True when the value names a recognisable place or work location (an NZ
-    /// region/city, a recognised country, remote or NZ-wide). Shared with
-    /// <see cref="LocationSanitiser"/> so a mid-sentence fragment is not
-    /// mistaken for a location.
+    /// region/city, a recognised country, remote or NZ-wide).
     /// </summary>
     public static bool ContainsKnownPlace(string? value) => MatchRegion(value) is not null;
 
@@ -94,9 +94,14 @@ public sealed class NormalisationService : INormalisationService
             }
         }
 
-        if (RemotePattern.IsMatch(value)) return "Remote";
+        // A foreign marker beats a bare remote token ("Remote - Sydney" is an
+        // overseas posting), but an explicit NZ city above already won.
+        var foreign = NzPlaceDirectory.ContainsForeignMarker(value)
+            || InternationalPattern.IsMatch(value);
+
+        if (!foreign && RemotePattern.IsMatch(value)) return "Remote";
         if (NzWidePattern.IsMatch(value)) return "New Zealand";
-        if (InternationalPattern.IsMatch(value)) return "Other";
+        if (foreign) return NzPlaceDirectory.InternationalRegion;
 
         return null;
     }

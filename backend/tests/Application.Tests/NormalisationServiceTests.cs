@@ -47,13 +47,32 @@ public sealed class NormalisationServiceTests
     [Theory]
     [InlineData("Service Desk Support Analyst Job in Christchurch Central, Canterbury - SEEK", "Canterbury")]
     [InlineData("Engineer - IT Service Operations Job in Porirua, Wellington - SEEK", "Wellington")]
-    [InlineData("Senior Data Engineer - Bengaluru, Karnataka, India", "Other")]
+    [InlineData("Senior Data Engineer - Bengaluru, Karnataka, India", "International")]
     [InlineData("This is a remote-first role", "Remote")]
     public void ResolveRegion_derives_a_region_from_context_when_location_is_missing(
         string context,
         string expected)
     {
         service.ResolveRegion(null, context).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Adelaide, Brisbane, Canberra", "International")]
+    [InlineData("Sydney", "International")]
+    [InlineData("Allen, TX", "International")]
+    // Canonical Round 5 locations still resolve to their NZ region.
+    [InlineData("Christchurch, Canterbury", "Canterbury")]
+    [InlineData("Hamilton, Waikato", "Waikato")]
+    [InlineData("Tauranga, Bay of Plenty", "Bay of Plenty")]
+    [InlineData("Whangarei, Northland", "Northland")]
+    [InlineData("Upper Hutt, Wellington", "Wellington")]
+    [InlineData("Remote (NZ)", "Remote")]
+    [InlineData("New Zealand", "New Zealand")]
+    public void StandardiseRegion_handles_international_and_canonical_locations(
+        string location,
+        string expected)
+    {
+        service.StandardiseRegion(location).Should().Be(expected);
     }
 
     [Fact]

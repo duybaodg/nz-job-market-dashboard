@@ -1,43 +1,47 @@
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Application.Normalisation;
 
 /// <summary>
 /// Result of sanitising a raw location string.
-/// <see cref="Location"/> is the cleaned, place-shaped location (or <c>null</c>
-/// when nothing usable was found) and <see cref="RemovedRemainder"/> is the
-/// content that was cut off, so the caller can preserve it in the description.
+/// <see cref="Location"/> is the canonical place (or <c>null</c> when nothing
+/// usable was found), <see cref="RemovedRemainder"/> is content that was cut
+/// off so the caller can preserve it in the description, and
+/// <see cref="RegionHint"/> carries an explicit region for a location that was
+/// recognised but intentionally not stored (currently
+/// <see cref="NzPlaceDirectory.InternationalRegion"/> for non-NZ places).
 /// </summary>
-public sealed record LocationSanitisation(string? Location, string? RemovedRemainder);
+public sealed record LocationSanitisation(
+    string? Location,
+    string? RemovedRemainder,
+    string? RegionHint = null);
 
 /// <summary>
-/// Shared location sanitizer applied at normalisation time for every parser.
-///
-/// Some sources put a whole detail block in the location field: Comspek
-/// (<c>"Wellington Job type Permanent Specialisation Team Leaders Reference
-/// BH-2844 Job description …"</c>) and SEEK (<c>"Nelson, Nelson Region, New
-/// Zealand We also welcome applications …"</c>). Other sources capture a
-/// labelled field that runs into the next one (Talent Vault:
-/// <c>"Auckland Industry: … Contact name: …"</c>) or a description sentence
-/// (Gallagher: <c>"centives Career growth opportunities …"</c>). The region
-/// mapper then sees a giant string and the dashboard shows description text as
-/// a location.
-///
-/// A location is truncated at the first non-location token (a labelled field
-/// such as "Job type"/"Industry"/"Contact name", a sentence such as "We also …",
-/// a sentence boundary), then limited to a handful of comma-separated segments
-/// and <see cref="MaxLength"/> characters. A cut that leaves a bare
-/// mid-sentence fragment with no place name at all ("centives") is rejected
-/// outright. Semicolon-separated multi-region values
-/// ("Wellington - Hutt Valley;Wellington - Kapiti") are compacted by factoring
-/// the repeated prefix without losing any region. The removed text is not
-/// discarded: callers prepend it to the description.
+/// Shared location normaliser applied at ingestion time and by the startup
+/// repair pass. Round 5 turns the previous "cut the description tail" pass into
+/// a canonical NZ place model:
+/// <list type="bullet">
+/// <item>a value becomes at most <c>"City, Region"</c> (suburbs fold into
+/// their city, e.g. <c>"Manukau City, Auckland, NZ"</c> → <c>"Auckland"</c>,
+/// <c>"Hamilton, New Zealand, NZ"</c> → <c>"Hamilton, Waikato"</c>);</item>
+/// <item>noise tokens (country, <c>NZ</c>, "Region"/"Greater", duplicated
+/// tokens, employment markers, rate/start text) are stripped wherever they
+/// appear;</item>
+/// <item>"NZ: Remote"/"Remote"/"Work from home" → <c>"Remote (NZ)"</c>;</item>
+/// <item>a non-NZ place list → <c>location = null</c> with
+/// <c>region = "International"</c>;</item>
+/// <item>a sentence fragment with no known place name → <c>null</c>.</item>
+/// </list>
+/// Every rule is data-driven through <see cref="NzPlaceDirectory"/> so a new
+/// suburb alias is a one-line table addition, not a new branch.
 /// </summary>
 public static class LocationSanitiser
 {
     public const int MaxLength = 60;
-    public const int MaxSegments = 4;
+
+    public const string RemoteLocation = "Remote (NZ)";
+
+    public const string NewZealandLocation = "New Zealand";
 
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
 
@@ -75,6 +79,13 @@ public static class LocationSanitiser
           | apply\s+now
           | please\s+(?:note|apply|contact)
           | join\s+(?:our|us|the)
+          | rate\s*:
+          | start\s*:
+          | asap
+          | urgent
+          | (?:temporary|permanent|contract|casual)\s+job
+          | (?:full|part)[_\s-]?time\s+job
+          | fixed[_\s-]?term\s+job
         )\b
         """,
         RegexOptions.Compiled | RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase);
@@ -84,10 +95,34 @@ public static class LocationSanitiser
         @"(?<=\w)[.!?]\s+(?=[A-Z])",
         RegexOptions.Compiled);
 
+    //: Comma/semicolon/pipe and spaced dash/ampersand separate the place
+    //: segments; parentheses are treated as separators too so
+    //: "Auckland (Albany HQ) (NZ)" exposes all three tokens.
+    private static readonly Regex SegmentSplit = new(
+        @"\s*[,;|/]\s*|\s+[-–—]\s+|\s*[()\[\]{}]\s*|\s+&\s+",
+        RegexOptions.Compiled);
+
+    private static readonly Regex RemotePattern = new(
+        @"(?<![\p{L}\d])(?:remote|work\s+from\s+home|wfh|work\s+anywhere|telecommut\w*)(?![\p{L}\d])",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex NzWidePattern = new(
+        @"(?<![\p{L}\d])(?:new\s+zealand|aotearoa|nationwide|countrywide|national|nz)(?![\p{L}\d])",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private static readonly HashSet<string> Abbreviations = new(StringComparer.OrdinalIgnoreCase)
     {
         "st", "mt", "dr", "mr", "mrs", "ms", "no", "ave", "rd", "po", "sq", "co", "inc", "ltd"
     };
+
+    private enum LocationKind
+    {
+        Place,
+        International,
+        Junk
+    }
+
+    private readonly record struct LocationAnalysis(string? Location, LocationKind Kind);
 
     public static LocationSanitisation Sanitise(string? location)
     {
@@ -104,24 +139,17 @@ public static class LocationSanitiser
         {
             if (marker.Index == 0)
             {
-                // The whole value is a description marker, not a location.
-                return new LocationSanitisation(null, original);
+                // The whole value is a description marker, not a location. Keep
+                // the text, but flag overseas content so the region is right.
+                var hint = NzPlaceDirectory.ContainsForeignMarker(original)
+                    ? NzPlaceDirectory.InternationalRegion
+                    : null;
+                return new LocationSanitisation(null, original, hint);
             }
 
             value = value[..marker.Index];
         }
-
-        // A stop-marker cut can leave a mid-sentence fragment with no place
-        // name ("centives" out of "...incentives Career growth ..."). Such a
-        // fragment must not be stored as a location.
-        if (!IsPlaceLike(value))
-        {
-            return new LocationSanitisation(null, original);
-        }
-
-        // Only look for a sentence boundary when the value is still too long;
-        // this avoids truncating place names such as "St. Heliers".
-        if (value.Length > MaxLength)
+        else if (value.Length > MaxLength)
         {
             var boundary = FindSentenceBoundary(value);
             if (boundary > 0)
@@ -130,38 +158,37 @@ public static class LocationSanitiser
             }
         }
 
-        value = LimitSegments(value);
-        var cutValue = value;
-        value = CollapseMultiRegion(value);
-        value = HardCap(value);
-        var clean = value.Trim().Trim('.', ',', ';', '|', '-', ' ', '\t');
+        var remainder = value.Length < original.Length
+            ? CleanRemainder(original[value.Length..])
+            : null;
 
-        if (clean.Length == 0)
+        var analysis = Analyse(value);
+
+        if (analysis.Location is not null)
         {
-            return new LocationSanitisation(null, original);
+            var clean = HardCap(analysis.Location.Trim().Trim('.', ',', ';', '|', '-', ' ', '\t'));
+            return new LocationSanitisation(string.IsNullOrEmpty(clean) ? null : clean, remainder);
         }
 
-        // Preserve whatever tail was removed. When the value was compacted
-        // (repeated multi-region prefix) the removed text is duplicate place
-        // information, not description, so nothing is prepended.
-        string? remainder = null;
-        if (clean.Length < original.Length && original.StartsWith(clean, StringComparison.Ordinal))
+        if (analysis.Kind == LocationKind.International)
         {
-            remainder = original[clean.Length..];
-        }
-        else if (cutValue.Length < original.Length && original.StartsWith(cutValue, StringComparison.Ordinal))
-        {
-            remainder = original[cutValue.Length..];
+            // Preserve the raw value in the description so the region stays
+            // "International" on the next idempotent repair pass. A foreign
+            // place is a location, so it is never treated as place noise.
+            return new LocationSanitisation(
+                null,
+                original,
+                NzPlaceDirectory.InternationalRegion);
         }
 
-        remainder = remainder?.Trim().Trim(',', ';', '|', '-', ' ', '\t');
-
-        return new LocationSanitisation(clean, string.IsNullOrWhiteSpace(remainder) ? null : remainder);
+        // Junk: return the whole raw value so the caller can move it into the
+        // description rather than silently lose it.
+        return new LocationSanitisation(null, original);
     }
 
     /// <summary>
     /// Prepends a removed location remainder to a description without creating
-    /// an obvious duplicate. Used by ingestion and the one-off repair pass.
+    /// an obvious duplicate. Used by ingestion and the repair pass.
     /// </summary>
     public static string? PrependRemainder(string? remainder, string? description)
     {
@@ -180,112 +207,116 @@ public static class LocationSanitiser
         return string.IsNullOrEmpty(text) ? trimmed : $"{trimmed} {text}";
     }
 
-    /// <summary>
-    /// A value is a plausible location when it is structured (comma/semicolon
-    /// separated), carries a proper noun (an upper-case letter) or names a
-    /// known place/work mode. A bare lower-case sentence fragment fails all
-    /// three tests and is discarded rather than shown as a location.
-    /// </summary>
-    private static bool IsPlaceLike(string value)
+    private static LocationAnalysis Analyse(string value)
     {
-        if (value.Length == 0)
-        {
-            return false;
-        }
+        var hasForeign = NzPlaceDirectory.ContainsForeignMarker(value);
+        var hasRemote = RemotePattern.IsMatch(value);
+        var hasNzWide = NzWidePattern.IsMatch(value);
 
-        if (value.IndexOfAny([',', ';']) >= 0)
-        {
-            return true;
-        }
+        string? aliasCity = null;
+        string? aliasRegion = null;
+        string? cityCity = null;
+        string? cityRegion = null;
+        var cityExact = false;
+        string? regionOnly = null;
 
-        foreach (var character in value)
+        foreach (var segment in SegmentSplit.Split(value))
         {
-            if (char.IsUpper(character))
+            var normalised = NzPlaceDirectory.NormaliseSegment(segment);
+            if (normalised.Length == 0)
             {
-                return true;
+                continue;
+            }
+
+            if (aliasCity is null
+                && NzPlaceDirectory.TryResolveAlias(normalised, out var alias, out var aliasReg, out _))
+            {
+                aliasCity = alias;
+                aliasRegion = aliasReg;
+            }
+
+            if (cityCity is null
+                && NzPlaceDirectory.TryResolveCity(normalised, out var city, out var cityReg, out var exact))
+            {
+                cityCity = city;
+                cityRegion = cityReg;
+                cityExact = exact;
+            }
+
+            if (regionOnly is null
+                && NzPlaceDirectory.TryResolveRegionOnly(normalised, out var region))
+            {
+                regionOnly = region;
             }
         }
 
-        return NormalisationService.ContainsKnownPlace(value);
+        // A recognisable non-NZ list ("Adelaide, Brisbane, Canberra",
+        // "Allen, TX; …; Remote") is not a NZ location. A suburb alias is not
+        // enough to override that: only an exact NZ city name is.
+        if (hasForeign && !cityExact)
+        {
+            return new LocationAnalysis(null, LocationKind.International);
+        }
+
+        // The most specific match wins: a suburb alias (Trentham) beats a broad
+        // city (Wellington), a city beats a bare region (Canterbury).
+        if (aliasCity is not null)
+        {
+            return new LocationAnalysis(Build(aliasCity, aliasRegion), LocationKind.Place);
+        }
+
+        if (cityCity is not null)
+        {
+            return new LocationAnalysis(Build(cityCity, cityRegion), LocationKind.Place);
+        }
+
+        if (regionOnly is not null)
+        {
+            return new LocationAnalysis(regionOnly, LocationKind.Place);
+        }
+
+        if (hasRemote)
+        {
+            return new LocationAnalysis(RemoteLocation, LocationKind.Place);
+        }
+
+        if (hasNzWide && IsEssentiallyNzWide(value))
+        {
+            return new LocationAnalysis(NewZealandLocation, LocationKind.Place);
+        }
+
+        return new LocationAnalysis(null, LocationKind.Junk);
+    }
+
+    /// <summary>"Auckland" for a city that is also its region, else "City, Region".</summary>
+    private static string Build(string city, string? region)
+    {
+        if (string.IsNullOrWhiteSpace(region)
+            || string.Equals(city, region, StringComparison.OrdinalIgnoreCase))
+        {
+            return city;
+        }
+
+        return $"{city}, {region}";
     }
 
     /// <summary>
-    /// Compacts a semicolon-separated multi-region value by factoring out the
-    /// shared prefix: "Wellington - Hutt Valley;Wellington - Kapiti;
-    /// Wellington - Masterton" becomes "Wellington - Hutt Valley; Kapiti;
-    /// Masterton". All region names are kept, so the region mapper still sees
-    /// Wellington and the value fits the length cap.
+    /// True when the value is nothing but NZ-wide wording ("New Zealand",
+    /// "All New Zealand"). "New Zealand's legal and political heart" is not.
     /// </summary>
-    private static string CollapseMultiRegion(string value)
+    private static bool IsEssentiallyNzWide(string value)
     {
-        if (!value.Contains(';'))
-        {
-            return value;
-        }
+        var tokens = Regex
+            .Replace(value, @"[^\p{L}\p{N}\s]", " ")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-        var segments = value
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (segments.Length < 2)
-        {
-            return value;
-        }
-
-        var prefix = LongestCommonPrefix(segments);
-        prefix = TrimToWordBoundary(prefix);
-        if (prefix.Length < 3)
-        {
-            return value;
-        }
-
-        var builder = new StringBuilder(segments[0]);
-        for (var index = 1; index < segments.Length; index++)
-        {
-            var segment = segments[index];
-            var remainder = segment.Length > prefix.Length
-                ? segment[prefix.Length..].TrimStart(' ', '-', '/', ',')
-                : string.Empty;
-
-            builder.Append("; ").Append(string.IsNullOrEmpty(remainder) ? segment : remainder);
-        }
-
-        return builder.ToString();
+        return tokens.Length == 0 || tokens.All(NzPlaceDirectory.IsNoiseToken);
     }
 
-    private static string LongestCommonPrefix(IReadOnlyList<string> values)
+    private static string? CleanRemainder(string value)
     {
-        var first = values[0];
-        var length = first.Length;
-        for (var index = 1; index < values.Count && length > 0; index++)
-        {
-            length = Math.Min(length, values[index].Length);
-            var compare = 0;
-            while (compare < length
-                && char.ToUpperInvariant(first[compare]) == char.ToUpperInvariant(values[index][compare]))
-            {
-                compare++;
-            }
-
-            length = compare;
-        }
-
-        return first[..length];
-    }
-
-    private static string TrimToWordBoundary(string prefix)
-    {
-        if (prefix.Length == 0)
-        {
-            return prefix;
-        }
-
-        var last = prefix[^1];
-        if (last == ' ' || last == '-' || last == '/' || last == ',')
-        {
-            return prefix;
-        }
-
-        var boundary = prefix.LastIndexOfAny([' ', '-', '/', ',']);
-        return boundary >= 0 ? prefix[..(boundary + 1)] : prefix;
+        var trimmed = value.Trim().Trim(',', ';', '|', '-', ' ', '\t');
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
     private static int FindSentenceBoundary(string value)
@@ -306,17 +337,6 @@ public static class LocationSanitiser
         }
 
         return -1;
-    }
-
-    private static string LimitSegments(string value)
-    {
-        var segments = value.Split(',');
-        if (segments.Length <= MaxSegments)
-        {
-            return value;
-        }
-
-        return string.Join(",", segments.Take(MaxSegments)).TrimEnd();
     }
 
     private static string HardCap(string value)

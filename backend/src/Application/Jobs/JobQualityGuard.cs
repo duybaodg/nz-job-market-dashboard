@@ -110,7 +110,7 @@ public sealed class JobQualityGuard(
             }
 
             // One-off repair for rows written before the shared location
-            // sanitizer existed. Idempotent: a second run sees a clean
+            // sanitiser existed. Idempotent: a second run sees a clean
             // location and leaves it alone.
             var sanitised = LocationSanitiser.Sanitise(job.Location);
             if (!string.Equals(job.Location, sanitised.Location, StringComparison.Ordinal))
@@ -122,7 +122,8 @@ public sealed class JobQualityGuard(
                 locationsRepaired++;
             }
 
-            var region = normalisationService.ResolveRegion(job.Location, job.DescriptionSummary);
+            var region = sanitised.RegionHint
+                ?? normalisationService.ResolveRegion(job.Location, job.DescriptionSummary);
             if (!string.Equals(job.Region, region, StringComparison.Ordinal))
             {
                 job.Region = region;

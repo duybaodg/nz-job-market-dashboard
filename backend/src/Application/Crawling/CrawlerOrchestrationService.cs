@@ -238,6 +238,7 @@ public sealed class CrawlerOrchestrationService(
         // trailing ad sentence (SEEK). Clean it for every parser and preserve
         // the removed text in the description instead of discarding it.
         var sanitisedLocation = LocationSanitiser.Sanitise(rawJob.Location);
+        var regionHint = sanitisedLocation.RegionHint;
         var candidate = rawJob with
         {
             Location = sanitisedLocation.Location,
@@ -280,7 +281,7 @@ public sealed class CrawlerOrchestrationService(
             existingJob.Company = CleanOptional(candidate.Company) ?? existingJob.Company;
             existingJob.Location = CleanOptional(candidate.Location) ?? existingJob.Location;
             existingJob.DescriptionSummary = Summarise(candidate.DescriptionText) ?? existingJob.DescriptionSummary;
-            existingJob.Region = normalisationService.ResolveRegion(
+            existingJob.Region = regionHint ?? normalisationService.ResolveRegion(
                 existingJob.Location,
                 existingJob.DescriptionSummary ?? candidate.DescriptionText);
             existingJob.EmploymentType = InferEmploymentType(candidate.DescriptionText);
@@ -313,7 +314,7 @@ public sealed class CrawlerOrchestrationService(
             Title = candidate.Title.Trim(),
             Company = CleanOptional(candidate.Company),
             Location = CleanOptional(candidate.Location),
-            Region = normalisationService.ResolveRegion(candidate.Location, candidate.DescriptionText),
+            Region = regionHint ?? normalisationService.ResolveRegion(candidate.Location, candidate.DescriptionText),
             SalaryMin = salaryMin,
             SalaryMax = salaryMax,
             EmploymentType = InferEmploymentType(candidate.DescriptionText),

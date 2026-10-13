@@ -165,6 +165,41 @@ public sealed class JobQualityGuardRunTests
         talentVault.DescriptionSummary.Should().Contain("Industry: Information & Communication Technology");
     }
 
+    // Round 5: the repair pass must canonicalise every existing spelling and
+    // mark (and keep marked) non-NZ places as International, idempotently.
+    [Fact]
+    public async Task RunAsync_canonicalises_existing_locations_and_marks_international_places()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.Jobs.AddRange(
+            CreateJob("Data Engineer", "https://acme.example/jobs/10", location: "Auckland, Auckland, nz"),
+            CreateJob("Cloud Engineer", "https://acme.example/jobs/11", location: "Hamilton, New Zealand, NZ"),
+            CreateJob("Support Engineer", "https://acme.example/jobs/12", location: "Adelaide, Brisbane, Canberra"),
+            CreateJob("Platform Developer", "https://acme.example/jobs/13", location: "None"),
+            CreateJob("Network Engineer", "https://acme.example/jobs/14", location: "Manukau City, Auckland, NZ"));
+        await dbContext.SaveChangesAsync();
+
+        var guard = CreateGuard(dbContext);
+        var first = await guard.RunAsync(CancellationToken.None);
+        var second = await guard.RunAsync(CancellationToken.None);
+
+        first.LocationsRepaired.Should().Be(5);
+        second.LocationsRepaired.Should().Be(0);
+        second.RegionsNormalised.Should().Be(0);
+
+        dbContext.Jobs.Single(job => job.Url.EndsWith("/10")).Location.Should().Be("Auckland");
+        dbContext.Jobs.Single(job => job.Url.EndsWith("/11")).Location.Should().Be("Hamilton, Waikato");
+        dbContext.Jobs.Single(job => job.Url.EndsWith("/11")).Region.Should().Be("Waikato");
+        dbContext.Jobs.Single(job => job.Url.EndsWith("/14")).Location.Should().Be("Auckland");
+
+        var international = dbContext.Jobs.Single(job => job.Url.EndsWith("/12"));
+        international.Location.Should().BeNull();
+        international.Region.Should().Be("International");
+        international.DescriptionSummary.Should().Contain("Adelaide");
+
+        dbContext.Jobs.Single(job => job.Url.EndsWith("/13")).Location.Should().BeNull();
+    }
+
     private static JobQualityGuard CreateGuard(ApplicationDbContext dbContext) => new(
         dbContext,
         new JobContentValidator(),
