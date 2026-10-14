@@ -204,6 +204,28 @@ Posting recency is a first-class dimension:
 - Hub/landing-page records left behind by older worker versions are deactivated
   by `JobQualityGuard` at worker startup.
 
+## Skill extraction (shared taxonomy)
+
+Technical skills are extracted from the **full** job description (languages,
+frameworks, cloud, databases, data/BI, DevOps, testing, security,
+integration/ERP and process keywords), not just a programming-language list.
+
+- The vocabulary is a single data file: **`crawler/skills_taxonomy.json`**
+  (272 skills across 10 skill types). It is read by both the Python scrapling
+  worker (`crawler/skills_taxonomy.py`) and the .NET ingestion pipeline
+  (`backend/src/Application/Jobs/SkillsTaxonomy.cs` + `SkillExtractor.cs`).
+- Matching is case-insensitive alias matching with word boundaries. Every skill
+  can declare `aliases`, `deny` patterns and a `contextAny` window to suppress
+  false positives (`R` in "R&D", `Go` in "go to market", marketing "angular
+  design", etc.). Results are normalised to canonical names and capped at **15
+  per job**.
+- `SkillBackfillService` runs once at worker startup to re-extract skills for
+  every stored job from its title, summary and retained raw-page markdown. It is
+  idempotent and unions with existing valid skills so a weaker stored signal
+  never destroys data.
+- `GET /api/analytics/top-skills` returns the top 15 by distinct active job
+  across every skill type.
+
 ## Current Scope
 
 Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, frontend overview dashboard, scheduled registry-driven crawling of 67 NZ IT job sites, and optional Firecrawl plumbing.
