@@ -38,7 +38,7 @@ public sealed class SkillBackfillServiceTests
     }
 
     [Fact]
-    public async Task Backfill_replaces_legacy_skills_when_the_full_text_is_retained()
+    public async Task Backfill_keeps_valid_legacy_skills_and_adds_new_ones()
     {
         await using var dbContext = CreateDbContext();
         var job = CreateJob("https://example.com/jobs/legacy", summary: "Java role.");
@@ -50,15 +50,33 @@ public sealed class SkillBackfillServiceTests
             SkillType = "Keyword"
         });
         dbContext.Jobs.Add(job);
-        dbContext.RawJobPages.Add(CreatePage(job.Url, "Java, Spring Boot and microservices on AWS."));
+        dbContext.RawJobPages.Add(CreatePage(job.Url, "React, Java, Spring Boot and microservices on AWS."));
         await dbContext.SaveChangesAsync();
 
         var result = await new SkillBackfillService(dbContext, SkillExtractor.Default).RunAsync(CancellationToken.None);
 
-        var stored = dbContext.Jobs.Single().Skills.Select(skill => skill.SkillName).ToList();
-        stored.Should().Contain("Java");
-        stored.Should().NotContain("React");
-        result.SkillsRemoved.Should().BeGreaterThan(0);
+        var stored = dbContext.Jobs.Single().Skills.ToList();
+        stored.Select(skill => skill.SkillName).Should().Contain(new[] { "React", "Java", "Spring", "AWS" });
+        // The legacy row keeps its skill but is upgraded to the canonical type.
+        stored.Single(skill => skill.SkillName == "React").SkillType.Should().Be("Framework");
+        result.SkillsRemoved.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Backfill_unions_skills_from_every_retained_page_not_just_the_newest()
+    {
+        await using var dbContext = CreateDbContext();
+        var job = CreateJob("https://example.com/jobs/multi-page", summary: null);
+        dbContext.Jobs.Add(job);
+        dbContext.RawJobPages.AddRange(
+            CreatePage(job.Url, "Kubernetes platform engineering.", DateTime.UtcNow),
+            CreatePage(job.Url, "C# and .NET services.", DateTime.UtcNow.AddDays(-2)));
+        await dbContext.SaveChangesAsync();
+
+        await new SkillBackfillService(dbContext, SkillExtractor.Default).RunAsync(CancellationToken.None);
+
+        dbContext.Jobs.Single().Skills.Select(skill => skill.SkillName)
+            .Should().Contain(new[] { "Kubernetes", "C#", ".NET" });
     }
 
     [Fact]
@@ -104,6 +122,28 @@ public sealed class SkillBackfillServiceTests
             .SkillType.Should().Be("Cloud");
     }
 
+    [Fact]
+    public async Task Backfill_removes_retired_vocabulary_even_without_full_text()
+    {
+        await using var dbContext = CreateDbContext();
+        var job = CreateJob("https://example.com/jobs/retired", summary: "React and TypeScript.");
+        job.Skills.Add(new JobSkill
+        {
+            Id = Guid.NewGuid(),
+            JobId = job.Id,
+            SkillName = "Retired Skill",
+            SkillType = "Keyword"
+        });
+        dbContext.Jobs.Add(job);
+        await dbContext.SaveChangesAsync();
+
+        await new SkillBackfillService(dbContext, SkillExtractor.Default).RunAsync(CancellationToken.None);
+
+        var stored = dbContext.Jobs.Single().Skills.Select(skill => skill.SkillName).ToList();
+        stored.Should().NotContain("Retired Skill");
+        stored.Should().Contain("React");
+    }
+
     private static Job CreateJob(string url, string? summary) => new()
     {
         Id = Guid.NewGuid(),
@@ -119,13 +159,13 @@ public sealed class SkillBackfillServiceTests
         UpdatedAt = DateTime.UtcNow
     };
 
-    private static RawJobPage CreatePage(string url, string markdown) => new()
+    private static RawJobPage CreatePage(string url, string markdown, DateTime? crawledAt = null) => new()
     {
         Id = Guid.NewGuid(),
         Source = "Test",
         Url = url,
         Markdown = markdown,
-        CrawledAt = DateTime.UtcNow
+        CrawledAt = crawledAt ?? DateTime.UtcNow
     };
 
     private static ApplicationDbContext CreateDbContext()

@@ -2064,12 +2064,6 @@
           ]
         },
         {
-          "name": "Automation",
-          "aliases": [
-            "Automation"
-          ]
-        },
-        {
           "name": "Software Development",
           "aliases": [
             "Software Development"
@@ -2104,12 +2098,6 @@
           "name": "Customer Experience",
           "aliases": [
             "Customer Experience"
-          ]
-        },
-        {
-          "name": "Security",
-          "aliases": [
-            "Security"
           ]
         },
         {

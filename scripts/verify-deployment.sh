@@ -89,21 +89,26 @@ print("  total sources: " + str(data["summary"]["totalSources"]))
 fi
 
 printf '%-28s ' "skill extraction"
-skills_jobs=$(curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" 2>/dev/null || true)
-top_skills=$(curl -fsS --max-time 20 "${BASE_URL}/api/analytics/top-skills" 2>/dev/null || true)
-if [[ -z "$skills_jobs" || -z "$top_skills" ]]; then
+skills_jobs=$(mktemp)
+top_skills=$(mktemp)
+curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" -o "$skills_jobs" 2>/dev/null || true
+curl -fsS --max-time 20 "${BASE_URL}/api/analytics/top-skills" -o "$top_skills" 2>/dev/null || true
+if [[ ! -s "$skills_jobs" || ! -s "$top_skills" ]]; then
   echo "FAIL"
   fail=1
 else
-  SKILLS_JOBS="$skills_jobs" TOP_SKILLS="$top_skills" python3 -c '
-import json, os
-jobs = json.loads(os.environ["SKILLS_JOBS"])
-top = json.loads(os.environ["TOP_SKILLS"])
+  python3 - "$skills_jobs" "$top_skills" <<'PY'
+import json
+import sys
+
+jobs = json.load(open(sys.argv[1], encoding="utf-8"))
+top = json.load(open(sys.argv[2], encoding="utf-8"))
 with_skills = sum(1 for job in jobs if job.get("skills"))
 print("OK (" + str(with_skills) + "/" + str(len(jobs)) + " jobs have skills)")
 print("  top skills: " + ", ".join(item["skillName"] + "=" + str(item["jobCount"]) for item in top[:15]))
-'
+PY
 fi
+rm -f "$skills_jobs" "$top_skills"
 
 echo
 if [[ "$fail" -ne 0 ]]; then

@@ -15,7 +15,7 @@ class SkillExtractorFixtureTests(unittest.TestCase):
 
     FIXTURE_EXPECTATIONS = {
         "westpac-data-engineer.txt": {"SQL", "Python", "ETL", "Snowflake", "Oracle", "Apache Kafka"},
-        "eroad-security-analyst.txt": {"Security", "Cybersecurity", "AWS", "Azure", "GCP", "Python"},
+        "eroad-security-analyst.txt": {"Cybersecurity", "AWS", "Azure", "GCP", "Python", "Linux"},
         "digital-workspace-engineer.txt": {"ITIL", "IT Service Management", "Technical Support", "Problem Solving"},
         "gallagher-product-manager-cloud.txt": {
             "Cloud Computing",

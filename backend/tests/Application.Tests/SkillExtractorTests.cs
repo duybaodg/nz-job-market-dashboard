@@ -21,7 +21,7 @@ public sealed class SkillExtractorTests
         },
         {
             "eroad-security-analyst.txt",
-            new[] { "Security", "Cybersecurity", "AWS", "Azure", "GCP", "Python" }
+            new[] { "Cybersecurity", "AWS", "Azure", "GCP", "Python", "Linux" }
         },
         {
             "digital-workspace-engineer.txt",
