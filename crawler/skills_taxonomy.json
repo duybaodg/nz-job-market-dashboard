@@ -1,0 +1,2124 @@
+{
+  "version": 1,
+  "description": "Shared technical-skill taxonomy for the NZ Job Market Dashboard. Read by both the Python crawler (crawler/skills_taxonomy.py) and the .NET ingestion (backend/src/Application/Jobs/SkillsTaxonomy.cs).",
+  "maxSkillsPerJob": 15,
+  "categories": [
+    {
+      "type": "ProgrammingLanguage",
+      "skills": [
+        {
+          "name": "C#",
+          "aliases": [
+            "C#",
+            "C Sharp",
+            "CSharp"
+          ]
+        },
+        {
+          "name": "C++",
+          "aliases": [
+            "C++",
+            "CPP"
+          ]
+        },
+        {
+          "name": "Python",
+          "aliases": [
+            "Python",
+            "Python3"
+          ]
+        },
+        {
+          "name": "Java",
+          "aliases": [
+            "Java"
+          ]
+        },
+        {
+          "name": "JavaScript",
+          "aliases": [
+            "JavaScript",
+            "ECMAScript",
+            "ES6",
+            {
+              "text": "JS",
+              "caseSensitive": true
+            }
+          ]
+        },
+        {
+          "name": "TypeScript",
+          "aliases": [
+            "TypeScript",
+            {
+              "text": "TS",
+              "caseSensitive": true
+            }
+          ]
+        },
+        {
+          "name": "Go",
+          "aliases": [
+            "Go",
+            "Golang"
+          ],
+          "deny": [
+            "[- ]?to[- ]market\\b"
+          ],
+          "contextAny": [
+            "golang",
+            "\\bgo\\b[^.]{0,40}\\b(?:developer|engineer|programming|language|backend|microservice|concurren|goroutine|api|sdk)\\b",
+            "\\b(?:backend|microservice|distributed)\\b"
+          ],
+          "contextWindow": 60
+        },
+        {
+          "name": "Rust",
+          "aliases": [
+            "Rust",
+            "Rustlang"
+          ]
+        },
+        {
+          "name": "Kotlin",
+          "aliases": [
+            "Kotlin"
+          ]
+        },
+        {
+          "name": "Swift",
+          "aliases": [
+            "Swift"
+          ]
+        },
+        {
+          "name": "PHP",
+          "aliases": [
+            "PHP"
+          ]
+        },
+        {
+          "name": "Ruby",
+          "aliases": [
+            "Ruby"
+          ]
+        },
+        {
+          "name": "Scala",
+          "aliases": [
+            "Scala"
+          ]
+        },
+        {
+          "name": "R",
+          "aliases": [
+            "R"
+          ],
+          "deny": [
+            "\\s*(?:&|and)\\s*D\\b",
+            "\\+"
+          ],
+          "contextAny": [
+            "\\br\\s*(?:studio|shiny|programming|language|packages?|stats)\\b",
+            "rstudio",
+            "\\brstats\\b",
+            "data scien",
+            "statistic",
+            "machine learning",
+            "regression",
+            "visuali[sz]",
+            "\\banalytics?\\b",
+            "\\bpython\\b",
+            "\\bsql\\b"
+          ],
+          "contextWindow": 48
+        },
+        {
+          "name": "MATLAB",
+          "aliases": [
+            "MATLAB",
+            "Matlab"
+          ]
+        },
+        {
+          "name": "Bash",
+          "aliases": [
+            "Bash",
+            "Shell Script",
+            "Shell Scripting",
+            "Shell"
+          ]
+        },
+        {
+          "name": "PowerShell",
+          "aliases": [
+            "PowerShell"
+          ]
+        },
+        {
+          "name": "SQL",
+          "aliases": [
+            "SQL"
+          ]
+        },
+        {
+          "name": "T-SQL",
+          "aliases": [
+            "T-SQL",
+            "Transact-SQL",
+            "TSQL"
+          ]
+        },
+        {
+          "name": "PL/SQL",
+          "aliases": [
+            "PL/SQL",
+            "PLSQL"
+          ]
+        },
+        {
+          "name": "VBA",
+          "aliases": [
+            "VBA",
+            "Visual Basic for Applications"
+          ]
+        },
+        {
+          "name": "SAS",
+          "aliases": [
+            "SAS"
+          ],
+          "contextAny": [
+            "\\bsas\\b[^.]{0,30}\\b(?:programming|developer|enterprise|viya|studio|macro|base|analytics)\\b",
+            "\\b(?:statistical|predictive|clinical)\\b[^.]{0,30}\\bsas\\b"
+          ],
+          "contextWindow": 40
+        },
+        {
+          "name": "COBOL",
+          "aliases": [
+            "COBOL"
+          ]
+        },
+        {
+          "name": "ABAP",
+          "aliases": [
+            "ABAP"
+          ]
+        },
+        {
+          "name": "Delphi",
+          "aliases": [
+            "Delphi"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Framework",
+      "skills": [
+        {
+          "name": ".NET",
+          "aliases": [
+            ".NET",
+            ".NET Core",
+            ".NET Framework",
+            "dotnet"
+          ]
+        },
+        {
+          "name": "ASP.NET",
+          "aliases": [
+            "ASP.NET",
+            "ASP.NET Core",
+            "ASP.NET MVC",
+            "ASP.NET Web API"
+          ]
+        },
+        {
+          "name": "Blazor",
+          "aliases": [
+            "Blazor"
+          ]
+        },
+        {
+          "name": "React",
+          "aliases": [
+            "React",
+            "ReactJS",
+            "React.js"
+          ]
+        },
+        {
+          "name": "React Native",
+          "aliases": [
+            "React Native"
+          ]
+        },
+        {
+          "name": "Angular",
+          "aliases": [
+            "Angular",
+            "AngularJS",
+            "Angular.js"
+          ],
+          "contextAny": [
+            "angularjs",
+            "angular\\.js",
+            "\\bangular\\s*\\d",
+            "front[- ]?end",
+            "\\bspa\\b",
+            "single[- ]page",
+            "typescript",
+            "rxjs",
+            "angular material",
+            "\\bng\\b",
+            "web application",
+            "\\bui\\b",
+            "\\bcomponent"
+          ],
+          "contextWindow": 110
+        },
+        {
+          "name": "Vue.js",
+          "aliases": [
+            "Vue",
+            "Vue.js",
+            "VueJS",
+            "Nuxt"
+          ]
+        },
+        {
+          "name": "Next.js",
+          "aliases": [
+            "Next.js",
+            "NextJS",
+            "Next JS"
+          ]
+        },
+        {
+          "name": "Node.js",
+          "aliases": [
+            "Node.js",
+            "NodeJS",
+            "Node JS",
+            "Node"
+          ],
+          "contextAny": [
+            "npm",
+            "node\\.js",
+            "nodejs",
+            "express",
+            "backend",
+            "server[- ]side",
+            "javascript",
+            "typescript",
+            "\\bapi\\b",
+            "microservice"
+          ],
+          "contextWindow": 90
+        },
+        {
+          "name": "Svelte",
+          "aliases": [
+            "Svelte",
+            "SvelteKit"
+          ]
+        },
+        {
+          "name": "jQuery",
+          "aliases": [
+            "jQuery"
+          ]
+        },
+        {
+          "name": "Redux",
+          "aliases": [
+            "Redux"
+          ]
+        },
+        {
+          "name": "Tailwind CSS",
+          "aliases": [
+            "Tailwind",
+            "Tailwind CSS"
+          ]
+        },
+        {
+          "name": "HTML",
+          "aliases": [
+            "HTML",
+            "HTML5"
+          ]
+        },
+        {
+          "name": "CSS",
+          "aliases": [
+            "CSS",
+            "CSS3",
+            "SCSS",
+            "Sass",
+            {
+              "text": "LESS",
+              "caseSensitive": true
+            }
+          ]
+        },
+        {
+          "name": "Bootstrap",
+          "aliases": [
+            "Bootstrap"
+          ]
+        },
+        {
+          "name": "Spring",
+          "aliases": [
+            "Spring",
+            "Spring Boot"
+          ],
+          "contextAny": [
+            "spring boot",
+            "spring framework",
+            "spring mvc",
+            "java",
+            "jpa",
+            "hibernate",
+            "microservice",
+            "spring cloud"
+          ],
+          "contextWindow": 90
+        },
+        {
+          "name": "Django",
+          "aliases": [
+            "Django"
+          ]
+        },
+        {
+          "name": "Flask",
+          "aliases": [
+            "Flask"
+          ]
+        },
+        {
+          "name": "FastAPI",
+          "aliases": [
+            "FastAPI"
+          ]
+        },
+        {
+          "name": "Ruby on Rails",
+          "aliases": [
+            "Ruby on Rails",
+            "Rails",
+            "RoR"
+          ]
+        },
+        {
+          "name": "Laravel",
+          "aliases": [
+            "Laravel"
+          ]
+        },
+        {
+          "name": "Flutter",
+          "aliases": [
+            "Flutter"
+          ]
+        },
+        {
+          "name": "Xamarin",
+          "aliases": [
+            "Xamarin"
+          ]
+        },
+        {
+          "name": ".NET MAUI",
+          "aliases": [
+            ".NET MAUI",
+            {
+              "text": "MAUI",
+              "caseSensitive": true
+            }
+          ]
+        },
+        {
+          "name": "WPF",
+          "aliases": [
+            "WPF",
+            "Windows Presentation Foundation"
+          ]
+        },
+        {
+          "name": "WinForms",
+          "aliases": [
+            "WinForms",
+            "Windows Forms"
+          ]
+        },
+        {
+          "name": "Electron",
+          "aliases": [
+            "Electron"
+          ]
+        },
+        {
+          "name": "Qt",
+          "aliases": [
+            "Qt"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Cloud",
+      "skills": [
+        {
+          "name": "AWS",
+          "aliases": [
+            "AWS",
+            "Amazon Web Services"
+          ]
+        },
+        {
+          "name": "AWS Lambda",
+          "aliases": [
+            "AWS Lambda",
+            "Lambda Function",
+            "Lambda"
+          ]
+        },
+        {
+          "name": "AWS S3",
+          "aliases": [
+            "AWS S3",
+            "Amazon S3",
+            "S3 Bucket",
+            "S3"
+          ]
+        },
+        {
+          "name": "AWS EC2",
+          "aliases": [
+            "AWS EC2",
+            "Amazon EC2",
+            "EC2"
+          ]
+        },
+        {
+          "name": "AWS RDS",
+          "aliases": [
+            "AWS RDS",
+            "Amazon RDS"
+          ]
+        },
+        {
+          "name": "AWS EKS",
+          "aliases": [
+            "AWS EKS",
+            "Amazon EKS"
+          ]
+        },
+        {
+          "name": "AWS ECS",
+          "aliases": [
+            "AWS ECS",
+            "Amazon ECS"
+          ]
+        },
+        {
+          "name": "AWS CloudFormation",
+          "aliases": [
+            "CloudFormation",
+            "AWS CloudFormation"
+          ]
+        },
+        {
+          "name": "AWS SQS",
+          "aliases": [
+            "AWS SQS",
+            "Amazon SQS"
+          ]
+        },
+        {
+          "name": "AWS SNS",
+          "aliases": [
+            "AWS SNS",
+            "Amazon SNS"
+          ]
+        },
+        {
+          "name": "Azure",
+          "aliases": [
+            "Azure",
+            "Microsoft Azure"
+          ]
+        },
+        {
+          "name": "Azure Functions",
+          "aliases": [
+            "Azure Functions"
+          ]
+        },
+        {
+          "name": "Azure Synapse",
+          "aliases": [
+            "Azure Synapse",
+            "Synapse Analytics"
+          ]
+        },
+        {
+          "name": "Azure SQL",
+          "aliases": [
+            "Azure SQL"
+          ]
+        },
+        {
+          "name": "Azure Logic Apps",
+          "aliases": [
+            "Azure Logic Apps",
+            "Logic Apps"
+          ]
+        },
+        {
+          "name": "GCP",
+          "aliases": [
+            "GCP",
+            "Google Cloud Platform",
+            "Google Cloud"
+          ]
+        },
+        {
+          "name": "Google BigQuery",
+          "aliases": [
+            "BigQuery",
+            "Google BigQuery"
+          ]
+        },
+        {
+          "name": "Kubernetes",
+          "aliases": [
+            "Kubernetes",
+            "K8s",
+            "K8S"
+          ]
+        },
+        {
+          "name": "Docker",
+          "aliases": [
+            "Docker"
+          ]
+        },
+        {
+          "name": "Terraform",
+          "aliases": [
+            "Terraform"
+          ]
+        },
+        {
+          "name": "Helm",
+          "aliases": [
+            "Helm"
+          ]
+        },
+        {
+          "name": "Serverless",
+          "aliases": [
+            "Serverless Framework",
+            "Serverless"
+          ]
+        },
+        {
+          "name": "OpenShift",
+          "aliases": [
+            "OpenShift"
+          ]
+        },
+        {
+          "name": "Cloudflare",
+          "aliases": [
+            "Cloudflare"
+          ]
+        },
+        {
+          "name": "VMware",
+          "aliases": [
+            "VMware"
+          ]
+        },
+        {
+          "name": "Infrastructure as Code",
+          "aliases": [
+            "Infrastructure as Code",
+            "IaC"
+          ]
+        },
+        {
+          "name": "Cloud Computing",
+          "aliases": [
+            "Cloud Computing",
+            "Cloud Services",
+            "Cloud"
+          ]
+        },
+        {
+          "name": "SaaS",
+          "aliases": [
+            "SaaS",
+            "Software as a Service"
+          ]
+        },
+        {
+          "name": "PaaS",
+          "aliases": [
+            "PaaS",
+            "Platform as a Service"
+          ]
+        },
+        {
+          "name": "IaaS",
+          "aliases": [
+            "IaaS",
+            "Infrastructure as a Service"
+          ]
+        },
+        {
+          "name": "Citrix",
+          "aliases": [
+            "Citrix"
+          ]
+        },
+        {
+          "name": "Microsoft 365",
+          "aliases": [
+            "Microsoft 365",
+            "M365",
+            "Office 365"
+          ]
+        },
+        {
+          "name": "Windows Server",
+          "aliases": [
+            "Windows Server"
+          ]
+        },
+        {
+          "name": "Windows",
+          "aliases": [
+            "Windows",
+            "Windows 10",
+            "Windows 11"
+          ],
+          "contextAny": [
+            "windows server",
+            "active directory",
+            "microsoft",
+            "desktop",
+            "operating system",
+            "\\bos\\b",
+            "endpoint",
+            "workstation"
+          ],
+          "contextWindow": 60
+        },
+        {
+          "name": "Linux",
+          "aliases": [
+            "Linux"
+          ]
+        },
+        {
+          "name": "Unix",
+          "aliases": [
+            "Unix"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Database",
+      "skills": [
+        {
+          "name": "SQL Server",
+          "aliases": [
+            "SQL Server",
+            "MSSQL",
+            "Microsoft SQL Server"
+          ]
+        },
+        {
+          "name": "PostgreSQL",
+          "aliases": [
+            "PostgreSQL",
+            "Postgres",
+            "PostgresQL"
+          ]
+        },
+        {
+          "name": "MySQL",
+          "aliases": [
+            "MySQL"
+          ]
+        },
+        {
+          "name": "MariaDB",
+          "aliases": [
+            "MariaDB"
+          ]
+        },
+        {
+          "name": "Oracle",
+          "aliases": [
+            "Oracle Database",
+            "Oracle",
+            "Oracle DB"
+          ]
+        },
+        {
+          "name": "MongoDB",
+          "aliases": [
+            "MongoDB",
+            "Mongo"
+          ]
+        },
+        {
+          "name": "Redis",
+          "aliases": [
+            "Redis"
+          ]
+        },
+        {
+          "name": "Elasticsearch",
+          "aliases": [
+            "Elasticsearch",
+            "Elastic Search"
+          ]
+        },
+        {
+          "name": "DynamoDB",
+          "aliases": [
+            "DynamoDB",
+            "Amazon DynamoDB"
+          ]
+        },
+        {
+          "name": "Cassandra",
+          "aliases": [
+            "Cassandra"
+          ]
+        },
+        {
+          "name": "SQLite",
+          "aliases": [
+            "SQLite"
+          ]
+        },
+        {
+          "name": "Teradata",
+          "aliases": [
+            "Teradata"
+          ]
+        },
+        {
+          "name": "Snowflake",
+          "aliases": [
+            "Snowflake"
+          ]
+        },
+        {
+          "name": "Databricks",
+          "aliases": [
+            "Databricks"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "DataTool",
+      "skills": [
+        {
+          "name": "Power BI",
+          "aliases": [
+            "Power BI",
+            "PowerBI",
+            "Power-BI"
+          ]
+        },
+        {
+          "name": "Tableau",
+          "aliases": [
+            "Tableau"
+          ]
+        },
+        {
+          "name": "Looker",
+          "aliases": [
+            "Looker",
+            "Looker Studio",
+            "Google Looker"
+          ]
+        },
+        {
+          "name": "Qlik",
+          "aliases": [
+            "Qlik",
+            "QlikView",
+            "Qlik Sense"
+          ]
+        },
+        {
+          "name": "dbt",
+          "aliases": [
+            "dbt"
+          ]
+        },
+        {
+          "name": "Apache Airflow",
+          "aliases": [
+            "Airflow",
+            "Apache Airflow"
+          ]
+        },
+        {
+          "name": "Apache Spark",
+          "aliases": [
+            "Apache Spark",
+            "PySpark",
+            "Spark SQL",
+            "Spark Streaming",
+            "Spark"
+          ],
+          "contextAny": [
+            "apache spark",
+            "pyspark",
+            "spark sql",
+            "spark streaming",
+            "spark job",
+            "spark cluster",
+            "hadoop",
+            "databricks",
+            "dataframe"
+          ],
+          "contextWindow": 80
+        },
+        {
+          "name": "Apache Kafka",
+          "aliases": [
+            "Kafka",
+            "Apache Kafka"
+          ]
+        },
+        {
+          "name": "Apache Hive",
+          "aliases": [
+            "Apache Hive",
+            "HiveQL",
+            "Hive"
+          ],
+          "contextAny": [
+            "apache hive",
+            "hive sql",
+            "hiveql",
+            "hadoop",
+            "hive metastore",
+            "hive table"
+          ],
+          "contextWindow": 80
+        },
+        {
+          "name": "Hadoop",
+          "aliases": [
+            "Hadoop",
+            "Apache Hadoop"
+          ]
+        },
+        {
+          "name": "SSIS",
+          "aliases": [
+            "SSIS",
+            "SQL Server Integration Services"
+          ]
+        },
+        {
+          "name": "SSRS",
+          "aliases": [
+            "SSRS",
+            "SQL Server Reporting Services"
+          ]
+        },
+        {
+          "name": "SSAS",
+          "aliases": [
+            "SSAS",
+            "SQL Server Analysis Services"
+          ]
+        },
+        {
+          "name": "Azure Data Factory",
+          "aliases": [
+            "Azure Data Factory"
+          ]
+        },
+        {
+          "name": "Microsoft Fabric",
+          "aliases": [
+            "Microsoft Fabric",
+            "Fabric"
+          ],
+          "contextAny": [
+            "microsoft fabric",
+            "lakehouse",
+            "power bi",
+            "synapse",
+            "warehouse",
+            "onelake",
+            "data factory",
+            "analytics"
+          ],
+          "contextWindow": 110
+        },
+        {
+          "name": "Domo",
+          "aliases": [
+            "Domo"
+          ]
+        },
+        {
+          "name": "Alteryx",
+          "aliases": [
+            "Alteryx"
+          ]
+        },
+        {
+          "name": "WhereScape RED",
+          "aliases": [
+            "WhereScape RED",
+            "WhereScape",
+            "Wherescape"
+          ]
+        },
+        {
+          "name": "Informatica",
+          "aliases": [
+            "Informatica",
+            "Informatica PowerCenter"
+          ]
+        },
+        {
+          "name": "Talend",
+          "aliases": [
+            "Talend"
+          ]
+        },
+        {
+          "name": "IBM DataStage",
+          "aliases": [
+            "DataStage",
+            "IBM DataStage"
+          ]
+        },
+        {
+          "name": "Power Query",
+          "aliases": [
+            "Power Query",
+            "M Language"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "DevOps",
+      "skills": [
+        {
+          "name": "GitHub Actions",
+          "aliases": [
+            "GitHub Actions"
+          ]
+        },
+        {
+          "name": "GitLab CI",
+          "aliases": [
+            "GitLab CI",
+            "GitLab CI/CD"
+          ]
+        },
+        {
+          "name": "Jenkins",
+          "aliases": [
+            "Jenkins"
+          ]
+        },
+        {
+          "name": "Azure DevOps",
+          "aliases": [
+            "Azure DevOps",
+            "VSTS",
+            "TFS",
+            "Team Foundation Server"
+          ]
+        },
+        {
+          "name": "TeamCity",
+          "aliases": [
+            "TeamCity"
+          ]
+        },
+        {
+          "name": "Bamboo",
+          "aliases": [
+            "Bamboo"
+          ],
+          "contextAny": [
+            "atlassian",
+            "\\bci\\b",
+            "\\bcd\\b",
+            "pipeline",
+            "\\bbuild\\b",
+            "jenkins",
+            "bitbucket",
+            "deployment"
+          ],
+          "contextWindow": 80
+        },
+        {
+          "name": "Octopus Deploy",
+          "aliases": [
+            "Octopus Deploy",
+            "Octopus"
+          ]
+        },
+        {
+          "name": "ArgoCD",
+          "aliases": [
+            "ArgoCD",
+            "Argo CD"
+          ]
+        },
+        {
+          "name": "Ansible",
+          "aliases": [
+            "Ansible"
+          ]
+        },
+        {
+          "name": "Chef",
+          "aliases": [
+            "Chef"
+          ],
+          "contextAny": [
+            "ansible",
+            "puppet",
+            "configuration management",
+            "infrastructure as code",
+            "devops",
+            "chef server",
+            "chef cookbook"
+          ],
+          "contextWindow": 90
+        },
+        {
+          "name": "Puppet",
+          "aliases": [
+            "Puppet"
+          ],
+          "contextAny": [
+            "ansible",
+            "chef",
+            "configuration management",
+            "infrastructure as code",
+            "devops",
+            "puppet manifest"
+          ],
+          "contextWindow": 90
+        },
+        {
+          "name": "Grafana",
+          "aliases": [
+            "Grafana"
+          ]
+        },
+        {
+          "name": "Prometheus",
+          "aliases": [
+            "Prometheus"
+          ]
+        },
+        {
+          "name": "Datadog",
+          "aliases": [
+            "Datadog",
+            "DataDog"
+          ]
+        },
+        {
+          "name": "ELK Stack",
+          "aliases": [
+            "ELK",
+            "Elastic Stack",
+            "OpenSearch",
+            "Kibana",
+            "Logstash"
+          ]
+        },
+        {
+          "name": "Nginx",
+          "aliases": [
+            "Nginx",
+            "NGINX"
+          ]
+        },
+        {
+          "name": "CI/CD",
+          "aliases": [
+            "CI/CD",
+            "CICD",
+            "Continuous Integration",
+            "Continuous Delivery",
+            "Continuous Deployment"
+          ]
+        },
+        {
+          "name": "Git",
+          "aliases": [
+            "Git",
+            "GitHub",
+            "GitLab",
+            "Bitbucket"
+          ]
+        },
+        {
+          "name": "DevOps",
+          "aliases": [
+            "DevOps"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Testing",
+      "skills": [
+        {
+          "name": "Selenium",
+          "aliases": [
+            "Selenium"
+          ]
+        },
+        {
+          "name": "Cypress",
+          "aliases": [
+            "Cypress"
+          ]
+        },
+        {
+          "name": "Playwright",
+          "aliases": [
+            "Playwright"
+          ]
+        },
+        {
+          "name": "Postman",
+          "aliases": [
+            "Postman"
+          ]
+        },
+        {
+          "name": "JMeter",
+          "aliases": [
+            "JMeter",
+            "Apache JMeter"
+          ]
+        },
+        {
+          "name": "xUnit",
+          "aliases": [
+            "xUnit"
+          ]
+        },
+        {
+          "name": "NUnit",
+          "aliases": [
+            "NUnit"
+          ]
+        },
+        {
+          "name": "MSTest",
+          "aliases": [
+            "MSTest"
+          ]
+        },
+        {
+          "name": "Jest",
+          "aliases": [
+            "Jest"
+          ]
+        },
+        {
+          "name": "JUnit",
+          "aliases": [
+            "JUnit"
+          ]
+        },
+        {
+          "name": "pytest",
+          "aliases": [
+            "pytest"
+          ]
+        },
+        {
+          "name": "Mocha",
+          "aliases": [
+            "Mocha"
+          ]
+        },
+        {
+          "name": "TestNG",
+          "aliases": [
+            "TestNG"
+          ]
+        },
+        {
+          "name": "SpecFlow",
+          "aliases": [
+            "SpecFlow"
+          ]
+        },
+        {
+          "name": "Cucumber",
+          "aliases": [
+            "Cucumber"
+          ]
+        },
+        {
+          "name": "SoapUI",
+          "aliases": [
+            "SoapUI"
+          ]
+        },
+        {
+          "name": "LoadRunner",
+          "aliases": [
+            "LoadRunner"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Security",
+      "skills": [
+        {
+          "name": "Splunk",
+          "aliases": [
+            "Splunk"
+          ]
+        },
+        {
+          "name": "CrowdStrike",
+          "aliases": [
+            "CrowdStrike",
+            "CrowdStrike Falcon"
+          ],
+          "contextAny": [
+            "crowdstrike",
+            "endpoint",
+            "\\bedr\\b",
+            "security",
+            "threat",
+            "falcon"
+          ],
+          "contextWindow": 80
+        },
+        {
+          "name": "Microsoft Sentinel",
+          "aliases": [
+            "Microsoft Sentinel",
+            "Azure Sentinel",
+            "Sentinel"
+          ],
+          "contextAny": [
+            "microsoft sentinel",
+            "azure sentinel",
+            "\\bsiem\\b",
+            "\\bsoc\\b",
+            "security",
+            "azure",
+            "sentinel analytics"
+          ],
+          "contextWindow": 100
+        },
+        {
+          "name": "Okta",
+          "aliases": [
+            "Okta"
+          ]
+        },
+        {
+          "name": "SailPoint",
+          "aliases": [
+            "SailPoint"
+          ]
+        },
+        {
+          "name": "CyberArk",
+          "aliases": [
+            "CyberArk"
+          ]
+        },
+        {
+          "name": "Burp Suite",
+          "aliases": [
+            "Burp Suite",
+            "Burp"
+          ]
+        },
+        {
+          "name": "Metasploit",
+          "aliases": [
+            "Metasploit"
+          ]
+        },
+        {
+          "name": "Nessus",
+          "aliases": [
+            "Nessus"
+          ]
+        },
+        {
+          "name": "Qualys",
+          "aliases": [
+            "Qualys"
+          ]
+        },
+        {
+          "name": "Tenable",
+          "aliases": [
+            "Tenable"
+          ]
+        },
+        {
+          "name": "Wireshark",
+          "aliases": [
+            "Wireshark"
+          ]
+        },
+        {
+          "name": "PKI",
+          "aliases": [
+            "PKI",
+            "Public Key Infrastructure"
+          ]
+        },
+        {
+          "name": "IAM",
+          "aliases": [
+            "IAM",
+            "Identity and Access Management",
+            "Identity & Access Management"
+          ]
+        },
+        {
+          "name": "PAM",
+          "aliases": [
+            "PAM",
+            "Privileged Access Management"
+          ]
+        },
+        {
+          "name": "SIEM",
+          "aliases": [
+            "SIEM"
+          ]
+        },
+        {
+          "name": "SOC",
+          "aliases": [
+            "SOC"
+          ],
+          "contextAny": [
+            "\\bsoc\\b[^.]{0,25}\\b(?:analyst|team|operations|monitoring|tier)\\b",
+            "security operations",
+            "\\bsiem\\b",
+            "incident response",
+            "threat"
+          ],
+          "contextWindow": 80
+        },
+        {
+          "name": "Penetration Testing",
+          "aliases": [
+            "Penetration Testing",
+            "Pen Testing",
+            "PenTest",
+            "Pen Test"
+          ]
+        },
+        {
+          "name": "Vulnerability Management",
+          "aliases": [
+            "Vulnerability Management"
+          ]
+        },
+        {
+          "name": "NIST",
+          "aliases": [
+            "NIST",
+            "NIST CSF"
+          ]
+        },
+        {
+          "name": "ISO 27001",
+          "aliases": [
+            "ISO 27001",
+            "ISO27001"
+          ]
+        },
+        {
+          "name": "MITRE ATT&CK",
+          "aliases": [
+            "MITRE ATT&CK",
+            "MITRE"
+          ]
+        },
+        {
+          "name": "Zero Trust",
+          "aliases": [
+            "Zero Trust"
+          ]
+        },
+        {
+          "name": "Firewall",
+          "aliases": [
+            "Firewall",
+            "Firewalls"
+          ]
+        },
+        {
+          "name": "Fortinet",
+          "aliases": [
+            "Fortinet"
+          ]
+        },
+        {
+          "name": "Palo Alto",
+          "aliases": [
+            "Palo Alto Networks",
+            "Palo Alto"
+          ]
+        },
+        {
+          "name": "Cybersecurity",
+          "aliases": [
+            "Cybersecurity",
+            "Cyber Security"
+          ]
+        },
+        {
+          "name": "VPN",
+          "aliases": [
+            "VPN"
+          ]
+        },
+        {
+          "name": "Endpoint Security",
+          "aliases": [
+            "Endpoint Security",
+            "Endpoint Protection"
+          ]
+        },
+        {
+          "name": "Incident Response",
+          "aliases": [
+            "Incident Response"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Integration",
+      "skills": [
+        {
+          "name": "Dynamics 365",
+          "aliases": [
+            "Dynamics 365",
+            "D365",
+            "Microsoft Dynamics"
+          ]
+        },
+        {
+          "name": "SAP",
+          "aliases": [
+            "SAP",
+            "S/4HANA",
+            "SAP S/4HANA"
+          ]
+        },
+        {
+          "name": "Xero",
+          "aliases": [
+            "Xero"
+          ]
+        },
+        {
+          "name": "MYOB",
+          "aliases": [
+            "MYOB"
+          ]
+        },
+        {
+          "name": "Salesforce",
+          "aliases": [
+            "Salesforce",
+            "SFDC"
+          ]
+        },
+        {
+          "name": "SharePoint",
+          "aliases": [
+            "SharePoint"
+          ]
+        },
+        {
+          "name": "Power Apps",
+          "aliases": [
+            "Power Apps",
+            "PowerApps"
+          ]
+        },
+        {
+          "name": "Power Automate",
+          "aliases": [
+            "Power Automate",
+            "Microsoft Flow"
+          ]
+        },
+        {
+          "name": "Power Platform",
+          "aliases": [
+            "Power Platform"
+          ]
+        },
+        {
+          "name": "MuleSoft",
+          "aliases": [
+            "MuleSoft",
+            "Mule ESB",
+            "Anypoint"
+          ]
+        },
+        {
+          "name": "Boomi",
+          "aliases": [
+            "Boomi",
+            "Dell Boomi"
+          ]
+        },
+        {
+          "name": "REST API",
+          "aliases": [
+            "REST API",
+            "RESTful",
+            "REST"
+          ],
+          "contextAny": [
+            "rest api",
+            "restful",
+            "\\brest\\b[^.]{0,25}\\b(?:api|endpoint|service|http|json|web ?service|architecture|integration)\\b",
+            "\\bhttp\\b"
+          ],
+          "contextWindow": 45
+        },
+        {
+          "name": "SOAP",
+          "aliases": [
+            "SOAP"
+          ]
+        },
+        {
+          "name": "GraphQL",
+          "aliases": [
+            "GraphQL"
+          ]
+        },
+        {
+          "name": "Workday",
+          "aliases": [
+            "Workday"
+          ]
+        },
+        {
+          "name": "ServiceNow",
+          "aliases": [
+            "ServiceNow"
+          ]
+        },
+        {
+          "name": "NetSuite",
+          "aliases": [
+            "NetSuite",
+            "Oracle NetSuite"
+          ]
+        },
+        {
+          "name": "Active Directory",
+          "aliases": [
+            "Active Directory",
+            "Active Directory Domain Services"
+          ]
+        },
+        {
+          "name": "Microsoft Entra ID",
+          "aliases": [
+            "Microsoft Entra ID",
+            "Entra ID",
+            "Azure AD",
+            "Azure Active Directory"
+          ]
+        },
+        {
+          "name": "Microsoft Intune",
+          "aliases": [
+            "Microsoft Intune",
+            "Intune"
+          ]
+        },
+        {
+          "name": "SCCM",
+          "aliases": [
+            "SCCM",
+            "MECM",
+            "Microsoft Endpoint Configuration Manager"
+          ]
+        },
+        {
+          "name": "Jamf",
+          "aliases": [
+            "Jamf",
+            "Jamf Pro"
+          ]
+        },
+        {
+          "name": "Mobile Device Management",
+          "aliases": [
+            "Mobile Device Management"
+          ]
+        },
+        {
+          "name": "Microsoft Exchange",
+          "aliases": [
+            "Microsoft Exchange",
+            "Exchange Online",
+            "Exchange Server"
+          ]
+        },
+        {
+          "name": "Microsoft Teams",
+          "aliases": [
+            "Microsoft Teams",
+            "MS Teams"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Keyword",
+      "skills": [
+        {
+          "name": "Agile",
+          "aliases": [
+            "Agile"
+          ]
+        },
+        {
+          "name": "Scrum",
+          "aliases": [
+            "Scrum"
+          ]
+        },
+        {
+          "name": "Kanban",
+          "aliases": [
+            "Kanban"
+          ]
+        },
+        {
+          "name": "Jira",
+          "aliases": [
+            "Jira"
+          ]
+        },
+        {
+          "name": "Confluence",
+          "aliases": [
+            "Confluence"
+          ]
+        },
+        {
+          "name": "Microservices",
+          "aliases": [
+            "Microservices",
+            "Micro-services"
+          ]
+        },
+        {
+          "name": "ETL",
+          "aliases": [
+            "ETL",
+            "Extract Transform Load"
+          ]
+        },
+        {
+          "name": "ELT",
+          "aliases": [
+            "ELT",
+            "Extract Load Transform"
+          ]
+        },
+        {
+          "name": "API",
+          "aliases": [
+            "API",
+            "APIs"
+          ]
+        },
+        {
+          "name": "Machine Learning",
+          "aliases": [
+            "Machine Learning",
+            {
+              "text": "ML",
+              "caseSensitive": true
+            }
+          ]
+        },
+        {
+          "name": "Artificial Intelligence",
+          "aliases": [
+            "Artificial Intelligence",
+            {
+              "text": "AI",
+              "caseSensitive": true
+            }
+          ],
+          "contextAny": [
+            "artificial intelligence",
+            "machine learning",
+            "generative",
+            "\\bllm\\b",
+            "deep learning",
+            "data scien",
+            "\\bai\\b[^.]{0,30}\\b(?:model|solution|tool|platform|powered|assistant|adoption)\\b"
+          ],
+          "contextWindow": 110
+        },
+        {
+          "name": "Generative AI",
+          "aliases": [
+            "Generative AI",
+            "GenAI",
+            "Gen AI"
+          ]
+        },
+        {
+          "name": "LLM",
+          "aliases": [
+            "LLM",
+            "Large Language Model",
+            "Large Language Models"
+          ]
+        },
+        {
+          "name": "Data Warehouse",
+          "aliases": [
+            "Data Warehouse",
+            "Data Warehousing",
+            "DWH"
+          ]
+        },
+        {
+          "name": "Data Modelling",
+          "aliases": [
+            "Data Modelling",
+            "Data Modeling",
+            "Dimensional Modelling",
+            "Dimensional Modeling"
+          ]
+        },
+        {
+          "name": "Data Migration",
+          "aliases": [
+            "Data Migration"
+          ]
+        },
+        {
+          "name": "Data Governance",
+          "aliases": [
+            "Data Governance"
+          ]
+        },
+        {
+          "name": "Data Quality",
+          "aliases": [
+            "Data Quality"
+          ]
+        },
+        {
+          "name": "Business Intelligence",
+          "aliases": [
+            "Business Intelligence",
+            "BI Reporting",
+            {
+              "text": "BI",
+              "caseSensitive": true
+            }
+          ]
+        },
+        {
+          "name": "TDD",
+          "aliases": [
+            "TDD",
+            "Test-Driven Development",
+            "Test Driven Development"
+          ]
+        },
+        {
+          "name": "BDD",
+          "aliases": [
+            "BDD",
+            "Behaviour-Driven Development",
+            "Behavior-Driven Development"
+          ]
+        },
+        {
+          "name": "SDLC",
+          "aliases": [
+            "SDLC",
+            "Software Development Life Cycle"
+          ]
+        },
+        {
+          "name": "Solution Architecture",
+          "aliases": [
+            "Solution Architecture",
+            "Solution Architect"
+          ]
+        },
+        {
+          "name": "Stakeholder Management",
+          "aliases": [
+            "Stakeholder Management",
+            "Stakeholder Engagement"
+          ]
+        },
+        {
+          "name": "Analytics",
+          "aliases": [
+            "Analytics",
+            "Data Analytics",
+            "Advanced Analytics"
+          ]
+        },
+        {
+          "name": "Data Science",
+          "aliases": [
+            "Data Science"
+          ]
+        },
+        {
+          "name": "Data Engineering",
+          "aliases": [
+            "Data Engineering"
+          ]
+        },
+        {
+          "name": "Data Pipeline",
+          "aliases": [
+            "Data Pipeline",
+            "Data Pipelines",
+            "Data Pipelining"
+          ]
+        },
+        {
+          "name": "Data Integration",
+          "aliases": [
+            "Data Integration"
+          ]
+        },
+        {
+          "name": "Data Platform",
+          "aliases": [
+            "Data Platform",
+            "Data Platforms"
+          ]
+        },
+        {
+          "name": "Data Analysis",
+          "aliases": [
+            "Data Analysis"
+          ]
+        },
+        {
+          "name": "ITIL",
+          "aliases": [
+            "ITIL"
+          ]
+        },
+        {
+          "name": "IT Service Management",
+          "aliases": [
+            "IT Service Management",
+            "ITSM",
+            "Service Management"
+          ]
+        },
+        {
+          "name": "Incident Management",
+          "aliases": [
+            "Incident Management"
+          ]
+        },
+        {
+          "name": "Troubleshooting",
+          "aliases": [
+            "Troubleshooting"
+          ]
+        },
+        {
+          "name": "Technical Support",
+          "aliases": [
+            "Technical Support"
+          ]
+        },
+        {
+          "name": "Continuous Improvement",
+          "aliases": [
+            "Continuous Improvement"
+          ]
+        },
+        {
+          "name": "Problem Solving",
+          "aliases": [
+            "Problem Solving",
+            "Problem-Solving"
+          ]
+        },
+        {
+          "name": "Product Management",
+          "aliases": [
+            "Product Management"
+          ]
+        },
+        {
+          "name": "Product Roadmap",
+          "aliases": [
+            "Product Roadmap",
+            "Product Strategy"
+          ]
+        },
+        {
+          "name": "Requirements Gathering",
+          "aliases": [
+            "Requirements Gathering",
+            "Requirements Analysis"
+          ]
+        },
+        {
+          "name": "Business Analysis",
+          "aliases": [
+            "Business Analysis"
+          ]
+        },
+        {
+          "name": "Vendor Management",
+          "aliases": [
+            "Vendor Management"
+          ]
+        },
+        {
+          "name": "Risk Management",
+          "aliases": [
+            "Risk Management"
+          ]
+        },
+        {
+          "name": "Change Management",
+          "aliases": [
+            "Change Management"
+          ]
+        },
+        {
+          "name": "Compliance",
+          "aliases": [
+            "Compliance"
+          ]
+        },
+        {
+          "name": "Digital Transformation",
+          "aliases": [
+            "Digital Transformation"
+          ]
+        },
+        {
+          "name": "Cloud Migration",
+          "aliases": [
+            "Cloud Migration",
+            "Cloud Adoption"
+          ]
+        },
+        {
+          "name": "Automation",
+          "aliases": [
+            "Automation"
+          ]
+        },
+        {
+          "name": "Software Development",
+          "aliases": [
+            "Software Development"
+          ]
+        },
+        {
+          "name": "Networking",
+          "aliases": [
+            "Networking",
+            "Network Engineering"
+          ]
+        },
+        {
+          "name": "DNS",
+          "aliases": [
+            "DNS"
+          ]
+        },
+        {
+          "name": "DHCP",
+          "aliases": [
+            "DHCP"
+          ]
+        },
+        {
+          "name": "TCP/IP",
+          "aliases": [
+            "TCP/IP"
+          ]
+        },
+        {
+          "name": "Customer Experience",
+          "aliases": [
+            "Customer Experience"
+          ]
+        },
+        {
+          "name": "Security",
+          "aliases": [
+            "Security"
+          ]
+        },
+        {
+          "name": "Master Data Management",
+          "aliases": [
+            "Master Data Management"
+          ]
+        }
+      ]
+    }
+  ]
+}

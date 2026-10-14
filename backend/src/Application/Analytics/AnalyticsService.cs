@@ -65,10 +65,16 @@ public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyti
             .GroupBy(skill => skill.SkillName)
             .OrderByDescending(group => group.Count())
             .ThenBy(group => group.Key)
-            .Take(10)
+            .Take(TopSkillsLimit)
             .Select(group => new SkillDemandDto(group.Key, group.Select(skill => skill.JobId).Distinct().Count()))
             .ToListAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// The Round 7 taxonomy produces a much richer mix than the original
+    /// programming-language list, so the dashboard surfaces the top 15.
+    /// </summary>
+    public const int TopSkillsLimit = 15;
 
     public async Task<IReadOnlyList<JobsByRegionDto>> GetJobsByRegionAsync(CancellationToken cancellationToken)
     {

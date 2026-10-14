@@ -88,6 +88,23 @@ print("  total sources: " + str(data["summary"]["totalSources"]))
 '
 fi
 
+printf '%-28s ' "skill extraction"
+skills_jobs=$(curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" 2>/dev/null || true)
+top_skills=$(curl -fsS --max-time 20 "${BASE_URL}/api/analytics/top-skills" 2>/dev/null || true)
+if [[ -z "$skills_jobs" || -z "$top_skills" ]]; then
+  echo "FAIL"
+  fail=1
+else
+  SKILLS_JOBS="$skills_jobs" TOP_SKILLS="$top_skills" python3 -c '
+import json, os
+jobs = json.loads(os.environ["SKILLS_JOBS"])
+top = json.loads(os.environ["TOP_SKILLS"])
+with_skills = sum(1 for job in jobs if job.get("skills"))
+print("OK (" + str(with_skills) + "/" + str(len(jobs)) + " jobs have skills)")
+print("  top skills: " + ", ".join(item["skillName"] + "=" + str(item["jobCount"]) for item in top[:15]))
+'
+fi
+
 echo
 if [[ "$fail" -ne 0 ]]; then
   echo "Some checks failed. If sources are missing, the worker may still be on its first pass."

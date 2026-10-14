@@ -20,6 +20,9 @@ using (var scope = host.Services.CreateScope())
     // One-off repair: remove junk left by older worker versions and
     // re-normalise regions with the Phase-2 mapping. Idempotent.
     await scope.ServiceProvider.GetRequiredService<IJobQualityGuard>().RunAsync(CancellationToken.None);
+    // Round 7: re-extract technical skills for every stored job from its
+    // description with the shared taxonomy. Idempotent.
+    await scope.ServiceProvider.GetRequiredService<ISkillBackfillService>().RunAsync(CancellationToken.None);
     // Retention: hard-delete jobs and crawl history older than
     // CRAWLER_RETENTION_DAYS (default 20). Idempotent.
     await scope.ServiceProvider.GetRequiredService<ICrawlDataRetentionService>().PurgeAsync(CancellationToken.None);

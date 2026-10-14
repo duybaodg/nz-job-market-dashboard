@@ -21,9 +21,16 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
+# The shared skill taxonomy lives at crawler/skills_taxonomy.json; adding the
+# crawler root lets both the script and the imported-package test path reach it.
+_CRAWLER_ROOT = os.path.dirname(os.path.dirname(_THIS_DIR))
+if _CRAWLER_ROOT not in sys.path:
+    sys.path.insert(0, _CRAWLER_ROOT)
+
 from platform_api import API_PLATFORMS, crawl_platform  # noqa: E402
 from robots import RobotsRules, can_fetch, parse_robots  # noqa: E402
 from site_registry import lookup_source  # noqa: E402
+from skills_taxonomy import default_extractor  # noqa: E402
 
 
 
@@ -3113,11 +3120,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def attach_skills(result: dict[str, Any]) -> dict[str, Any]:
+    """Attach the shared-taxonomy skills to every job in a crawl result.
+
+    The taxonomy lives once in ``crawler/skills_taxonomy.json`` and is read by
+    both this worker and the .NET ingestion pipeline. The .NET side prefers
+    this array and only falls back to extracting itself when a crawler (for
+    example Firecrawl) did not provide one.
+    """
+    extractor = default_extractor()
+    for job in result.get("jobs", []):
+        job["skills"] = extractor.extract_for_job(job)
+    return result
+
+
 def main() -> int:
     args = parse_args()
 
     try:
-        print(json.dumps(crawl(args), ensure_ascii=False))
+        print(json.dumps(attach_skills(crawl(args)), ensure_ascii=False))
         return 0
     except Exception as exc:  # pragma: no cover - defensive CLI boundary
         print(str(exc), file=sys.stderr)

@@ -25,11 +25,13 @@ public sealed class CrawlerOrchestrationService(
     INormalisationService normalisationService,
     CrawlerLifecycleOptions? lifecycleOptions = null,
     IJobContentValidator? jobContentValidator = null,
-    ILogger<CrawlerOrchestrationService>? logger = null)
+    ILogger<CrawlerOrchestrationService>? logger = null,
+    SkillExtractor? skillExtractor = null)
     : ICrawlerOrchestrationService
 {
     private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
     private readonly IJobContentValidator contentValidator = jobContentValidator ?? new JobContentValidator();
+    private readonly SkillExtractor skillExtractor = skillExtractor ?? SkillExtractor.Default;
     private static readonly Regex HtmlTitleRegex = new(
         @"<title[^>]*>(.*?)</title>",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
@@ -55,10 +57,6 @@ public sealed class CrawlerOrchestrationService(
         + @"|"
         + @"experience(?:\s+of|\s+in|\s+with)?\s+(?:at\s+least\s+)?(\d{1,2})(?:\s*\+)?\s+years?",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly HashSet<string> ProgrammingLanguages = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "C#", "C++", "Go", "Java", "JavaScript", "Kotlin", "PHP", "Python", "Ruby", "Rust", "Scala", "Swift", "TypeScript"
-    };
 
     public async Task<CrawlRunResultDto> StartCrawlRunAsync(StartCrawlRunRequest request, CancellationToken cancellationToken)
     {
@@ -560,39 +558,45 @@ public sealed class CrawlerOrchestrationService(
         return clean.Length <= 240 ? clean : $"{clean[..237]}...";
     }
 
-    private static IReadOnlyList<string> ExtractSkills(string text)
-    {
-        var knownSkills = new[] { ".NET", "C#", "C++", "React", "TypeScript", "JavaScript", "Java", "Go", "Rust", "Kotlin", "Swift", "PHP", "Ruby", "Scala", "SQL", "PostgreSQL", "Azure", "AWS", "Power BI", "Python", "Terraform" };
-        return knownSkills
-            .Where(skill => skill == "Go"
-                ? Regex.IsMatch(text, @"(?<![\w])(?:Go|Golang)(?![\w])")
-                : Regex.IsMatch(text, $@"(?<![\w+#]){Regex.Escape(skill)}(?![\w+#])", RegexOptions.IgnoreCase))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
     private void SetSkills(Job job, RawJobInput rawJob)
     {
-        var desired = ExtractSkills($"{rawJob.Title} {rawJob.DescriptionText}").ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // The Python worker already applies the shared taxonomy and emits a
+        // "skills" array; prefer it so both sides stay in lock-step. The
+        // Firecrawl path (and anything older) has no skills, so fall back to
+        // extracting from the full description text with the same taxonomy.
+        var desired = rawJob.Skills is { Count: > 0 }
+            ? skillExtractor.NormaliseProvided(rawJob.Skills)
+            : skillExtractor.ExtractForJob(rawJob.Title, rawJob.DescriptionText);
+
+        var pending = desired.ToDictionary(skill => skill.Name, skill => skill.Type, StringComparer.OrdinalIgnoreCase);
 
         foreach (var existing in job.Skills.ToList())
         {
-            if (!desired.Remove(existing.SkillName))
+            if (!pending.TryGetValue(existing.SkillName, out var skillType))
             {
+                // No longer mentioned: drop it so a re-crawl replaces the set
+                // instead of accumulating stale skills.
+                job.Skills.Remove(existing);
+                dbContext.JobSkills.Remove(existing);
                 continue;
             }
 
-            existing.SkillType = ProgrammingLanguages.Contains(existing.SkillName) ? "ProgrammingLanguage" : "Keyword";
+            if (!string.Equals(existing.SkillType, skillType, StringComparison.Ordinal))
+            {
+                existing.SkillType = skillType;
+            }
+
+            pending.Remove(existing.SkillName);
         }
 
-        foreach (var skill in desired)
+        foreach (var (name, skillType) in pending)
         {
             var jobSkill = new JobSkill
             {
                 Id = Guid.NewGuid(),
                 JobId = job.Id,
-                SkillName = skill,
-                SkillType = ProgrammingLanguages.Contains(skill) ? "ProgrammingLanguage" : "Keyword",
+                SkillName = name,
+                SkillType = skillType,
                 Confidence = 0.7m
             };
             job.Skills.Add(jobSkill);

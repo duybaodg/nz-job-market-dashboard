@@ -14,6 +14,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IJobService, JobService>();
         services.AddScoped<IJobQualityGuard, JobQualityGuard>();
+        services.AddScoped<ISkillBackfillService, SkillBackfillService>();
         services.AddScoped<ICrawlDataRetentionService, CrawlDataRetentionService>();
         services.AddScoped<IJobContentValidator, JobContentValidator>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
@@ -22,6 +23,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDeduplicationService, DeduplicationService>();
         services.AddSingleton<HealthReportCache>();
         services.AddScoped<IHealthService, HealthService>();
+
+        // The shared skill taxonomy is loaded once from
+        // crawler/skills_taxonomy.json and reused for every extraction.
+        services.AddSingleton(SkillsTaxonomy.Default);
+        services.AddSingleton(SkillExtractor.Default);
 
         return services;
     }

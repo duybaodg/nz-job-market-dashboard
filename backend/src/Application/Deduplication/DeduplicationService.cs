@@ -3,6 +3,9 @@ using System.Text;
 
 namespace Application.Deduplication;
 
+/// <summary>A skill emitted by the Python worker alongside a raw job.</summary>
+public sealed record RawJobSkill(string Name, string Type);
+
 public sealed record RawJobInput(
     string Source,
     string? SourceJobId,
@@ -13,7 +16,8 @@ public sealed record RawJobInput(
     string? DescriptionText,
     string Url,
     DateTime? PostedDate,
-    DateTime? ClosingDate);
+    DateTime? ClosingDate,
+    IReadOnlyList<RawJobSkill>? Skills = null);
 
 public interface IDeduplicationService
 {
