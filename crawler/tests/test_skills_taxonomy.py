@@ -139,5 +139,28 @@ class SkillNormalisationTests(unittest.TestCase):
         self.assertEqual("Keyword", skills["Agile"])
 
 
+class WorkerSkillAttachmentTests(unittest.TestCase):
+    def test_attach_skills_enriches_every_job_in_the_cli_result(self) -> None:
+        from adapters.scrapling.scrapling_worker import attach_skills
+
+        result = {
+            "rawPages": [],
+            "jobs": [
+                {
+                    "title": "Senior Data Engineer",
+                    "descriptionText": "Python, Azure and Snowflake on Kubernetes.",
+                },
+                {"title": "Marketing Manager", "descriptionText": "Own the go to market plan."},
+            ],
+        }
+
+        enriched = attach_skills(result)
+        names = {skill["name"] for skill in enriched["jobs"][0]["skills"]}
+
+        self.assertTrue({"Python", "Azure", "Snowflake", "Kubernetes"}.issubset(names))
+        # A go-to-market role must not pick up the Go language.
+        self.assertNotIn("Go", {skill["name"] for skill in enriched["jobs"][1]["skills"]})
+
+
 if __name__ == "__main__":
     unittest.main()
