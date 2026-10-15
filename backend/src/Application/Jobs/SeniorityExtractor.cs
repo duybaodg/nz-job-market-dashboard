@@ -57,11 +57,11 @@ public static class SeniorityExtractor
         ",
         RegexOptions.Compiled | RegexOptions.IgnorePatternWhitespace);
 
-    // "5+ years", "at least 8 years", "3-5 years", "minimum of 7 years"
+    // "5+ years", "at least 8 years", "3-5 years", "2-8+ years", "minimum of 7 years"
     private static readonly Regex YearsExperience = new(
         @"(?ix)
         (?:(?:at\s+least|minimum(?:\s+of)?|over|more\s+than)\s+)?
-        (?<lo>\d{1,2})(?:\s*\+)?(?:\s*(?:-|to|–|—)\s*(?<hi>\d{1,2}))?
+        (?<lo>\d{1,2})(?:\s*(?:-|to|–|—)\s*(?<hi>\d{1,2}))?\s*\+?
         \s+years?(?:'|’)?\s+(?:of\s+)?(?:relevant\s+|professional\s+|commercial\s+|industry\s+|hands[\s-]?on\s+)?experience
         ",
         RegexOptions.Compiled | RegexOptions.IgnorePatternWhitespace);
@@ -139,19 +139,20 @@ public static class SeniorityExtractor
         var best = -1;
         foreach (Match match in YearsExperience.Matches(text))
         {
-            // The band's upper edge is the more conservative "you will have"
-            // requirement when a range is advertised.
-            var candidate = int.Parse(match.Groups["hi"].Success
-                ? match.Groups["hi"].Value
-                : match.Groups["lo"].Value);
-            if (candidate > MaxPlausibleCandidateYears)
+            // Use the lower edge of an advertised band: it is the minimum the
+            // employer asks for ("3-5 years" is an Intermediate requirement).
+            // A very wide band ("2-8+ years") says nothing precise and is
+            // ignored rather than inflated to the upper edge.
+            var lo = int.Parse(match.Groups["lo"].Value);
+            var hi = match.Groups["hi"].Success ? int.Parse(match.Groups["hi"].Value) : lo;
+            if (hi - lo > 3 || lo > MaxPlausibleCandidateYears)
             {
                 continue;
             }
 
-            if (candidate > best)
+            if (lo > best)
             {
-                best = candidate;
+                best = lo;
             }
         }
 

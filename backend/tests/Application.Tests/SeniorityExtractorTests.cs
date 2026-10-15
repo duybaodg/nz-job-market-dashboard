@@ -53,6 +53,24 @@ public sealed class SeniorityExtractorTests
     }
 
     [Fact]
+    public void A_very_wide_experience_band_is_ignored_rather_than_inflated()
+    {
+        var result = SeniorityExtractor.Extract(
+            "Software Engineer", null, "Skills & Experience 2-8+ years' experience in software engineering.");
+
+        result.Value.Should().Be("Unknown");
+    }
+
+    [Fact]
+    public void A_band_uses_its_lower_edge_as_the_minimum_requirement()
+    {
+        SeniorityExtractor.Extract("Analyst", null, "You will have 3-5 years of experience.")
+            .Value.Should().Be("Intermediate");
+        SeniorityExtractor.Extract("Engineer", null, "You will have 5-8 years of experience.")
+            .Value.Should().Be("Senior");
+    }
+
+    [Fact]
     public void An_explicit_title_marker_beats_description_years()
     {
         var result = SeniorityExtractor.Extract(
