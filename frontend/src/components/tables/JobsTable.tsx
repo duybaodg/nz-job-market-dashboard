@@ -6,7 +6,8 @@ import {
   type ColumnDef,
 } from '@tanstack/react-table'
 import type { Job } from '../../types/api'
-import { formatDate, formatSalaryRange } from '../../lib/format'
+import { formatDate } from '../../lib/format'
+import { formatAdvertisedSalary } from '../../lib/salary'
 import { ArrowUpRight } from 'lucide-react'
 
 const columns: ColumnDef<Job>[] = [
@@ -20,7 +21,12 @@ const columns: ColumnDef<Job>[] = [
           <ArrowUpRight aria-hidden="true" />
         </a>
         <span>{row.original.company ?? 'Unknown company'}</span>
-        <span>Posted {formatDate(row.original.postedDate)} · closes {formatDate(row.original.closingDate)}</span>
+        <span>
+          {row.original.postedDate
+            ? `Posted ${formatDate(row.original.postedDate)}`
+            : `First seen ${formatDate(row.original.firstSeenAt)}`}
+          {row.original.closingDate ? ` · closes ${formatDate(row.original.closingDate)}` : ''}
+        </span>
       </div>
     ),
   },
@@ -38,7 +44,19 @@ const columns: ColumnDef<Job>[] = [
   },
   {
     header: 'Salary',
-    cell: ({ row }) => formatSalaryRange(row.original.salaryMin, row.original.salaryMax),
+    cell: ({ row }) => {
+      const job = row.original
+      return (
+        <div className="salary-cell">
+          <span>{formatAdvertisedSalary(job)}</span>
+          {job.salaryQuestionable ? (
+            <span className="salary-flag" title={job.salaryQuestionableReason ?? 'Flagged for review'}>
+              Check parse
+            </span>
+          ) : null}
+        </div>
+      )
+    },
   },
   {
     header: 'Experience',

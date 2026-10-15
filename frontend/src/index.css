@@ -144,6 +144,23 @@ tbody tr:hover { background: #f8faf9; }
 .health-table td { vertical-align: middle; }
 .health-error { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 280px; color: var(--muted); font-size: 12px; }
 .empty-state { margin-bottom: 16px; border: 1px solid #dfbd72; border-radius: 12px; padding: 14px 16px; color: #6b5017; background: #fff8e9; }
+.error-state { border-color: #e0a3a3; color: #7a2323; background: #fdf1f1; }
+.data-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 13px; background: var(--surface); }
+.data-status strong { font-weight: 900; }
+.data-status-ok { border-color: #bfe0d6; background: #eef8f5; color: #155f58; }
+.data-status-warn { border-color: #dfbd72; background: #fff8e9; color: #6b5017; }
+.data-status-alert { border-color: #e0a3a3; background: #fdf1f1; color: #7a2323; }
+.filter-note { align-self: end; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.pulse-note { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
+.freshness-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.freshness-table th,
+.freshness-table td { padding: 8px 6px; text-align: right; border-top: 1px solid #e7eeeb; }
+.freshness-table thead th { border-top: 0; color: #6b7975; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+.freshness-table th[scope="row"] { text-align: left; font-weight: 600; }
+.freshness-table td small { display: block; color: var(--muted); font-size: 11px; }
+.freshness-caption { margin-top: 10px; font-size: 12px; line-height: 1.4; }
+.salary-cell { display: grid; gap: 3px; }
+.salary-flag { display: inline-block; width: max-content; border-radius: 999px; padding: 1px 7px; color: #6b5017; background: #fff3d6; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
 .rank-list { display: grid; gap: 8px; }
 .rank-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; border-top: 1px solid #e7eeeb; color: #26312f; }
 .rank-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

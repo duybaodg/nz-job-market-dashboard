@@ -15,8 +15,18 @@ export function formatSalaryRange(min: number | null, max: number | null) {
   return formatCurrency(min ?? max)
 }
 
-export function formatDate(value: string | null) {
+export function formatDate(value: string | null | undefined) {
   return value ? new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' }).format(new Date(value)) : 'Unknown'
+}
+
+/** Date and time in the reporting timezone (Pacific/Auckland), for freshness. */
+export function formatNzDateTime(value: string | null | undefined) {
+  if (!value) return 'never'
+  return `${new Intl.DateTimeFormat('en-NZ', {
+    timeZone: 'Pacific/Auckland',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))} NZ`
 }
 
 export function formatRelativeTime(value: string | null) {

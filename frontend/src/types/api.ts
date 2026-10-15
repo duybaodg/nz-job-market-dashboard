@@ -1,3 +1,5 @@
+export type SalaryPeriod = 'Year' | 'Hour' | 'Day' | 'Unknown'
+
 export type Job = {
   id: string
   source: string
@@ -7,6 +9,11 @@ export type Job = {
   region: string | null
   salaryMin: number | null
   salaryMax: number | null
+  salaryText: string | null
+  salaryCurrency: string
+  salaryPeriod: SalaryPeriod
+  salaryQuestionable: boolean
+  salaryQuestionableReason: string | null
   employmentType: string
   seniority: string
   workMode: string
@@ -24,15 +31,72 @@ export type Job = {
   programmingLanguages: string[]
 }
 
+export type MetricInterval = {
+  startUtc: string
+  endUtc: string
+  startLocalDate: string
+  endLocalDateExclusive: string
+  days: number
+  label: string
+  isPartial: boolean
+}
+
+export type Change = {
+  current: number
+  previous: number | null
+  absoluteChange: number | null
+  percentChange: number | null
+  comparisonAvailable: boolean
+  noPriorBaseline: boolean
+  note: string | null
+}
+
+export type SalarySummary = {
+  medianAnnualNzd: number | null
+  eligibleCount: number
+  cohortCount: number
+  coveragePercent: number
+  questionableCount: number
+  suppressed: boolean
+  smallSample: boolean
+  deduplicated: boolean
+  exclusions: Record<string, number>
+  currency: string
+  payPeriod: string
+  basis: string
+}
+
+export type EmployerSummary = {
+  identifiableEmployers: number
+  listingsWithEmployer: number
+  listingsWithoutEmployer: number
+  coveragePercent: number
+}
+
+export type DataFreshnessState = 'Fresh' | 'Stale' | 'Partial' | 'Unavailable'
+
+export type DataStatus = {
+  state: DataFreshnessState
+  lastSuccessfulUpdateUtc: string | null
+  newestListingSeenUtc: string | null
+  enabledSources: number
+  enabledSourcesWithRecentSuccess: number
+  message: string
+}
+
 export type Overview = {
-  totalActiveJobs: number
-  newJobsToday: number
-  newJobsThisWeek: number
-  totalCompanies: number
-  averageSalary: number | null
-  medianSalary: number | null
+  generatedAtUtc: string
+  activeListings: number
+  postedDateKnown: number
+  postedDateMissing: number
+  newlyDiscovered: Change
+  newlyPosted: Change
+  salary: SalarySummary
+  employers: EmployerSummary
+  dataStatus: DataStatus
   mostActiveRegion: string | null
   mostRequestedSkill: string | null
+  interval: MetricInterval
 }
 
 export type SkillDemand = {
@@ -47,11 +111,20 @@ export type JobsByRegion = {
 
 export type FreshnessWindow = {
   days: number
-  jobCount: number
+  interval: MetricInterval
+  newlyPosted: number
+  previousNewlyPosted: number
+  newlyDiscovered: number
+  previousNewlyDiscovered: number
+  postedDateKnown: number
+  postedDateMissing: number
+  comparisonAvailable: boolean
 }
 
 export type Freshness = {
   totalActiveJobs: number
+  generatedAtUtc: string
+  dataStatus: DataStatus
   windows: FreshnessWindow[]
 }
 
