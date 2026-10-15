@@ -73,6 +73,8 @@ public sealed class AnalyticsService(
         return new OverviewDto(
             now,
             active.Count,
+            newlyPosted.WithPostedDate,
+            newlyPosted.MissingPostedDate,
             discoveredChange,
             postedChange,
             ToSalaryDto(salary),

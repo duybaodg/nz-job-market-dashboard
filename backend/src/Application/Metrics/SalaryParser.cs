@@ -60,7 +60,7 @@ public static class SalaryParser
     private const string CurrencyCode = @"(?:\$|NZD|AUD|USD|GBP|EUR|CAD|INR)";
     private const string AmountPattern =
         CurrencyCode + @"\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?"            // $120,000
-        + "|" + CurrencyCode + @"\s*\d{1,4}(?:\.\d+)?\s*[kK]?"      // $85 / $120k / $1000
+        + "|" + CurrencyCode + @"\s*\d{1,6}(?:\.\d+)?\s*[kK]?"      // $85 / $120k / NZD 55000
         + @"|\d{2,3}\s*[kK]"                                          // 130k
         + @"|\d{4,6}";                                                // 120000
 

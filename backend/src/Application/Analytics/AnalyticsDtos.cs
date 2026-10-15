@@ -67,6 +67,8 @@ public sealed record DataStatusDto(
 public sealed record OverviewDto(
     DateTime GeneratedAtUtc,
     int ActiveListings,
+    int PostedDateKnown,
+    int PostedDateMissing,
     ChangeDto NewlyDiscovered,
     ChangeDto NewlyPosted,
     SalarySummaryDto Salary,
