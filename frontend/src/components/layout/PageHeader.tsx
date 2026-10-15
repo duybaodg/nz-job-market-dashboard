@@ -1,6 +1,6 @@
 type PageHeaderProps = {
-  jobCount: number
-  sourceCount: number
+  jobCount: number | null
+  sourceCount: number | null
 }
 
 export function PageHeader({ jobCount, sourceCount }: PageHeaderProps) {
@@ -13,8 +13,12 @@ export function PageHeader({ jobCount, sourceCount }: PageHeaderProps) {
       </div>
       <div className="header-actions">
         <div className="header-status" aria-label="Dashboard status">
-          <span><i className="live-dot" aria-hidden="true" /> Live dataset</span>
-          <strong>{jobCount} jobs · {sourceCount} sources</strong>
+          <span><i className="live-dot" aria-hidden="true" /> Tracked NZ tech listings</span>
+          <strong>
+            {jobCount == null
+              ? 'Metrics unavailable'
+              : `${jobCount} jobs · ${sourceCount ?? 0} sources`}
+          </strong>
         </div>
       </div>
     </header>

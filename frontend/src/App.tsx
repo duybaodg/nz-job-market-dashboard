@@ -183,8 +183,8 @@ function App() {
       <AppSidebar />
       <main>
         <PageHeader
-          jobCount={overview?.activeListings ?? 0}
-          sourceCount={unique(allJobs.map((job) => job.source)).length}
+          jobCount={overview ? overview.activeListings : null}
+          sourceCount={hasJobsError ? null : unique(allJobs.map((job) => job.source)).length}
         />
 
         {hasOverviewError ? (

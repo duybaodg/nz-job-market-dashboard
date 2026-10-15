@@ -19,6 +19,7 @@ COPY crawler ./crawler
 RUN python3 -m pip install --break-system-packages --no-cache-dir -e ./crawler \
     && python3 -m pip install --break-system-packages --no-cache-dir msgspec patchright \
     && python3 -m playwright install chromium \
+    && patchright install chromium \
     && python3 -m playwright install-deps chromium
 ENV SCRAPLING_FETCHER_TYPE=dynamic
 ENTRYPOINT ["dotnet", "Api.dll"]
