@@ -82,6 +82,21 @@ for name in ("SEEK NZ", "Trade Me Jobs"):
 '
 fi
 
+printf '%-28s ' "adzuna removed"
+if echo "${sources:-[]}" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+adzuna = [s for s in data if s["name"] == "Adzuna NZ"]
+if any(s["enabled"] for s in adzuna):
+    print("FAIL (Adzuna NZ is still enabled)")
+    raise SystemExit(1)
+print("OK (Adzuna NZ present but disabled)" if adzuna else "OK (Adzuna NZ absent)")
+'; then
+  :
+else
+  fail=1
+fi
+
 printf '%-28s ' "employer identity"
 employers=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/employers" 2>/dev/null || true)
 if [[ -z "$employers" ]]; then
