@@ -68,6 +68,279 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("crawl_runs", (string)null);
                 });
 
+            modelBuilder.Entity("Domain.Entities.DeduplicationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<int>("GroupsFound")
+                        .HasColumnType("integer")
+                        .HasColumnName("groups_found");
+
+                    b.Property<bool>("IsValidated")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_validated");
+
+                    b.Property<int>("ListingsEvaluated")
+                        .HasColumnType("integer")
+                        .HasColumnName("listings_evaluated");
+
+                    b.Property<int>("ListingsMerged")
+                        .HasColumnType("integer")
+                        .HasColumnName("listings_merged");
+
+                    b.Property<string>("MatchVersion")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("match_version");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<int>("ReviewCandidateCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("review_candidate_count");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("trigger");
+
+                    b.Property<int>("UniqueVacancies")
+                        .HasColumnType("integer")
+                        .HasColumnName("unique_vacancies");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsValidated");
+
+                    b.HasIndex("StartedAt");
+
+                    b.ToTable("deduplication_runs", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Entities.DuplicateGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CanonicalListingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("canonical_listing_id");
+
+                    b.Property<string>("Confidence")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("confidence");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("MatchMethod")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("match_method");
+
+                    b.Property<string>("MatchVersion")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("match_version");
+
+                    b.Property<int>("MemberCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("member_count");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CanonicalListingId");
+
+                    b.ToTable("duplicate_groups", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Entities.DuplicateReviewCandidate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CandidateJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("candidate_job_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Employer")
+                        .HasColumnType("text")
+                        .HasColumnName("employer");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("Reason");
+
+                    b.ToTable("duplicate_review_candidates", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Entities.Employer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CanonicalName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("canonical_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("employers", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Entities.EmployerAlias", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("alias");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("EmployerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employer_id");
+
+                    b.Property<string>("NormalizedAlias")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_alias");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployerId");
+
+                    b.HasIndex("NormalizedAlias")
+                        .IsUnique();
+
+                    b.ToTable("employer_aliases", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Entities.EmployerAuditEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("actor");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Detail")
+                        .HasColumnType("text")
+                        .HasColumnName("detail");
+
+                    b.Property<Guid?>("EmployerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employer_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EmployerId");
+
+                    b.ToTable("employer_audit_events", (string)null);
+                });
+
             modelBuilder.Entity("Domain.Entities.Job", b =>
                 {
                     b.Property<Guid>("Id")
@@ -95,6 +368,18 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<string>("DescriptionSummary")
                         .HasColumnType("text")
                         .HasColumnName("description_summary");
+
+                    b.Property<string>("DescriptionText")
+                        .HasColumnType("text")
+                        .HasColumnName("description_text");
+
+                    b.Property<Guid?>("DuplicateGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("duplicate_group_id");
+
+                    b.Property<Guid?>("EmployerCanonicalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employer_canonical_id");
 
                     b.Property<string>("EmploymentType")
                         .IsRequired()
@@ -217,6 +502,10 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ContentHash")
                         .IsUnique();
+
+                    b.HasIndex("DuplicateGroupId");
+
+                    b.HasIndex("EmployerCanonicalId");
 
                     b.HasIndex("Region");
 
@@ -538,6 +827,30 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("raw_job_pages", (string)null);
                 });
 
+            modelBuilder.Entity("Domain.Entities.EmployerAlias", b =>
+                {
+                    b.HasOne("Domain.Entities.Employer", "Employer")
+                        .WithMany("Aliases")
+                        .HasForeignKey("EmployerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employer");
+                });
+
+            modelBuilder.Entity("Domain.Entities.Job", b =>
+                {
+                    b.HasOne("Domain.Entities.DuplicateGroup", null)
+                        .WithMany()
+                        .HasForeignKey("DuplicateGroupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Domain.Entities.Employer", null)
+                        .WithMany()
+                        .HasForeignKey("EmployerCanonicalId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("Domain.Entities.JobSkill", b =>
                 {
                     b.HasOne("Domain.Entities.Job", "Job")
@@ -561,6 +874,11 @@ namespace Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Domain.Entities.CrawlRun", b =>
                 {
                     b.Navigation("RawPages");
+                });
+
+            modelBuilder.Entity("Domain.Entities.Employer", b =>
+                {
+                    b.Navigation("Aliases");
                 });
 
             modelBuilder.Entity("Domain.Entities.Job", b =>

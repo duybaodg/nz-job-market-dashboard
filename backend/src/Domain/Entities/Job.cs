@@ -24,6 +24,11 @@ public sealed class Job
     public string ExperienceBand { get; set; } = "Unknown";
     public string? Industry { get; set; }
     public string? DescriptionSummary { get; set; }
+    /// <summary>
+    /// Full text used only for deduplication similarity; retained so a match can
+    /// be audited. Never shown in the feed (the summary is).
+    /// </summary>
+    public string? DescriptionText { get; set; }
     public string Url { get; set; } = string.Empty;
     public string ContentHash { get; set; } = string.Empty;
     public DateTime? PostedDate { get; set; }
@@ -35,5 +40,9 @@ public sealed class Job
     public DateTime LastSeenAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    /// <summary>Reviewed canonical employer; null when the name is unmatched (never guessed).</summary>
+    public Guid? EmployerCanonicalId { get; set; }
+    /// <summary>Soft duplicate grouping; null for a standalone listing.</summary>
+    public Guid? DuplicateGroupId { get; set; }
     public ICollection<JobSkill> Skills { get; set; } = new List<JobSkill>();
 }
