@@ -39,6 +39,12 @@ export type Job = {
   employerDisclosure: EmployerDisclosure
   roleFamily: string
   roleFamilyInferred: boolean
+  duplicateGroupId: string | null
+  duplicateCount: number
+  alsoOnSources: string[]
+  isCanonicalListing: boolean
+  employerCanonicalId: string | null
+  employerCanonicalName: string | null
 }
 
 export type MetricInterval = {
@@ -85,6 +91,23 @@ export type EmployerSummary = {
   directEmployerListings: number
   agencyAdvertisedListings: number
   boardAdvertisedListings: number
+  canonicalEmployers: number
+  agencyCanonicals: number
+  directEmployerCanonicals: number
+  unmatchedEmployerNames: number
+}
+
+export type DeduplicationSummary = {
+  active: boolean
+  lastValidatedAtUtc: string | null
+  matchVersion: string
+  activeListings: number
+  uniqueVacancies: number | null
+  groups: number
+  listingsMerged: number
+  reviewCandidates: number
+  groupCap: number
+  lastRunStatus: string | null
 }
 
 export type DataFreshnessState = 'Fresh' | 'Stale' | 'Partial' | 'Unavailable'
@@ -111,6 +134,8 @@ export type Overview = {
   mostActiveRegion: string | null
   mostRequestedSkill: string | null
   interval: MetricInterval
+  uniqueVacancies: number | null
+  deduplication: DeduplicationSummary
 }
 
 export type SkillDemand = {
@@ -140,6 +165,8 @@ export type Freshness = {
   generatedAtUtc: string
   dataStatus: DataStatus
   windows: FreshnessWindow[]
+  uniqueVacancies: number | null
+  deduplication: DeduplicationSummary
 }
 
 export type SourceHealthState = 'healthy' | 'empty' | 'degraded' | 'stale' | 'disabled' | 'never-run'

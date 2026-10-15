@@ -136,6 +136,8 @@ export function MarketTrendsPage() {
 
   const coverage = history?.coverage
   const missingSnapshotDays = coverage?.missingDates.length ?? 0
+  const deduplication = overview?.deduplication
+  const showUniqueVacancies = (deduplication?.active ?? false) && overview?.uniqueVacancies != null
 
   return (
     <div className="app-shell" id="market-trends">
@@ -200,14 +202,22 @@ export function MarketTrendsPage() {
         <section className="stats-grid" aria-busy={overviewQuery.isLoading || jobsQuery.isLoading}>
           <StatCard
             icon={Building2}
-            label="Active tracked listings"
-            value={overview ? cohort.length.toLocaleString('en-NZ') : 'Unavailable'}
+            label={showUniqueVacancies ? 'Unique vacancies' : 'Active tracked listings'}
+            value={
+              showUniqueVacancies
+                ? overview!.uniqueVacancies!.toLocaleString('en-NZ')
+                : overview
+                  ? cohort.length.toLocaleString('en-NZ')
+                  : 'Unavailable'
+            }
             detail={
-              activeChange
-                ? `As of now · ${describeChange(activeChange)}`
-                : filteredScope
-                  ? 'As of now · comparison unavailable for a filtered cohort'
-                  : 'As of now · comparison needs daily snapshots'
+              showUniqueVacancies
+                ? `${cohort.length.toLocaleString('en-NZ')} listings · ${deduplication!.listingsMerged} duplicate listings merged into ${deduplication!.groups} group${deduplication!.groups === 1 ? '' : 's'}`
+                : activeChange
+                  ? `As of now · ${describeChange(activeChange)}`
+                  : filteredScope
+                    ? 'As of now · comparison unavailable for a filtered cohort'
+                    : 'As of now · comparison needs daily snapshots'
             }
           />
           <StatCard
@@ -431,6 +441,9 @@ export function MarketTrendsPage() {
             <p className="muted chart-caption">
               {employers.disclosedListings} listings disclose an employer · {employers.agencyOnlyListings} agency-only ·{' '}
               {employers.unknownListings} unknown.
+              {overview
+                ? ` ${overview.employers.canonicalEmployers} canonical employers tracked (${overview.employers.agencyCanonicals} agency, ${overview.employers.directEmployerCanonicals} direct), ${overview.employers.unmatchedEmployerNames} unmatched name(s).`
+                : ''}
             </p>
           </section>
         </section>
@@ -448,8 +461,11 @@ export function MarketTrendsPage() {
               <h3>Definitions</h3>
               <ul>
                 <li>
-                  A <strong>listing</strong> is one advertisement captured from one source. Deduplication into unique
-                  vacancies is not implemented, so counts are listings, never “unique”.
+                  A <strong>listing</strong> is one advertisement captured from one source. When a validated
+                  deduplication pass has run, the headline metric switches to <strong>unique vacancies</strong>:
+                  cross-source listings are merged only on strong evidence (identical title, canonical employer and
+                  salary/window, or a shared location with ≥80% description similarity), capped at four listings per
+                  vacancy. Source rows are never deleted; weaker title+employer matches are queued for human review.
                 </li>
                 <li>
                   <strong>New listings</strong> use the crawler first-seen timestamp (discovery), not a substituted
@@ -461,8 +477,9 @@ export function MarketTrendsPage() {
                   annualised or mixed in.
                 </li>
                 <li>
-                  <strong>Hiring employers</strong> counts distinct disclosed employers. Agency-only listings and unknown
-                  employers are reported separately.
+                  <strong>Hiring employers</strong> counts distinct admin-reviewed canonical employers; exact and
+                  curated-alias matches only, never fuzzy merges. Agency-only listings and unknown employers are
+                  reported separately.
                 </li>
                 <li>
                   <strong>Geography</strong>: city, region, nationwide and work mode are independent. Remote is a work

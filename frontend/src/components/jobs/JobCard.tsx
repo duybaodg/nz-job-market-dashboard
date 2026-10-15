@@ -39,6 +39,13 @@ export function JobCard({ job }: JobCardProps) {
         {employer.secondary ? <span>{employer.secondary}</span> : null}
       </p>
 
+      {job.alsoOnSources.length > 0 ? (
+        <p className="job-duplicate" title="The same vacancy is advertised on another tracked source">
+          Also on {job.alsoOnSources.join(', ')}
+          {job.duplicateCount > job.alsoOnSources.length ? ` and ${job.duplicateCount - job.alsoOnSources.length} more` : ''}
+        </p>
+      ) : null}
+
       <dl className="job-meta">
         <div>
           <dt>

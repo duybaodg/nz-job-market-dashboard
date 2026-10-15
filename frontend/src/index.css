@@ -251,6 +251,7 @@ tbody tr:hover { background: #f8faf9; }
 .muted-salary { color: var(--muted); font-weight: 700; }
 .job-employer { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 13px; }
 .job-employer span { color: var(--muted); }
+.job-duplicate { display: inline-block; margin-top: 8px; border-radius: 999px; padding: 3px 9px; color: #24506b; background: #e7f1f8; font-size: 11px; font-weight: 800; }
 .job-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; margin: 12px 0 0; }
 .job-meta > div { min-width: 0; }
 .job-meta dt { display: flex; align-items: center; gap: 5px; color: #6b7975; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }

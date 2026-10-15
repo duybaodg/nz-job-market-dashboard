@@ -335,12 +335,13 @@ export function employerActivity(jobs: Job[], limit = 10): EmployerActivity {
   for (const job of jobs) {
     if (job.employerDisclosure === 'Disclosed' && job.hiringEmployer) {
       disclosed++
-      const key = job.hiringEmployer.trim().toLowerCase()
+      const displayName = job.employerCanonicalName ?? job.hiringEmployer.trim()
+      const key = job.employerCanonicalId ?? `name:${job.hiringEmployer.trim().toLowerCase()}`
       const existing = employers.get(key)
       if (existing) {
         existing.count++
       } else {
-        employers.set(key, { name: job.hiringEmployer.trim(), count: 1, advertiserType: job.advertiserType })
+        employers.set(key, { name: displayName, count: 1, advertiserType: job.advertiserType })
       }
       continue
     }
@@ -356,6 +357,6 @@ export function employerActivity(jobs: Job[], limit = 10): EmployerActivity {
     disclosedListings: disclosed,
     agencyOnlyListings: agencyOnly,
     unknownListings: unknown,
-    distinctEmployers: rows.length,
+    distinctEmployers: employers.size,
   }
 }

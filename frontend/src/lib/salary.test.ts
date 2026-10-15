@@ -39,6 +39,12 @@ function job(overrides: Partial<Job> = {}): Job {
     employerDisclosure: 'Disclosed',
     roleFamily: 'Software Engineering',
     roleFamilyInferred: true,
+    duplicateGroupId: null,
+    duplicateCount: 0,
+    alsoOnSources: [],
+    isCanonicalListing: false,
+    employerCanonicalId: null,
+    employerCanonicalName: null,
     ...overrides,
   }
 }

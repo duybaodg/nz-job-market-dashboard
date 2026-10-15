@@ -41,15 +41,16 @@ import json
 import sys
 
 jobs = json.load(open(sys.argv[1], encoding="utf-8"))
-required = ["roleFamily", "advertiserType", "employerDisclosure", "sourceCategory", "salaryPeriod"]
+required = ["roleFamily", "advertiserType", "employerDisclosure", "sourceCategory", "salaryPeriod", "duplicateCount", "alsoOnSources", "employerCanonicalName"]
 missing = [key for key in required if any(key not in job for job in jobs)]
 if missing:
     print("missing keys: " + ", ".join(missing))
     raise SystemExit(1)
 employers = sum(1 for job in jobs if job.get("employerDisclosure") == "Disclosed")
 agency = sum(1 for job in jobs if job.get("employerDisclosure") == "AgencyOnly")
+duplicates = sum(1 for job in jobs if job.get("duplicateCount", 0) > 0)
 families = {job["roleFamily"] for job in jobs}
-print(f"OK ({len(jobs)} jobs, {employers} disclosed employers, {agency} agency-only, {len(families)} role families)")
+print(f"OK ({len(jobs)} jobs, {employers} disclosed employers, {agency} agency-only, {duplicates} duplicate-badged, {len(families)} role families)")
 PY
 ); then
   echo "FAIL ($fields_output)"
@@ -78,6 +79,39 @@ for name in ("SEEK NZ", "Trade Me Jobs"):
     match = next((s for s in data if s["name"] == name), None)
     if match:
         print(f"  {name}: enabled={match.get("enabled")} frequency={match.get("crawlFrequencyMinutes")}m (crawled last)")
+'
+fi
+
+printf '%-28s ' "employer identity"
+employers=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/employers" 2>/dev/null || true)
+if [[ -z "$employers" ]]; then
+  echo "FAIL"
+  fail=1
+else
+  echo "$employers" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+print("OK (%d canonicals: %d agency, %d direct; %d listings mapped, %d unmatched)" % (
+    data["canonicalCount"], data["agencyCount"], data["directEmployerCount"],
+    data["listingsWithCanonical"], data["listingsUnmatched"]))
+for item in data["unmatchedNames"][:5]:
+    print("  unmatched: %s (%d)" % (item["name"], item["jobCount"]))
+'
+fi
+
+printf '%-28s ' "deduplication"
+duplicates=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/duplicates" 2>/dev/null || true)
+if [[ -z "$duplicates" ]]; then
+  echo "FAIL"
+  fail=1
+else
+  echo "$duplicates" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+unique = data["uniqueVacancies"]
+print("OK (%d groups, %d listings merged, unique vacancies %s of %d listings, %d review candidates, active=%s)" % (
+    data["groupCount"], data["listingsMerged"], unique if unique is not None else "not yet validated",
+    data["activeListings"], len(data["reviewCandidates"]), data["deduplicated"]))
 '
 fi
 

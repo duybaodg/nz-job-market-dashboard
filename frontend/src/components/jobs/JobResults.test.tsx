@@ -42,6 +42,12 @@ function job(overrides: Partial<Job> = {}): Job {
     employerDisclosure: 'Disclosed',
     roleFamily: 'Data & Analytics',
     roleFamilyInferred: true,
+    duplicateGroupId: null,
+    duplicateCount: 0,
+    alsoOnSources: [],
+    isCanonicalListing: false,
+    employerCanonicalId: null,
+    employerCanonicalName: null,
     ...overrides,
   }
 }
@@ -71,6 +77,23 @@ describe('JobCard essential information', () => {
     expect(screen.getByText('First seen')).toBeTruthy()
     expect(screen.getByText('Hiring employer not disclosed')).toBeTruthy()
     expect(screen.getByText(/Advertised by Beyond Recruitment \(recruiter\)/)).toBeTruthy()
+  })
+
+  it('badges a listing that is also advertised on another source', () => {
+    render(
+      <JobCard
+        job={job({
+          duplicateGroupId: 'group-1',
+          duplicateCount: 2,
+          alsoOnSources: ['Trade Me Jobs', 'LinkedIn'],
+          isCanonicalListing: true,
+          employerCanonicalId: 'employer-1',
+          employerCanonicalName: 'Woolworths Group New Zealand',
+        })}
+      />,
+    )
+
+    expect(screen.getByText('Also on Trade Me Jobs, LinkedIn')).toBeTruthy()
   })
 })
 

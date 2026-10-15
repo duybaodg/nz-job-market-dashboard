@@ -38,10 +38,10 @@ const PAGE_SIZE = 10
 const emptyJobs: Job[] = []
 
 const CSV_DEFINITIONS = [
-  'A source listing is one advertisement captured from one source; deduplication into unique vacancies is not implemented, so counts are listings.',
+  'A source listing is one advertisement captured from one source; the feed keeps every listing and badges cross-source duplicates ("Also on …"). Unique-vacancy counts appear on Market trends once a validated deduplication pass has run.',
   'Posted date is the source posted date; "First seen" is the crawler discovery timestamp and is never substituted for a posted date.',
   'Advertised salary is shown with its own currency and pay period; "Salary not advertised" means no figure was confirmed.',
-  'Hiring employer is the named client where disclosed; agency-only and unknown-employer listings are labelled and never guessed.',
+  'Hiring employer is the admin-reviewed canonical client where disclosed; agency-only and unknown-employer listings are labelled and never guessed.',
   'Role family is inferred deterministically from the job title; the original title is retained.',
 ]
 

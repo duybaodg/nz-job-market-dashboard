@@ -187,6 +187,14 @@ GET /api/admin/crawl-runs
 GET /api/admin/crawl-runs/{id}
 GET /api/admin/sources
 GET /api/admin/health                  # per-source crawler health (30s in-memory cache, read-only)
+GET /api/admin/employers               # canonical employers + aliases + job counts + unmatched names
+POST /api/admin/employers              # { canonicalName, type, notes, actor } create a canonical
+POST /api/admin/employers/{id}/aliases # { alias, actor } add an alias and rematch immediately
+DELETE /api/admin/employers/{id}/aliases/{alias}
+POST /api/admin/employers/seed         # one-off bootstrap from distinct company values (idempotent)
+POST /api/admin/employers/match        # repair pass: re-resolve every job by exact/alias match
+GET /api/admin/duplicates              # duplicate groups + review candidates (provenance)
+POST /api/admin/dedup/run              # run the incremental, validated dedup pass now
 ```
 
 ## Job freshness windows (2 / 7 / 15 days)
@@ -236,20 +244,72 @@ copy-link and browser Back/Forward reproduce the exact view:
   posted-date window, skill, role family, experience and programming language
   live under **More filters**. Pagination resets whenever a filter changes.
 - **Market trends (`/trends`):** scope, reporting period, comparison period and
-  freshness; four primary metrics (active tracked listings, new listings with an
-  equal-period comparison, median advertised salary with sample and coverage, and
-  hiring employers separated from agency-only/unknown listings); weekly
-  new-listing trend; active-listing history; demand by role family (with
-  seniority drill-down), region and skill; salary distribution and median salary
-  by role family; and employer activity. Every chart has a visible table or
-  ranked-bar alternative and can be operated by keyboard; chart bars apply a
-  visible filter and link through to the matching Find-jobs results.
+  freshness; four primary metrics (unique vacancies once a validated dedup pass
+  exists, otherwise active tracked listings; new listings with an equal-period
+  comparison; median advertised salary with sample and coverage; and hiring
+  employers counted by admin-reviewed canonical employer, separated from
+  agency-only/unknown listings); weekly new-listing trend; active-listing
+  history; demand by role family (with seniority drill-down), region and skill;
+  salary distribution and median salary by role family; and employer activity.
+  Every chart has a visible table or ranked-bar alternative and can be operated
+  by keyboard; chart bars apply a visible filter and link through to the matching
+  Find-jobs results.
 
 Advertiser vs hiring employer and role family are classified centrally in
 `Application/Employers/EmployerClassifier` and
 `Application/Jobs/RoleFamilyClassifier` and returned on every `JobDto`, so the
 cards, charts and CSV export cannot diverge. A reviewed agency alias table keeps
-agency-only listings from inventing the agency's client.
+agency-only listings from inventing the agency's client. On Find jobs every
+source row is kept and cross-source duplicates are badged **“Also on …”**; the
+canonical employer name is also returned on every job.
+
+## Employer identity and listing deduplication (Round 8)
+
+Both features are conservative and auditable: every decision is a data row that
+can be reviewed, and no source row is ever deleted.
+
+### Canonical employers (admin-reviewed)
+
+`employers` + `employer_aliases` + `employer_audit_events` hold the reviewed
+canonical employer model. Jobs gain a nullable `employer_canonical_id`; the raw
+source `company` text is preserved. Matching is **exact after case/whitespace
+normalisation or through a curated alias** — there is deliberately no fuzzy
+merge, so names such as “Fisher Paykel” and “Fisher & Paykel” stay separate until
+an admin adds an alias. Unmatched names create nothing and stay in the unknown
+bucket.
+
+The worker bootstraps canonicals once from the distinct source company values
+(reviewed agencies are typed `Agency`, the rest `DirectEmployer`) and then runs
+the match repair pass. `POST /api/admin/employers/{id}/aliases` adds an alias and
+immediately rematches affected jobs; removing an alias returns them to the
+unknown bucket. `GET /api/admin/employers` returns canonicals with aliases, live
+job counts, and the distinct unmatched names sorted by count. Canonical employer
+stats are surfaced on `GET /api/analytics/overview`.
+
+### Listing deduplication v1
+
+`duplicate_groups`, `duplicate_review_candidates` and `deduplication_runs` hold
+the soft grouping (jobs gain a nullable `duplicate_group_id`). Groups are keyed
+by normalised title + canonical employer and merged only on strong evidence:
+
+1. Same source + same source job id (handled at save time).
+2. Cross-source: identical normalised title, identical canonical employer,
+   identical salary text (both present or both absent) and representative dates
+   within 7 days. When the salary is absent on both sides the description
+   similarity must also be ≥ 0.8 (the guard against legitimate twin openings).
+3. Cross-source: same title + employer + location city, overlapping posting
+   window and shingled-token description Jaccard similarity ≥ 0.8.
+
+Anything weaker becomes a **review candidate** (title+employer matches that fail
+the gates, salary conflicts, or clusters larger than the **4-listing cap**)
+rather than a merge. Conflicting present salaries never merge. The canonical is
+the earliest `first_seen_at`, preferring a listing with a posted date; the pass
+is incremental and re-points the canonical when it expires. A `deduplication_run`
+records whether the pass passed integrity validation, and **unique-vacancy counts
+are only published once at least one validated pass exists** — `GET
+/api/analytics/overview` returns both `activeListings` and `uniqueVacancies`
+(plus the listing/merged/group/review-candidate summary), and
+`GET /api/admin/duplicates` shows exactly which listings merged into which group.
 
 ## Daily snapshots and historical analysis
 
