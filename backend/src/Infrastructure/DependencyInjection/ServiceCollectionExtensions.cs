@@ -42,6 +42,10 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(Math.Max(options.TimeoutSeconds + 10, 30));
         });
         services.AddScoped<IFirecrawlMarkdownParser, FirecrawlMarkdownParser>();
+        // The Firecrawl scrape endpoint ignores robots.txt, so the adapter gates
+        // every URL through this policy (a port of the Python matcher).
+        services.AddHttpClient("robots", client => client.Timeout = TimeSpan.FromSeconds(20));
+        services.AddScoped<IRobotsTxtPolicy, RobotsTxtPolicy>();
         services.Configure<ScraplingOptions>(options =>
         {
             options.PythonExecutable = configuration["SCRAPLING_PYTHON_EXECUTABLE"] ?? "python3";

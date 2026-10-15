@@ -226,9 +226,11 @@ class SourceRegistryTests(unittest.TestCase):
         original_scrapling = worker.fetch_with_scrapling
         original_http = worker.fetch_with_http
         original_browser_lookup = worker.find_browser_binary
+        original_firecrawl_config = worker.firecrawl_config
         worker.fetch_with_scrapling = boom
         worker.fetch_with_http = http
         worker.find_browser_binary = lambda: None  # force the HTTP fallback
+        worker.firecrawl_config = lambda: None  # no Firecrawl in this environment
         try:
             fetch = worker.build_fetcher(base_args(), "dynamic")
             fetch("https://example.com/1")
@@ -237,6 +239,7 @@ class SourceRegistryTests(unittest.TestCase):
             worker.fetch_with_scrapling = original_scrapling
             worker.fetch_with_http = original_http
             worker.find_browser_binary = original_browser_lookup
+            worker.firecrawl_config = original_firecrawl_config
 
         self.assertEqual(
             [

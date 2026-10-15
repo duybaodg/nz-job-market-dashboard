@@ -59,6 +59,7 @@ public static class ScraplingCliContract
         "stealth",
         "http",
         "browser",
+        "firecrawl",
     };
 
     //: Registry/legacy values that are not themselves CLI choices.
@@ -99,6 +100,8 @@ public static class ScraplingCliContract
         ["static"] = "http",
         ["requests"] = "http",
         ["urllib"] = "http",
+        ["firecrawl-selfhosted"] = "firecrawl",
+        ["firecrawl-self-hosted"] = "firecrawl",
     };
 
     /// <summary>

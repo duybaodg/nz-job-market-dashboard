@@ -6,7 +6,7 @@ Analytics dashboard for New Zealand job-market trends using live, normalized job
 
 - Frontend: React, TypeScript, Vite, Tailwind CSS, Recharts, TanStack Query, TanStack Table, Leaflet-ready structure
 - Backend: .NET 9 Web API, EF Core, PostgreSQL
-- Crawler: Python Scrapling worker, with Firecrawl plumbing available as optional fallback
+- Crawler: Python Scrapling worker, with a self-hosted Firecrawl fetch layer and automatic browser-failure fallback
 
 ## Local Development
 
@@ -361,7 +361,7 @@ integration/ERP and process keywords), not just a programming-language list.
 
 ## Current Scope
 
-Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, the Find jobs and Market trends audience views, daily listing snapshots with retained-history analytics, scheduled registry-driven crawling of 67 NZ IT job sites, and optional Firecrawl plumbing.
+Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, the Find jobs and Market trends audience views, daily listing snapshots with retained-history analytics, scheduled registry-driven crawling of 66 NZ IT job sites, and a self-hosted Firecrawl fetch layer.
 
 Crawling direction: the primary crawler is the Python Scrapling worker, driven by
 `crawler/sources/sites.json`. Each source declares a strategy (`api`, `rss`,
@@ -370,8 +370,11 @@ by source name, so the .NET adapter only needs the name and URL. Public ATS JSON
 APIs (Workday, Ashby, BambooHR, Greenhouse, SmartRecruiters, Oracle Recruiting,
 Salesforce Apex, Tribe) and SuccessFactors RSS feeds are crawled without a
 browser; everything else is rendered and parsed with JSON-LD-first extraction.
-Firecrawl remains disabled until `FIRECRAWL_API_KEY` is set and is fallback
-plumbing, not the main crawler path.
+The self-hosted Firecrawl instance is wired in as a fetch backend
+(`fetcher: "firecrawl"` for Potentia and Randstad NZ) and as an automatic
+fallback when a local browser render fails or times out. The worker still
+enforces `robots.txt` before every Firecrawl scrape, so the instance can never
+be used to bypass it.
 
 See `crawler/README.md` for the registry format, strategy table, probe tooling and
 how to add a source.
@@ -386,6 +389,9 @@ how to add a source.
 | `SCRAPLING_DOWNLOAD_DELAY_SECONDS` | 5 | Pause between page fetches |
 | `SCRAPLING_ROBOTS_TXT_OBEY` | true | Enforce `robots.txt` while crawling |
 | `SCRAPLING_FETCHER_TYPE` | fetcher | Global fetcher; per-source `fetcher` overrides it |
+| `FIRECRAWL_BASE_URL` | `https://api.firecrawl.dev/v2` | Firecrawl API base (self-hosted URL makes the fetch layer active) |
+| `FIRECRAWL_API_KEY` | – | Firecrawl API key; the self-hosted stack accepts any non-empty value |
+| `FIRECRAWL_TIMEOUT_SECONDS` | 60 | Per-page Firecrawl scrape timeout |
 | `CRAWLER_JOB_STALE_DAYS` | 15 | Expire jobs not seen for this many days |
 | `CRAWLER_MISSING_CRAWL_THRESHOLD` | 2 | Expire after N complete crawls without the job |
 | `CRAWLER_RETENTION_DAYS` | 20 | Hard-delete jobs and crawl history older than this many days |
@@ -395,7 +401,7 @@ Per-source scheduling comes from each row's `crawl_frequency_minutes`.
 SEEK and Trade Me are deprioritised (`priority: "last"`, weekly). The crawl
 scheduler reads that field from the registry and orders every due run so those
 two are crawled **after** all other sources — verified end to end — and the other
-52 enabled sources are refreshed first.
+46 enabled sources are refreshed first.
 
 Only sources whose `terms_checked_at` is set are crawled. Sites that return 403/405/410/522
 or whose `robots.txt` disallows crawling ship disabled pending review.

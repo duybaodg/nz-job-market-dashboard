@@ -1126,6 +1126,114 @@ def fetch_with_http(args: argparse.Namespace, url: str) -> tuple[str, str]:
     return html, clean_text(html)
 
 
+# --------------------------------------------------------------------------- #
+# Firecrawl — optional remote fetch layer (self-hosted or cloud)
+# --------------------------------------------------------------------------- #
+#: Default timeout for a Firecrawl scrape, overridable by
+#: FIRECRAWL_TIMEOUT_SECONDS / --firecrawl-timeout. Rendering a JavaScript board
+#: through the Firecrawl browser service is slower than a static fetch.
+FIRECRAWL_DEFAULT_TIMEOUT_SECONDS = 60
+
+
+def firecrawl_config() -> tuple[str, str] | None:
+    """Return ``(base_url, api_key)`` when Firecrawl is configured, else ``None``.
+
+    ``FIRECRAWL_BASE_URL`` may include the API version segment (the self-hosted
+    stack answers on both ``/v1`` and ``/v2``); the scrape endpoint is appended.
+    """
+    base = (os.environ.get("FIRECRAWL_BASE_URL") or "").strip().rstrip("/")
+    if not base:
+        return None
+    return base, (os.environ.get("FIRECRAWL_API_KEY") or "").strip()
+
+
+def firecrawl_scrape(url: str, timeout: int | None = None) -> dict[str, Any]:
+    """POST a single-page scrape to Firecrawl and return its ``data`` object."""
+    import ssl
+    import urllib.error
+    import urllib.request
+
+    config = firecrawl_config()
+    if config is None:
+        raise RuntimeError("Firecrawl is not configured (set FIRECRAWL_BASE_URL).")
+    base, api_key = config
+
+    seconds = int(timeout or FIRECRAWL_DEFAULT_TIMEOUT_SECONDS)
+    payload = {
+        "url": url,
+        "formats": ["markdown", "html", "rawHtml"],
+        # Keep the full document so job links survive; the generic HTML parser
+        # needs the surrounding listing markup, not just the main article.
+        "onlyMainContent": False,
+        "blockAds": True,
+        "timeout": max(seconds, 1) * 1000,
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": DEFAULT_HTTP_USER_AGENT,
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    request = urllib.request.Request(
+        f"{base}/scrape",
+        data=json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(
+            request, timeout=seconds, context=ssl.create_default_context()
+        ) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        detail = _sanitize(exc.read(2000).decode("utf-8", errors="replace"))
+        raise RuntimeError(f"Firecrawl HTTP {exc.code} for {url}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Firecrawl network error for {url}: {exc.reason}") from exc
+
+    try:
+        document = json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Firecrawl returned invalid JSON for {url}") from exc
+
+    if not isinstance(document, dict) or document.get("success") is False:
+        raise RuntimeError(f"Firecrawl scrape failed for {url}: {_sanitize(body)}")
+
+    data = document.get("data")
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Firecrawl returned no data for {url}")
+    return data
+
+
+def fetch_with_firecrawl(args: argparse.Namespace, url: str) -> tuple[str, str]:
+    """Fetch one page through Firecrawl, enforcing robots.txt first.
+
+    Firecrawl's ``/scrape`` endpoint is a single-URL fetch and does **not**
+    consult robots.txt (unlike its ``/crawl`` endpoint), so this worker checks
+    the shared :mod:`robots` matcher before handing the URL to the self-hosted
+    instance. The Firecrawl path is therefore never more permissive than the
+    Scrapling path.
+    """
+    if getattr(args, "robots_txt_obey", False) and not obeys_robots(
+        url, getattr(args, "user_agent", DEFAULT_HTTP_USER_AGENT)
+    ):
+        raise RuntimeError(f"Robots.txt does not allow crawling {url}")
+
+    timeout = getattr(args, "firecrawl_timeout", None) or FIRECRAWL_DEFAULT_TIMEOUT_SECONDS
+    data = firecrawl_scrape(url, int(timeout))
+    html = data.get("rawHtml") or data.get("html") or ""
+    markdown = data.get("markdown") or ""
+    if not isinstance(html, str):
+        html = ""
+    if not isinstance(markdown, str):
+        markdown = ""
+    if not html and not markdown:
+        raise RuntimeError(f"Firecrawl returned no content for {url}")
+    return html, markdown or clean_text(html)
+
+
 def title_from_url(url: str) -> str:
     """Derive a readable fallback title from a job URL slug."""
     slug = urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
@@ -2717,18 +2825,41 @@ def fetch_with_browser(args: argparse.Namespace, url: str) -> tuple[str, str]:
     return html, clean_text(html)
 
 
+def _firecrawl_fallback(args: argparse.Namespace, url: str, primary_error: Exception) -> tuple[str, str]:
+    """Retry a failed browser fetch through Firecrawl; raise the primary cause.
+
+    Used by the degradation chain only when Firecrawl is configured. Both causes
+    are reported so an operator can tell a site block from a Firecrawl outage.
+    """
+    if firecrawl_config() is None:
+        raise primary_error
+    print(f"Browser fetch failed for {url}; retrying with Firecrawl.", file=sys.stderr)
+    try:
+        return fetch_with_firecrawl(args, url)
+    except Exception as fallback_error:  # noqa: BLE001 - surface both causes
+        raise RuntimeError(
+            f"Browser fetch failed for {url} ({_sanitize(str(primary_error))}); "
+            f"Firecrawl fallback also failed ({_sanitize(str(fallback_error))})."
+        ) from fallback_error
+
+
 def build_fetcher(args: argparse.Namespace, fetcher_type: str) -> Any:
     """Return a page fetcher with graceful degradation.
 
-    JavaScript sites prefer Scrapling's browser; if Scrapling is not installed we
-    fall back to a plain Chromium ``--dump-dom`` render, and only if no browser
-    exists at all do we use the static HTTP fetcher (correct for JSON APIs and
-    server-rendered pages).
+    JavaScript sites prefer Scrapling's browser; if that render fails or times
+    out, the self-hosted Firecrawl instance is tried as an automatic fallback
+    (it drives its own browser service). If Scrapling is not installed we still
+    prefer a plain Chromium ``--dump-dom`` render, then Firecrawl, and only if
+    none of those are available do we use the static HTTP fetcher (correct for
+    JSON APIs and server-rendered pages).
+
+    Firecrawl enforces robots.txt itself in :func:`fetch_with_firecrawl`, so the
+    fallback can never fetch a URL the primary path would have refused.
     """
     if fetcher_type == "http":
         return lambda url: fetch_with_http(args, url)
-    if fetcher_type == "browser":
-        return lambda url: fetch_with_browser(args, url)
+    if fetcher_type == "firecrawl":
+        return lambda url: fetch_with_firecrawl(args, url)
 
     state = {"mode": "scrapling", "fetcher": fetcher_type}
 
@@ -2736,19 +2867,49 @@ def build_fetcher(args: argparse.Namespace, fetcher_type: str) -> Any:
         if state["mode"] == "http":
             return fetch_with_http(args, url)
         if state["mode"] == "browser":
-            return fetch_with_browser(args, url)
+            try:
+                return fetch_with_browser(args, url)
+            except Exception as exc:  # noqa: BLE001 - Firecrawl is the fallback
+                return _firecrawl_fallback(args, url, exc)
         try:
             return fetch_with_scrapling(args, url, state["fetcher"])
-        except RuntimeError as exc:
+        except Exception as exc:  # noqa: BLE001 - render failures fall back
             if "Scrapling is not installed" not in str(exc):
-                raise
+                return _firecrawl_fallback(args, url, exc)
             if find_browser_binary():
                 print(
                     "Scrapling is unavailable; rendering with the local Chromium binary.",
                     file=sys.stderr,
                 )
                 state["mode"] = "browser"
-                return fetch_with_browser(args, url)
+                try:
+                    return fetch_with_browser(args, url)
+                except Exception as browser_error:  # noqa: BLE001
+                    if firecrawl_config() is not None:
+                        print(
+                            f"Local browser render failed for {url}; retrying with Firecrawl.",
+                            file=sys.stderr,
+                        )
+                        try:
+                            return fetch_with_firecrawl(args, url)
+                        except Exception as fallback_error:  # noqa: BLE001
+                            print(
+                                f"Firecrawl fallback failed for {url}: {_sanitize(str(fallback_error))}",
+                                file=sys.stderr,
+                            )
+                    raise browser_error
+            if firecrawl_config() is not None:
+                print(
+                    f"Scrapling and Chromium are unavailable; trying Firecrawl for {url}.",
+                    file=sys.stderr,
+                )
+                try:
+                    return fetch_with_firecrawl(args, url)
+                except Exception as fallback_error:  # noqa: BLE001
+                    print(
+                        f"Firecrawl fallback failed for {url}: {_sanitize(str(fallback_error))}",
+                        file=sys.stderr,
+                    )
             print(
                 "Scrapling and Chromium are unavailable; using the static HTTP fetcher.",
                 file=sys.stderr,
@@ -3150,7 +3311,7 @@ PARSER_CHOICES = (
 )
 
 #: Fetcher back-ends accepted on the CLI.
-FETCHER_CHOICES = ("fetcher", "dynamic", "stealth", "http", "browser")
+FETCHER_CHOICES = ("fetcher", "dynamic", "stealth", "http", "browser", "firecrawl")
 
 
 def parse_args() -> argparse.Namespace:
@@ -3172,6 +3333,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-pages", type=int, default=50)
     parser.add_argument("--delay-seconds", type=float, default=5)
     parser.add_argument("--fetch-timeout", type=int, default=30)
+    parser.add_argument(
+        "--firecrawl-timeout",
+        type=int,
+        default=int(os.environ.get("FIRECRAWL_TIMEOUT_SECONDS") or FIRECRAWL_DEFAULT_TIMEOUT_SECONDS),
+        help="seconds to wait for a Firecrawl scrape",
+    )
     parser.add_argument("--browser-timeout", type=int, default=45)
     parser.add_argument("--render-wait-ms", type=int, default=8000)
     parser.add_argument("--robots-txt-obey", action="store_true")

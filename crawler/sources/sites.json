@@ -141,9 +141,10 @@
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 40,
-      "fetcher": "dynamic",
+      "fetcher": "firecrawl",
       "robotsAllows": true,
-      "maxPages": 12
+      "maxPages": 12,
+      "notes": "Round 10: Firecrawl self-hosted fetch layer (robots enforced by the worker before scrape) renders this JS board without the local browser; yielded 5 jobs vs 4 on the last Scrapling run."
     },
     {
       "name": "Talent Army",
@@ -257,8 +258,9 @@
       "httpStatus": 200,
       "parser": "generic",
       "sitemapJobUrls": 0,
-      "fetcher": "dynamic",
-      "robotsAllows": true
+      "fetcher": "firecrawl",
+      "robotsAllows": true,
+      "notes": "Round 10: switched to the Firecrawl self-hosted fetch layer after the local browser path timed out on four consecutive days (0 jobs); Firecrawl completed the same crawl with 5 jobs. Browser fetch remains available via fetcher-override."
     },
     {
       "name": "Hays NZ",
@@ -303,7 +305,7 @@
       "fetcher": "stealth",
       "robotsAllows": true,
       "maxPages": 12,
-      "notes": "Round 4: plain HTTP 403s (header-based block); StealthyFetcher renders the board. The old /jobs/it.html path is now a 404; /jobs.html lists all live roles including the informationtechnology category. robots.txt has no /jobs disallow."
+      "notes": "Round 4: plain HTTP 403s (header-based block); StealthyFetcher renders the board. The old /jobs/it.html path is now a 404; /jobs.html lists all live roles including the informationtechnology category. robots.txt has no /jobs disallow. Round 10: browser fetch has an automatic Firecrawl self-hosted fallback on render failure (the self-hosted scrape of this host currently answers SCRAPE_ALL_ENGINES_FAILED, so the browser stays primary)."
     },
     {
       "name": "Tribe Recruitment",
@@ -460,7 +462,8 @@
       "sitemapJobUrls": 40,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "maxPages": 12
+      "maxPages": 12,
+      "notes": "Round 10: browser fetch has an automatic Firecrawl self-hosted fallback when the render fails or times out; robots is enforced before any Firecrawl scrape."
     },
     {
       "name": "H2R Technology",
@@ -527,7 +530,8 @@
       "parser": "generic",
       "sitemapJobUrls": 17,
       "fetcher": "dynamic",
-      "robotsAllows": true
+      "robotsAllows": true,
+      "notes": "Round 10: browser fetch has an automatic Firecrawl self-hosted fallback when the render fails or times out; robots is enforced before any Firecrawl scrape."
     },
     {
       "name": "TEKsystems NZ",
@@ -675,7 +679,8 @@
       "sitemapJobUrls": 0,
       "fetcher": "dynamic",
       "robotsAllows": true,
-      "maxPages": 12
+      "maxPages": 12,
+      "notes": "Round 10: browser fetch has an automatic Firecrawl self-hosted fallback when the render fails or times out; robots is enforced before any Firecrawl scrape."
     },
     {
       "name": "Prosple NZ",

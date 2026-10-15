@@ -66,6 +66,8 @@ public sealed class ScraplingCliContractTests
     [InlineData("http", "http")]
     [InlineData("dynamic", "dynamic")]
     [InlineData("browser", "browser")]
+    [InlineData("firecrawl", "firecrawl")]
+    [InlineData("firecrawl-selfhosted", "firecrawl")]
     [InlineData("playwright", "browser")]
     [InlineData("static", "http")]
     [InlineData("something-unknown", "fetcher")]

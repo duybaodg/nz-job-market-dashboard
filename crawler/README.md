@@ -115,11 +115,31 @@ generic HTML heuristics**. Results are filtered to IT/technology roles by
 }
 ```
 
-A per-site `fetcher` (`http`, `fetcher`, `dynamic`, `stealth`, `browser`) overrides the
-global `SCRAPLING_FETCHER_TYPE`, so static sites stay cheap while JavaScript-only
-career pages get a browser. The worker degrades gracefully: Scrapling browser →
-local Chromium/Chrome `--dump-dom` render → static HTTP. A `--fetcher-override`
-flag forces a fetcher for local diagnostics.
+A per-site `fetcher` (`http`, `fetcher`, `dynamic`, `stealth`, `browser`, `firecrawl`)
+overrides the global `SCRAPLING_FETCHER_TYPE`, so static sites stay cheap while
+JavaScript-only career pages get a browser. The worker degrades gracefully:
+Scrapling browser → local Chromium/Chrome `--dump-dom` render → static HTTP. A
+`--fetcher-override` flag forces a fetcher for local diagnostics.
+
+### Firecrawl fetch layer
+
+`fetcher: "firecrawl"` uses the self-hosted Firecrawl instance (configured with
+`FIRECRAWL_BASE_URL` / `FIRECRAWL_API_KEY`) as the fetch backend. It is only a
+fetch layer: the normal link discovery, detail parsing, IT filter and skills
+taxonomy all run unchanged, so a switched source keeps the full pipeline. The
+self-hosted instance drives its own browser service, which is how the two
+switched sources (Potentia, Randstad NZ) render without the local Playwright
+install.
+
+Browser-backed fetchers also have Firecrawl as an **automatic fallback**: when a
+Scrapling/local-browser render raises or times out, the worker retries that URL
+through Firecrawl before degrading to static HTTP. Firecrawl is only tried when
+`FIRECRAWL_BASE_URL` is set; without it the old degradation chain is unchanged.
+
+Firecrawl's `/scrape` endpoint does **not** read robots.txt (unlike its `/crawl`
+endpoint), so the worker calls `obeys_robots` (the same `robots.py` matcher the
+Scrapling path uses) before it sends a URL to the instance. A disallowed URL is
+never scraped through Firecrawl.
 
 `robotsAllows` records the probe result; the worker additionally enforces
 `robots.txt` at runtime when `SCRAPLING_ROBOTS_TXT_OBEY=true`. Sites that
