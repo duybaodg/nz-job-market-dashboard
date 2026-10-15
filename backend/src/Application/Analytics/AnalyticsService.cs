@@ -1,4 +1,6 @@
 using Application.Common;
+using Application.Crawling;
+using Application.Metrics;
 using Microsoft.EntityFrameworkCore;
 
 namespace Application.Analytics;
@@ -11,50 +13,84 @@ public interface IAnalyticsService
     Task<FreshnessDto> GetFreshnessAsync(CancellationToken cancellationToken);
 }
 
-/// <summary>The freshness windows surfaced by the dashboard, in days.</summary>
+/// <summary>The freshness windows surfaced by the dashboard, in complete NZ days.</summary>
 public static class FreshnessWindows
 {
     public static readonly int[] All = [2, 7, 15];
 }
 
-public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyticsService
+public sealed class AnalyticsService(
+    IApplicationDbContext dbContext,
+    TimeProvider? timeProvider = null) : IAnalyticsService
 {
+    private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
+
     public async Task<OverviewDto> GetOverviewAsync(CancellationToken cancellationToken)
     {
-        var now = DateTime.UtcNow;
-        var today = now.Date;
-        var weekStart = today.AddDays(-7);
-
-        var salaries = await dbContext.Jobs
-            .AsNoTracking()
-            .Where(job => job.IsActive && (job.SalaryMin.HasValue || job.SalaryMax.HasValue))
-            .Select(job => new { job.SalaryMin, job.SalaryMax })
-            .ToListAsync(cancellationToken);
-
-        var salaryMidpoints = salaries
-            .Select(salary => ((salary.SalaryMin ?? salary.SalaryMax)!.Value + (salary.SalaryMax ?? salary.SalaryMin)!.Value) / 2)
-            .OrderBy(value => value)
+        var now = clock.GetUtcNow().UtcDateTime;
+        var active = await LoadActiveListingsAsync(cancellationToken);
+        var dateObservations = active
+            .Select(job => new ListingDateObservation(job.PostedDate, job.FirstSeenAt))
             .ToList();
 
+        var interval = NzReportingCalendar.LastCompleteDays(7, now);
+        var previousInterval = NzReportingCalendar.PreviousPeriod(interval);
+
+        var newlyDiscovered = ListingMetrics.Count(dateObservations, interval, DateBasis.Discovered);
+        var newlyPosted = ListingMetrics.Count(dateObservations, interval, DateBasis.Posted);
+
+        var discoveredChange = BuildChange(
+            newlyDiscovered.Count,
+            HistoryAvailable(previousInterval, now)
+                ? ListingMetrics.Count(dateObservations, previousInterval, DateBasis.Discovered).Count
+                : null);
+        var postedChange = BuildChange(
+            newlyPosted.Count,
+            HistoryAvailable(previousInterval, now)
+                ? ListingMetrics.Count(dateObservations, previousInterval, DateBasis.Posted).Count
+                : null);
+
+        var salary = SalaryMetrics.Compute(active.Select(job => new SalaryObservation(
+            job.SalaryMin,
+            job.SalaryMax,
+            job.SalaryText,
+            string.IsNullOrWhiteSpace(job.SalaryCurrency) ? "NZD" : job.SalaryCurrency!,
+            ParsePayPeriod(job.SalaryPeriod),
+            job.EmploymentType,
+            job.SalaryQuestionable)));
+        var listingsWithEmployer = active.Count(job => !string.IsNullOrWhiteSpace(job.Company));
+        var identifiable = active
+            .Where(job => !string.IsNullOrWhiteSpace(job.Company))
+            .Select(job => job.Company!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        var employerCoverage = active.Count == 0
+            ? 0m
+            : Math.Round((decimal)listingsWithEmployer / active.Count * 100m, 1, MidpointRounding.AwayFromZero);
+
+        var dataStatus = await BuildDataStatusAsync(now, cancellationToken);
+
         return new OverviewDto(
-            await dbContext.Jobs.CountAsync(job => job.IsActive, cancellationToken),
-            await dbContext.Jobs.CountAsync(job => job.IsActive && job.FirstSeenAt >= today, cancellationToken),
-            await dbContext.Jobs.CountAsync(job => job.IsActive && job.FirstSeenAt >= weekStart, cancellationToken),
-            await dbContext.Jobs.Where(job => job.IsActive && job.Company != null).Select(job => job.Company).Distinct().CountAsync(cancellationToken),
-            salaryMidpoints.Count == 0 ? null : salaryMidpoints.Average(),
-            GetMedian(salaryMidpoints),
-            await dbContext.Jobs
-                .Where(job => job.IsActive && job.Region != null)
+            now,
+            active.Count,
+            discoveredChange,
+            postedChange,
+            ToSalaryDto(salary),
+            new EmployerSummaryDto(identifiable, listingsWithEmployer, active.Count - listingsWithEmployer, employerCoverage),
+            dataStatus,
+            active
+                .Where(job => !string.IsNullOrWhiteSpace(job.Region))
                 .GroupBy(job => job.Region!)
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
-                .FirstOrDefaultAsync(cancellationToken),
+                .FirstOrDefault(),
             await dbContext.JobSkills
                 .Where(skill => skill.Job != null && skill.Job.IsActive)
                 .GroupBy(skill => skill.SkillName)
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
-                .FirstOrDefaultAsync(cancellationToken));
+                .FirstOrDefaultAsync(cancellationToken),
+            ToIntervalDto(interval, isPartial: false));
     }
 
     public async Task<IReadOnlyList<SkillDemandDto>> GetTopSkillsAsync(CancellationToken cancellationToken)
@@ -89,33 +125,167 @@ public sealed class AnalyticsService(IApplicationDbContext dbContext) : IAnalyti
 
     public async Task<FreshnessDto> GetFreshnessAsync(CancellationToken cancellationToken)
     {
-        var now = DateTime.UtcNow;
+        var now = clock.GetUtcNow().UtcDateTime;
+        var active = await LoadActiveListingsAsync(cancellationToken);
+        var dateObservations = active
+            .Select(job => new ListingDateObservation(job.PostedDate, job.FirstSeenAt))
+            .ToList();
         var windows = new List<FreshnessWindowDto>();
 
         foreach (var days in FreshnessWindows.All)
         {
-            var cutoff = now.AddDays(-days);
-            var count = await dbContext.Jobs.CountAsync(
-                job => job.IsActive && (job.PostedDate ?? job.FirstSeenAt) >= cutoff,
-                cancellationToken);
-            windows.Add(new FreshnessWindowDto(days, count));
+            var interval = NzReportingCalendar.LastCompleteDays(days, now);
+            var previousInterval = NzReportingCalendar.PreviousPeriod(interval);
+            var comparisonAvailable = HistoryAvailable(previousInterval, now);
+
+            var posted = ListingMetrics.Count(dateObservations, interval, DateBasis.Posted);
+            var discovered = ListingMetrics.Count(dateObservations, interval, DateBasis.Discovered);
+            var previousPosted = comparisonAvailable
+                ? ListingMetrics.Count(dateObservations, previousInterval, DateBasis.Posted).Count
+                : 0;
+            var previousDiscovered = comparisonAvailable
+                ? ListingMetrics.Count(dateObservations, previousInterval, DateBasis.Discovered).Count
+                : 0;
+
+            windows.Add(new FreshnessWindowDto(
+                days,
+                ToIntervalDto(interval, isPartial: false),
+                posted.Count,
+                previousPosted,
+                discovered.Count,
+                previousDiscovered,
+                posted.WithPostedDate,
+                posted.MissingPostedDate,
+                comparisonAvailable));
         }
 
         return new FreshnessDto(
-            await dbContext.Jobs.CountAsync(job => job.IsActive, cancellationToken),
+            active.Count,
+            now,
+            await BuildDataStatusAsync(now, cancellationToken),
             windows);
     }
 
-    private static decimal? GetMedian(IReadOnlyList<decimal> values)
+    private static ChangeDto BuildChange(int current, int? previous)
     {
-        if (values.Count == 0)
-        {
-            return null;
-        }
-
-        var midpoint = values.Count / 2;
-        return values.Count % 2 == 0
-            ? (values[midpoint - 1] + values[midpoint]) / 2
-            : values[midpoint];
+        var change = ChangeCalculation.Compute(current, previous);
+        return new ChangeDto(
+            change.Current,
+            change.Previous,
+            change.AbsoluteChange,
+            change.PercentChange,
+            change.ComparisonAvailable,
+            change.NoPriorBaseline,
+            change.Note);
     }
+
+    private static SalarySummaryDto ToSalaryDto(SalarySummary salary) =>
+        new(
+            salary.MedianAnnualNzd,
+            salary.EligibleCount,
+            salary.CohortCount,
+            salary.CoveragePercent,
+            salary.QuestionableCount,
+            salary.Suppressed,
+            salary.SmallSample,
+            salary.Deduplicated,
+            salary.Exclusions,
+            salary.Currency,
+            salary.PayPeriod,
+            salary.Basis);
+
+    /// <summary>
+    /// Current active rows can only reconstruct a prior period while that period
+    /// falls inside the crawl retention window. Older periods are declared
+    /// unavailable rather than guessed.
+    /// </summary>
+    private static bool HistoryAvailable(ReportingInterval previousInterval, DateTime now) =>
+        previousInterval.StartUtc >= now.AddDays(-CrawlerLifecycleOptions.DefaultRetentionDays);
+
+    private async Task<List<ActiveListing>> LoadActiveListingsAsync(CancellationToken cancellationToken)
+    {
+        return await dbContext.Jobs
+            .AsNoTracking()
+            .Where(job => job.IsActive)
+            .Select(job => new ActiveListing(
+                job.PostedDate,
+                job.FirstSeenAt,
+                job.LastSeenAt,
+                job.SalaryMin,
+                job.SalaryMax,
+                job.SalaryText,
+                job.SalaryCurrency,
+                job.SalaryPeriod,
+                job.SalaryQuestionable,
+                job.EmploymentType,
+                job.Company,
+                job.Region))
+            .ToListAsync(cancellationToken);
+    }
+
+    private async Task<DataStatusDto> BuildDataStatusAsync(DateTime now, CancellationToken cancellationToken)
+    {
+        var lastSuccessful = await dbContext.CrawlRuns
+            .AsNoTracking()
+            .Where(run => run.Status == "Completed" && run.FinishedAt != null)
+            .OrderByDescending(run => run.FinishedAt)
+            .Select(run => run.FinishedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var newestSeen = await dbContext.Jobs
+            .AsNoTracking()
+            .Where(job => job.IsActive)
+            .OrderByDescending(job => job.LastSeenAt)
+            .Select(job => (DateTime?)job.LastSeenAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var sources = await dbContext.JobSources
+            .AsNoTracking()
+            .Select(source => new SourceRunObservation(source.Name, source.Enabled, source.LastCrawledAt, null))
+            .ToListAsync(cancellationToken);
+
+        var status = DataStatusEvaluator.Evaluate(
+            now,
+            lastSuccessful,
+            newestSeen,
+            sources,
+            DataStatusEvaluator.DefaultStaleAfter);
+
+        return new DataStatusDto(
+            status.State.ToString(),
+            status.LastSuccessfulUpdateUtc,
+            status.NewestListingSeenUtc,
+            status.EnabledSources,
+            status.EnabledSourcesWithRecentSuccess,
+            status.Message);
+    }
+
+    private static MetricIntervalDto ToIntervalDto(ReportingInterval interval, bool isPartial) =>
+        new(
+            interval.StartUtc,
+            interval.EndUtc,
+            interval.StartLocalDate.ToString("yyyy-MM-dd"),
+            interval.EndLocalDateExclusive.ToString("yyyy-MM-dd"),
+            (int)Math.Round(interval.Duration.TotalDays),
+            interval.Label,
+            isPartial);
+
+    private static SalaryPayPeriod ParsePayPeriod(string? value) =>
+        Enum.TryParse<SalaryPayPeriod>(value, ignoreCase: true, out var period)
+            ? period
+            : SalaryPayPeriod.Year;
+
+    private sealed record ActiveListing(
+        DateTime? PostedDate,
+        DateTime FirstSeenAt,
+        DateTime LastSeenAt,
+        decimal? SalaryMin,
+        decimal? SalaryMax,
+        string? SalaryText,
+        string? SalaryCurrency,
+        string? SalaryPeriod,
+        bool SalaryQuestionable,
+        string EmploymentType,
+        string? Company,
+        string? Region);
 }

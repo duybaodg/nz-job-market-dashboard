@@ -11,6 +11,13 @@ public sealed class Job
     public string? Region { get; set; }
     public decimal? SalaryMin { get; set; }
     public decimal? SalaryMax { get; set; }
+    /// <summary>The advertised salary text exactly as extracted, kept for provenance.</summary>
+    public string? SalaryText { get; set; }
+    public string SalaryCurrency { get; set; } = "NZD";
+    /// <summary>Year | Hour | Day | Unknown.</summary>
+    public string SalaryPeriod { get; set; } = "Unknown";
+    public bool SalaryQuestionable { get; set; }
+    public string? SalaryQuestionableReason { get; set; }
     public string EmploymentType { get; set; } = "Unknown";
     public string Seniority { get; set; } = "Unknown";
     public string WorkMode { get; set; } = "Unknown";

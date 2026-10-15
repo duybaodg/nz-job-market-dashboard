@@ -213,6 +213,9 @@ public sealed class CrawlerOrchestrationServiceTests
         refreshed.PostedDate.Should().Be(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
         refreshed.SalaryMin.Should().Be(115000m);
         refreshed.SalaryMax.Should().Be(125000m);
+        refreshed.SalaryText.Should().Be("$115,000 – $125,000 per year");
+        refreshed.SalaryPeriod.Should().Be("Year");
+        refreshed.SalaryCurrency.Should().Be("NZD");
         refreshed.Seniority.Should().Be("Senior");
     }
 
@@ -236,9 +239,8 @@ public sealed class CrawlerOrchestrationServiceTests
     [Theory]
     [InlineData("100-160")]
     [InlineData("871-407")]
-    [InlineData("$50 per hour")]
     [InlineData("Competitive salary")]
-    public async Task StartCrawlRunAsync_rejects_unanchored_or_hourly_salary_text(string salaryText)
+    public async Task StartCrawlRunAsync_rejects_unanchored_salary_text(string salaryText)
     {
         await using var dbContext = CreateDbContext();
         var raw = new RawJobInput(
@@ -252,6 +254,26 @@ public sealed class CrawlerOrchestrationServiceTests
         var job = dbContext.Jobs.Single();
         job.SalaryMin.Should().BeNull();
         job.SalaryMax.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task StartCrawlRunAsync_keeps_hourly_rates_with_their_pay_period_and_never_annualises()
+    {
+        await using var dbContext = CreateDbContext();
+        var raw = new RawJobInput(
+            "Firecrawl", null, "Contract Developer", "Example", "Auckland", "$50 per hour",
+            "React and TypeScript.", "https://example.com/jobs/hourly", null, null);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([raw])], new DeduplicationService(), new NormalisationService());
+
+        await service.StartCrawlRunAsync(new("Firecrawl", "https://example.com/search"), CancellationToken.None);
+
+        var job = dbContext.Jobs.Single();
+        job.SalaryMin.Should().Be(50m);
+        job.SalaryMax.Should().BeNull();
+        job.SalaryPeriod.Should().Be("Hour");
+        job.SalaryCurrency.Should().Be("NZD");
+        job.SalaryText.Should().Be("$50 per hour");
     }
 
     [Fact]

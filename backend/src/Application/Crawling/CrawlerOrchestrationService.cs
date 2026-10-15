@@ -3,6 +3,7 @@ using System.Runtime.ExceptionServices;
 using Application.Common;
 using Application.Deduplication;
 using Application.Jobs;
+using Application.Metrics;
 using Application.Normalisation;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -38,20 +39,8 @@ public sealed class CrawlerOrchestrationService(
     // A salary range must be anchored by a currency symbol, an explicit "k"
     // suffix or a fully written 4-6 digit number on both sides. Without that
     // anchor, bare number pairs such as "100-160" (a SEEK teaser fragment) were
-    // misread as a $100k-$160k salary.
-    private static readonly Regex SalaryRangeRegex = new(
-        @"(?<a>(?:\$|NZD)\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,3}\s*[kK]|\d{4,6})"
-        + @"\s*(?:-|–|—|to)\s*"
-        + @"(?<b>(?:\$|NZD)?\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,3}\s*[kK]|\d{4,6})",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    // A single anchored amount ("$150,000", "NZD 120,000", "130k") is still a
-    // useful salary signal even though no range is stated.
-    private static readonly Regex SalarySingleRegex = new(
-        @"(?<a>(?:\$|NZD)\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,3}\s*[kK])",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex HourlyRateRegex = new(
-        @"(?ix)(?:per\s+hour|an?\s+hour|hourly|/\s*hr\b|per\s+day|daily|/\s*day\b)",
-        RegexOptions.Compiled);
+    // misread as a $100k-$160k salary. The parsing itself now lives in
+    // Application.Metrics.SalaryParser so ingestion and the dashboard agree.
     private static readonly Regex ExperienceRegex = new(
         @"(?:(?:at least|minimum(?: of)?|over|more than)\s+)?(\d{1,2})(?:\s*\+)?(?:\s*(?:-|to|–)\s*\d{1,2})?\s+years?"
         + @"|"
@@ -288,9 +277,7 @@ public sealed class CrawlerOrchestrationService(
             // Refresh the fields that a better parser or a re-crawl can now fill
             // in; never overwrite a known value with a missing one.
             existingJob.PostedDate = candidate.PostedDate ?? existingJob.PostedDate;
-            var (refreshedMin, refreshedMax) = ParseSalary(candidate.SalaryText);
-            existingJob.SalaryMin = refreshedMin ?? existingJob.SalaryMin;
-            existingJob.SalaryMax = refreshedMax ?? existingJob.SalaryMax;
+            ApplySalary(existingJob, candidate.SalaryText, candidate.Title);
             if (!string.IsNullOrWhiteSpace(candidate.Title))
             {
                 existingJob.Seniority = normalisationService.StandardiseSeniority(candidate.Title);
@@ -302,7 +289,7 @@ public sealed class CrawlerOrchestrationService(
             return 0;
         }
 
-        var (salaryMin, salaryMax) = ParseSalary(candidate.SalaryText);
+        var salary = SalaryParser.Parse(candidate.SalaryText, candidate.Title);
         var now = DateTime.UtcNow;
         var job = new Job
         {
@@ -313,8 +300,13 @@ public sealed class CrawlerOrchestrationService(
             Company = CleanOptional(candidate.Company),
             Location = CleanOptional(candidate.Location),
             Region = regionHint ?? normalisationService.ResolveRegion(candidate.Location, candidate.DescriptionText),
-            SalaryMin = salaryMin,
-            SalaryMax = salaryMax,
+            SalaryMin = salary.Min,
+            SalaryMax = salary.Max,
+            SalaryText = CleanOptional(candidate.SalaryText),
+            SalaryCurrency = salary.Currency,
+            SalaryPeriod = salary.PayPeriod.ToString(),
+            SalaryQuestionable = salary.IsQuestionable,
+            SalaryQuestionableReason = salary.QuestionableReason,
             EmploymentType = InferEmploymentType(candidate.DescriptionText),
             Seniority = normalisationService.StandardiseSeniority(candidate.Title),
             WorkMode = InferWorkMode(candidate.DescriptionText),
@@ -409,87 +401,30 @@ public sealed class CrawlerOrchestrationService(
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
-    private static (decimal? Min, decimal? Max) ParseSalary(string? salaryText)
+    /// <summary>
+    /// Refreshes a re-crawled job's salary fields with full provenance. A
+    /// missing salary text never clears a known value; an hourly/daily rate is
+    /// stored with its own pay period and never annualised.
+    /// </summary>
+    private static void ApplySalary(Job job, string? salaryText, string? title)
     {
         if (string.IsNullOrWhiteSpace(salaryText))
         {
-            return (null, null);
+            return;
         }
 
-        // Hourly/daily rates are not annual salaries; annualising them would
-        // fabricate a figure (and the plausibility bounds would usually reject it
-        // anyway), so leave the field empty.
-        if (HourlyRateRegex.IsMatch(salaryText))
+        var salary = SalaryParser.Parse(salaryText, title);
+        job.SalaryText = salaryText.Trim();
+        job.SalaryCurrency = salary.Currency;
+        job.SalaryPeriod = salary.PayPeriod.ToString();
+        job.SalaryQuestionable = salary.IsQuestionable;
+        job.SalaryQuestionableReason = salary.QuestionableReason;
+
+        if (salary.HasValue)
         {
-            return (null, null);
+            job.SalaryMin = salary.Min;
+            job.SalaryMax = salary.Max;
         }
-
-        decimal? min = null;
-        decimal? max = null;
-
-        var range = SalaryRangeRegex.Match(salaryText);
-        if (range.Success)
-        {
-            min = ToSalary(range.Groups["a"].Value);
-            max = ToSalary(range.Groups["b"].Value);
-
-            // Swap if min > max (parser got order wrong)
-            if (min > max)
-            {
-                (min, max) = (max, min);
-            }
-        }
-        else
-        {
-            var single = SalarySingleRegex.Match(salaryText);
-            if (single.Success)
-            {
-                min = ToSalary(single.Groups["a"].Value);
-            }
-        }
-
-        // Sanity bounds: reject implausible NZ IT salaries
-        const decimal maxPlausible = 500_000; // No NZ IT role pays >$500k annually
-        const decimal minPlausible = 30_000;  // Below $30k is likely a misparse (daily rate, contract months, etc.)
-
-        if (min is not null && (min < minPlausible || min > maxPlausible))
-        {
-            min = null;
-        }
-
-        if (max is not null && (max < minPlausible || max > maxPlausible))
-        {
-            max = null;
-        }
-
-        return (min, max);
-    }
-
-    private static decimal ToSalary(string value)
-    {
-        var cleaned = value
-            .Replace("$", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("NZD", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace(",", string.Empty)
-            .Replace(" ", string.Empty)
-            .Trim();
-
-        if (cleaned.EndsWith('k') || cleaned.EndsWith('K'))
-        {
-            cleaned = cleaned[..^1];
-        }
-
-        if (!decimal.TryParse(
-                cleaned,
-                System.Globalization.NumberStyles.Number,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var number))
-        {
-            return 0m;
-        }
-
-        // Numbers < 1000 are typically in "k" notation (e.g., 130 = $130k)
-        return number < 1000 ? number * 1000 : number;
     }
 
     private static string InferEmploymentType(string? text)

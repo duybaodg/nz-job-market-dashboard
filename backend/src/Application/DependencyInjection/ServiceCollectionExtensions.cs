@@ -19,6 +19,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IJobContentValidator, JobContentValidator>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
         services.AddScoped<ICrawlerOrchestrationService, CrawlerOrchestrationService>();
+        // Injected so analytics interval boundaries are deterministic in tests.
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<INormalisationService, NormalisationService>();
         services.AddScoped<IDeduplicationService, DeduplicationService>();
         services.AddSingleton<HealthReportCache>();

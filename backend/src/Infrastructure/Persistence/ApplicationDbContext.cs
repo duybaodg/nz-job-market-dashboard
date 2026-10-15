@@ -37,6 +37,11 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(job => job.Region).HasColumnName("region");
             entity.Property(job => job.SalaryMin).HasColumnName("salary_min");
             entity.Property(job => job.SalaryMax).HasColumnName("salary_max");
+            entity.Property(job => job.SalaryText).HasColumnName("salary_text");
+            entity.Property(job => job.SalaryCurrency).HasColumnName("salary_currency").HasDefaultValue("NZD");
+            entity.Property(job => job.SalaryPeriod).HasColumnName("salary_period").HasDefaultValue("Unknown");
+            entity.Property(job => job.SalaryQuestionable).HasColumnName("salary_questionable").HasDefaultValue(false);
+            entity.Property(job => job.SalaryQuestionableReason).HasColumnName("salary_questionable_reason");
             entity.Property(job => job.EmploymentType).HasColumnName("employment_type");
             entity.Property(job => job.Seniority).HasColumnName("seniority");
             entity.Property(job => job.WorkMode).HasColumnName("work_mode");
