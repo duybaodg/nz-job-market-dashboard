@@ -23,6 +23,10 @@ services:
       ASPNETCORE_URLS: http://+:8080
       DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB:-nz_job_market};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
       AI_EXTRACTION_ENABLED: ${AI_EXTRACTION_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      AI_EXTRACTION_BATCH_SIZE: ${AI_EXTRACTION_BATCH_SIZE:-10}
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
       FIRECRAWL_BASE_URL: ${FIRECRAWL_BASE_URL:-https://api.firecrawl.dev/v2}
       FIRECRAWL_TIMEOUT_SECONDS: ${FIRECRAWL_TIMEOUT_SECONDS:-60}
@@ -64,6 +68,10 @@ services:
     environment:
       DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB:-nz_job_market};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
       AI_EXTRACTION_ENABLED: ${AI_EXTRACTION_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      AI_EXTRACTION_BATCH_SIZE: ${AI_EXTRACTION_BATCH_SIZE:-10}
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
       FIRECRAWL_BASE_URL: ${FIRECRAWL_BASE_URL:-https://api.firecrawl.dev/v2}
       FIRECRAWL_TIMEOUT_SECONDS: ${FIRECRAWL_TIMEOUT_SECONDS:-60}

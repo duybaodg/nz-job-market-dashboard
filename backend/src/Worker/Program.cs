@@ -29,6 +29,12 @@ using (var scope = host.Services.CreateScope())
     // Round 9: deterministic deep extraction for work mode, seniority,
     // employment type and salary. Only fills blanks; idempotent.
     await scope.ServiceProvider.GetRequiredService<IJobFieldExtractionService>().BackfillAsync(CancellationToken.None);
+    // Round 9: one bounded AI enrichment batch at startup, only when enabled.
+    var aiEnrichment = scope.ServiceProvider.GetRequiredService<IAiFieldEnrichmentService>();
+    if (aiEnrichment.IsEnabled)
+    {
+        await aiEnrichment.RunBatchAsync(0, CancellationToken.None);
+    }
     // Round 8: bootstrap canonical employers once from the distinct company
     // values, then re-resolve every job by exact/alias match (no fuzzy merge).
     var employerIdentity = scope.ServiceProvider.GetRequiredService<IEmployerIdentityService>();

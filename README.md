@@ -1,6 +1,6 @@
 # NZ Job Market Intelligence Dashboard
 
-Analytics dashboard for New Zealand job-market trends using live, normalized job listings. Crawling is registry-driven and covers the full NZ IT job website list with per-site strategies (public ATS APIs, Schema.org JSON-LD, and browser-rendered HTML). AI extraction and authentication are not implemented.
+Analytics dashboard for New Zealand job-market trends using live, normalized job listings. Crawling is registry-driven and covers the full NZ IT job website list with per-site strategies (public ATS APIs, Schema.org JSON-LD, and browser-rendered HTML). Authentication is not implemented; an optional OpenAI-compatible field-enrichment pass is available but disabled by default (`AI_EXTRACTION_ENABLED`).
 
 ## Stack
 
@@ -404,4 +404,8 @@ or whose `robots.txt` disallows crawling ship disabled pending review.
 See [Crawling new data](#crawling-new-data) for how to start the worker, trigger a
 single crawl, and check results.
 
-Deferred: AI extraction and authentication.
+Deferred: authentication. Optional AI field enrichment exists behind
+`AI_EXTRACTION_ENABLED` (default `false`); it needs `OPENAI_API_KEY` and an
+OpenAI-compatible `OPENAI_BASE_URL`, runs in bounded batches in the worker, and
+only fills fields the deterministic extractors could not — deterministic values
+always win. See Round 9 in `docs/agent-plans/2026-10-12-crawl-data-quality-report.md`.

@@ -21,7 +21,39 @@ public sealed class CrawlWorker(
             await PurgeExpiredDataAsync(stoppingToken);
             await CaptureListingSnapshotAsync(stoppingToken);
             await CrawlDueSourcesAsync(stoppingToken);
+            await RunAiEnrichmentAsync(stoppingToken);
             await Task.Delay(TimeSpan.FromSeconds(pollSeconds), stoppingToken);
+        }
+    }
+
+    /// <summary>
+    /// Optional Round 9 AI enrichment: a bounded batch per cycle, and a no-op
+    /// unless AI_EXTRACTION_ENABLED is true and a key is configured.
+    /// </summary>
+    private async Task RunAiEnrichmentAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var enrichment = scope.ServiceProvider.GetRequiredService<IAiFieldEnrichmentService>();
+            if (!enrichment.IsEnabled)
+            {
+                return;
+            }
+
+            var result = await enrichment.RunBatchAsync(0, cancellationToken);
+            if (result.Attempted > 0)
+            {
+                logger.LogInformation(
+                    "AI enrichment: {Attempted} attempted, {Updated} updated, {Failed} failed.",
+                    result.Attempted,
+                    result.Updated,
+                    result.Failed);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "AI field enrichment failed");
         }
     }
 

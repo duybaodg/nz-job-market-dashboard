@@ -1,5 +1,7 @@
 using Application.Common;
 using Application.Crawling;
+using Application.Jobs;
+using Infrastructure.Ai;
 using Infrastructure.Crawling;
 using Infrastructure.Firecrawl;
 using Infrastructure.Persistence;
@@ -64,6 +66,28 @@ public static class ServiceCollectionExtensions
         });
         services.AddScoped<IJobSourceAdapter, ScraplingJobAdapter>();
         services.AddScoped<IJobSourceAdapter, FirecrawlJobAdapter>();
+
+        // Round 9: optional OpenAI-compatible field enrichment. Default-off
+        // (AI_EXTRACTION_ENABLED), and inert without a real OPENAI_API_KEY.
+        services.Configure<AiFieldEnrichmentOptions>(options =>
+        {
+            options.Enabled = bool.TryParse(configuration["AI_EXTRACTION_ENABLED"], out var aiEnabled) && aiEnabled;
+            options.ApiKey = configuration["OPENAI_API_KEY"] ?? string.Empty;
+            options.BaseUrl = configuration["OPENAI_BASE_URL"] ?? "https://api.openai.com/v1";
+            options.Model = configuration["OPENAI_MODEL"] ?? "gpt-4o-mini";
+            options.BatchSize = int.TryParse(configuration["AI_EXTRACTION_BATCH_SIZE"], out var batchSize)
+                ? Math.Max(batchSize, 1)
+                : 10;
+            options.TimeoutSeconds = int.TryParse(configuration["AI_EXTRACTION_TIMEOUT_SECONDS"], out var aiTimeout)
+                ? Math.Max(aiTimeout, 5)
+                : 60;
+        });
+        services.AddHttpClient<IAiFieldEnrichmentClient, OpenAiFieldEnrichmentClient>((provider, client) =>
+        {
+            var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiFieldEnrichmentOptions>>().Value;
+            client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(options.TimeoutSeconds, 5));
+        });
         services.AddScoped<ISourceRegistrySynchronizer, SourceRegistrySynchronizer>();
         services.AddSingleton<ISourcePriorityProvider, RegistrySourcePriorityProvider>();
         services.AddSingleton(new CrawlerLifecycleOptions
