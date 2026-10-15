@@ -299,6 +299,9 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
 .chart-caption { margin-top: 8px; font-size: 12px; line-height: 1.45; }
 .drilldown { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .drilldown h3 { margin: 0 0 8px; font-size: 13px; }
+.coverage-notes { border-top: 1px solid var(--line); padding-top: 10px; font-size: 12px; }
+.coverage-notes h3 { margin: 0 0 6px; font-size: 13px; }
+.coverage-notes ul { margin: 0; padding-left: 18px; color: #3e514c; line-height: 1.5; }
 .methodology { margin-bottom: 18px; }
 .methodology-body { margin-top: 10px; display: grid; gap: 14px; }
 .methodology-body h3 { margin: 0 0 4px; font-size: 13px; }

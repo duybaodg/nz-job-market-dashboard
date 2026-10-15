@@ -204,6 +204,21 @@ export type ActiveTrendPoint = {
   sourcesRemoved: string[]
 }
 
+export type SourceCoverageChange = {
+  snapshotDate: string
+  sourcesAdded: string[]
+  sourcesRemoved: string[]
+}
+
+export type NewListingPeriod = {
+  days: number
+  interval: MetricInterval
+  change: Change
+  currentPeriodCovered: boolean
+  dateBasis: string
+  note: string | null
+}
+
 export type History = {
   generatedAtUtc: string
   coverage: SnapshotCoverage
@@ -211,8 +226,9 @@ export type History = {
   latestSnapshotDate: string | null
   activeChange: Change
   comparableFromDate: string | null
+  newListings: NewListingPeriod
   weeklyNewListings: WeeklyNewListingPoint[]
   activeTrend: ActiveTrendPoint[]
-  weeklyDateBasis: string
+  coverageChanges: SourceCoverageChange[]
   note: string
 }

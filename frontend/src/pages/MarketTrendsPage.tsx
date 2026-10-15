@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Building2, CalendarPlus, Percent, WalletCards } from 'lucide-react'
 import { AppSidebar } from '../components/layout/AppSidebar'
+import { ActiveTrendChart } from '../components/charts/ActiveTrendChart'
 import { DataStatusBanner } from '../components/dashboard/DataStatusBanner'
 import { RankedBarList } from '../components/charts/RankedBarList'
 import { SalaryDistributionChart } from '../components/charts/SalaryDistributionChart'
@@ -76,13 +77,35 @@ export function MarketTrendsPage() {
 
   const periodDays = Number(filters.period)
 
-  const newListings = useMemo(() => {
+  // Preferred source: retained daily snapshots. The fallback counts today's
+  // retained rows only, and is labelled as such — it is never presented as
+  // retained history.
+  const fallbackNewListings = useMemo(() => {
     const now = Date.now()
     const current = countInWindow(cohort, now, periodDays, 0)
     const previousAvailable = periodDays * 2 <= RETENTION_DAYS
     const previous = previousAvailable ? countInWindow(cohort, now, periodDays * 2, periodDays) : null
     return { current, previous, previousAvailable, change: computeChange(current, previous) }
   }, [cohort, periodDays])
+
+  const retainedNewListings = history?.newListings
+  const newListings = retainedNewListings
+    ? {
+        current: retainedNewListings.change.current,
+        change: retainedNewListings.change,
+        comparisonAvailable: retainedNewListings.change.comparisonAvailable,
+        dateBasis: retainedNewListings.dateBasis,
+        note: retainedNewListings.note,
+      }
+    : {
+        current: fallbackNewListings.current,
+        change: fallbackNewListings.change,
+        comparisonAvailable: fallbackNewListings.previousAvailable,
+        dateBasis: 'Current retained rows only (daily snapshots not yet available)',
+        note: fallbackNewListings.previousAvailable
+          ? 'Fallback: counted from current retained rows because no daily snapshots exist yet.'
+          : 'Fallback: current retained rows only; the previous equal period is outside the 20-day retention window.',
+      }
 
   const salary = useMemo(() => salaryDistribution(cohort), [cohort])
   const roleSalaries = useMemo(() => salaryByRoleFamily(cohort), [cohort])
@@ -152,7 +175,7 @@ export function MarketTrendsPage() {
           <div>
             <span>Comparison</span>
             <strong>
-              {newListings.previousAvailable ? 'Previous equal period' : 'Unavailable (outside retention)'}
+              {newListings.comparisonAvailable ? 'Previous equal period' : 'Comparison unavailable'}
             </strong>
           </div>
           <div>
@@ -191,7 +214,7 @@ export function MarketTrendsPage() {
             icon={CalendarPlus}
             label={`New listings (${filters.period}d)`}
             value={newListings.current.toLocaleString('en-NZ')}
-            detail={`First seen · ${newListings.previousAvailable ? describeChange(newListings.change) : 'comparison unavailable (outside retention)'}`}
+            detail={`First seen · ${newListings.comparisonAvailable ? describeChange(newListings.change) : newListings.note ?? 'comparison unavailable'}`}
           />
           <StatCard
             icon={WalletCards}
@@ -233,9 +256,32 @@ export function MarketTrendsPage() {
             {coverage?.hasHistory
               ? `Snapshot coverage ${coverage.firstDate} to ${coverage.lastDate} (${coverage.snapshotDays} daily snapshots${
                   missingSnapshotDays > 0 ? `, ${missingSnapshotDays} missing day${missingSnapshotDays === 1 ? '' : 's'}` : ''
-                }). ${history?.weeklyDateBasis ?? ''}`
+                }). ${newListings.dateBasis}. ${retainedNewListings?.note ?? ''}`
               : coverage?.note ?? 'No snapshots retained yet; history will appear as daily captures accumulate.'}
           </p>
+        </section>
+
+        <section className="panel trend-panel" id="active-trend">
+          <div className="panel-header">
+            <div>
+              <h2>Active listings over time</h2>
+              <p>
+                Historical active counts from retained daily snapshots, with source-coverage changes annotated so an
+                added source is never read as demand growth.
+              </p>
+            </div>
+          </div>
+          {historyQuery.isError ? (
+            <div className="empty-state error-state" role="alert">
+              Historical snapshots could not be loaded. This is not evidence of zero active listings.
+            </div>
+          ) : historyQuery.isLoading ? (
+            <div className="chart-empty" aria-busy="true">
+              Loading retained history…
+            </div>
+          ) : (
+            <ActiveTrendChart points={history?.activeTrend ?? []} coverageChanges={history?.coverageChanges ?? []} />
+          )}
         </section>
 
         <section className="chart-grid">
