@@ -10,5 +10,7 @@ public interface IApplicationDbContext
     DbSet<RawJobPage> RawJobPages { get; }
     DbSet<CrawlRun> CrawlRuns { get; }
     DbSet<JobSource> JobSources { get; }
+    DbSet<ListingSnapshot> ListingSnapshots { get; }
+    DbSet<ListingSnapshotRun> ListingSnapshotRuns { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

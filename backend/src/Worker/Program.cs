@@ -1,5 +1,6 @@
 using Application.Crawling;
 using Application.DependencyInjection;
+using Application.History;
 using Application.Jobs;
 using Infrastructure.DependencyInjection;
 using Infrastructure.Persistence;
@@ -26,6 +27,8 @@ using (var scope = host.Services.CreateScope())
     // Retention: hard-delete jobs and crawl history older than
     // CRAWLER_RETENTION_DAYS (default 20). Idempotent.
     await scope.ServiceProvider.GetRequiredService<ICrawlDataRetentionService>().PurgeAsync(CancellationToken.None);
+    // P2: retain today's listing snapshot before crawling (idempotent per NZ day).
+    await scope.ServiceProvider.GetRequiredService<IListingSnapshotService>().CaptureAsync(CancellationToken.None);
 }
 
 await host.RunAsync();

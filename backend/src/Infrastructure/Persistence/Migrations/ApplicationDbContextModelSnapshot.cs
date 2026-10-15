@@ -321,6 +321,177 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("job_sources", (string)null);
                 });
 
+            modelBuilder.Entity("Domain.Entities.ListingSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AgencyAdvertised")
+                        .HasColumnType("boolean")
+                        .HasColumnName("agency_advertised");
+
+                    b.Property<DateTime>("CapturedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("captured_at_utc");
+
+                    b.Property<string>("Company")
+                        .HasColumnType("text")
+                        .HasColumnName("company");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_hash");
+
+                    b.Property<string>("EmploymentType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("employment_type");
+
+                    b.Property<DateTime>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_seen_at");
+
+                    b.Property<string>("HiringEmployer")
+                        .HasColumnType("text")
+                        .HasColumnName("hiring_employer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_id");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<string>("Location")
+                        .HasColumnType("text")
+                        .HasColumnName("location");
+
+                    b.Property<DateTime?>("PostedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("posted_date");
+
+                    b.Property<string>("Region")
+                        .HasColumnType("text")
+                        .HasColumnName("region");
+
+                    b.Property<string>("RoleFamily")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("role_family");
+
+                    b.Property<string>("SalaryCurrency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("salary_currency")
+                        .HasDefaultValue("NZD");
+
+                    b.Property<decimal?>("SalaryMax")
+                        .HasColumnType("numeric")
+                        .HasColumnName("salary_max");
+
+                    b.Property<decimal?>("SalaryMin")
+                        .HasColumnType("numeric")
+                        .HasColumnName("salary_min");
+
+                    b.Property<string>("SalaryPeriod")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("salary_period")
+                        .HasDefaultValue("Unknown");
+
+                    b.Property<string>("Seniority")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("seniority");
+
+                    b.Property<DateOnly>("SnapshotDate")
+                        .HasColumnType("date")
+                        .HasColumnName("snapshot_date");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("source");
+
+                    b.Property<string>("SourceCategory")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("source_category");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<string>("WorkMode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("work_mode");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FirstSeenAt");
+
+                    b.HasIndex("SnapshotDate", "ContentHash")
+                        .IsUnique();
+
+                    b.ToTable("listing_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Entities.ListingSnapshotRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("ActiveCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("active_count");
+
+                    b.Property<DateTime>("CapturedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("captured_at_utc");
+
+                    b.Property<int>("IdentifiableEmployerCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("identifiable_employer_count");
+
+                    b.Property<int>("ListingCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("listing_count");
+
+                    b.Property<DateOnly>("SnapshotDate")
+                        .HasColumnType("date")
+                        .HasColumnName("snapshot_date");
+
+                    b.Property<int>("SourceCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("source_count");
+
+                    b.Property<string>("SourceCoverageJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("source_coverage_json");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SnapshotDate")
+                        .IsUnique();
+
+                    b.ToTable("listing_snapshot_runs", (string)null);
+                });
+
             modelBuilder.Entity("Domain.Entities.RawJobPage", b =>
                 {
                     b.Property<Guid>("Id")

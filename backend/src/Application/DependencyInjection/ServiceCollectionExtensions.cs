@@ -2,6 +2,7 @@ using Application.Analytics;
 using Application.Crawling;
 using Application.Deduplication;
 using Application.Health;
+using Application.History;
 using Application.Jobs;
 using Application.Normalisation;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICrawlDataRetentionService, CrawlDataRetentionService>();
         services.AddScoped<IJobContentValidator, JobContentValidator>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
+        services.AddScoped<IHistoryService, HistoryService>();
+        services.AddScoped<IListingSnapshotService, ListingSnapshotService>();
         services.AddScoped<ICrawlerOrchestrationService, CrawlerOrchestrationService>();
         // Injected so analytics interval boundaries are deterministic in tests.
         services.AddSingleton(TimeProvider.System);

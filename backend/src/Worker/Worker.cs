@@ -1,5 +1,6 @@
 using Application.Common;
 using Application.Crawling;
+using Application.History;
 using Application.Jobs;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,8 +19,36 @@ public sealed class CrawlWorker(
         while (!stoppingToken.IsCancellationRequested)
         {
             await PurgeExpiredDataAsync(stoppingToken);
+            await CaptureListingSnapshotAsync(stoppingToken);
             await CrawlDueSourcesAsync(stoppingToken);
             await Task.Delay(TimeSpan.FromSeconds(pollSeconds), stoppingToken);
+        }
+    }
+
+    /// <summary>
+    /// Writes today's listing snapshot (idempotent per Pacific/Auckland day), so
+    /// historical trends are backed by retained evidence rather than today's
+    /// mutable job rows.
+    /// </summary>
+    private async Task CaptureListingSnapshotAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var snapshots = scope.ServiceProvider.GetRequiredService<IListingSnapshotService>();
+            var result = await snapshots.CaptureAsync(cancellationToken);
+            if (result.Captured)
+            {
+                logger.LogInformation(
+                    "Listing snapshot captured for {Date}: {Listings} listings, {Active} active.",
+                    result.SnapshotDate,
+                    result.Listings,
+                    result.Active);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "Listing snapshot capture failed");
         }
     }
 

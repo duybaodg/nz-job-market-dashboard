@@ -2,6 +2,7 @@ using Application.Analytics;
 using Application.Crawling;
 using Application.DependencyInjection;
 using Application.Health;
+using Application.History;
 using Application.Jobs;
 using Infrastructure.DependencyInjection;
 using Infrastructure.Persistence;
@@ -88,6 +89,13 @@ app.MapGet("/api/analytics/freshness", async (
         CancellationToken cancellationToken) =>
     Results.Ok(await analyticsService.GetFreshnessAsync(cancellationToken)))
     .WithName("GetAnalyticsFreshness");
+
+app.MapGet("/api/analytics/history", async (
+        int? days,
+        IHistoryService historyService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await historyService.GetHistoryAsync(days ?? 7, cancellationToken)))
+    .WithName("GetAnalyticsHistory");
 
 app.MapPost("/api/admin/crawl-runs", async (
         StartCrawlRunRequest request,

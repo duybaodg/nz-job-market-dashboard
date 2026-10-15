@@ -174,18 +174,8 @@ public sealed class AnalyticsService(
             windows);
     }
 
-    private static ChangeDto BuildChange(int current, int? previous)
-    {
-        var change = ChangeCalculation.Compute(current, previous);
-        return new ChangeDto(
-            change.Current,
-            change.Previous,
-            change.AbsoluteChange,
-            change.PercentChange,
-            change.ComparisonAvailable,
-            change.NoPriorBaseline,
-            change.Note);
-    }
+    private static ChangeDto BuildChange(int current, int? previous) =>
+        ChangeMapper.ToDto(ChangeCalculation.Compute(current, previous));
 
     private static SalarySummaryDto ToSalaryDto(SalarySummary salary) =>
         new(
@@ -306,14 +296,7 @@ public sealed class AnalyticsService(
     }
 
     private static MetricIntervalDto ToIntervalDto(ReportingInterval interval, bool isPartial) =>
-        new(
-            interval.StartUtc,
-            interval.EndUtc,
-            interval.StartLocalDate.ToString("yyyy-MM-dd"),
-            interval.EndLocalDateExclusive.ToString("yyyy-MM-dd"),
-            (int)Math.Round(interval.Duration.TotalDays),
-            interval.Label,
-            isPartial);
+        MetricIntervalMapper.ToDto(interval, isPartial);
 
     private static SalaryPayPeriod ParsePayPeriod(string? value) =>
         Enum.TryParse<SalaryPayPeriod>(value, ignoreCase: true, out var period)

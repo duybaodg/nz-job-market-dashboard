@@ -12,6 +12,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<RawJobPage> RawJobPages => Set<RawJobPage>();
     public DbSet<CrawlRun> CrawlRuns => Set<CrawlRun>();
     public DbSet<JobSource> JobSources => Set<JobSource>();
+    public DbSet<ListingSnapshot> ListingSnapshots => Set<ListingSnapshot>();
+    public DbSet<ListingSnapshotRun> ListingSnapshotRuns => Set<ListingSnapshotRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,6 +22,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         ConfigureRawJobPages(modelBuilder);
         ConfigureCrawlRuns(modelBuilder);
         ConfigureJobSources(modelBuilder);
+        ConfigureListingSnapshots(modelBuilder);
     }
 
     private static void ConfigureJobs(ModelBuilder modelBuilder)
@@ -138,6 +141,57 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(source => source.CreatedAt).HasColumnName("created_at");
             entity.Property(source => source.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(source => source.Name).IsUnique();
+        });
+    }
+
+    private static void ConfigureListingSnapshots(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ListingSnapshot>(entity =>
+        {
+            entity.ToTable("listing_snapshots");
+            entity.HasKey(snapshot => snapshot.Id);
+            entity.Property(snapshot => snapshot.Id).HasColumnName("id");
+            entity.Property(snapshot => snapshot.SnapshotDate).HasColumnName("snapshot_date");
+            entity.Property(snapshot => snapshot.JobId).HasColumnName("job_id");
+            entity.Property(snapshot => snapshot.Source).HasColumnName("source").IsRequired();
+            entity.Property(snapshot => snapshot.SourceCategory).HasColumnName("source_category").IsRequired().HasDefaultValue("unknown");
+            entity.Property(snapshot => snapshot.ContentHash).HasColumnName("content_hash").IsRequired();
+            entity.Property(snapshot => snapshot.Title).HasColumnName("title").IsRequired();
+            entity.Property(snapshot => snapshot.Company).HasColumnName("company");
+            entity.Property(snapshot => snapshot.HiringEmployer).HasColumnName("hiring_employer");
+            entity.Property(snapshot => snapshot.AgencyAdvertised).HasColumnName("agency_advertised");
+            entity.Property(snapshot => snapshot.Location).HasColumnName("location");
+            entity.Property(snapshot => snapshot.Region).HasColumnName("region");
+            entity.Property(snapshot => snapshot.WorkMode).HasColumnName("work_mode").IsRequired();
+            entity.Property(snapshot => snapshot.Seniority).HasColumnName("seniority").IsRequired();
+            entity.Property(snapshot => snapshot.EmploymentType).HasColumnName("employment_type").IsRequired();
+            entity.Property(snapshot => snapshot.RoleFamily).HasColumnName("role_family").IsRequired();
+            entity.Property(snapshot => snapshot.SalaryMin).HasColumnName("salary_min");
+            entity.Property(snapshot => snapshot.SalaryMax).HasColumnName("salary_max");
+            entity.Property(snapshot => snapshot.SalaryCurrency).HasColumnName("salary_currency").IsRequired().HasDefaultValue("NZD");
+            entity.Property(snapshot => snapshot.SalaryPeriod).HasColumnName("salary_period").IsRequired().HasDefaultValue("Unknown");
+            entity.Property(snapshot => snapshot.PostedDate).HasColumnName("posted_date");
+            entity.Property(snapshot => snapshot.FirstSeenAt).HasColumnName("first_seen_at");
+            entity.Property(snapshot => snapshot.LastSeenAt).HasColumnName("last_seen_at");
+            entity.Property(snapshot => snapshot.IsActive).HasColumnName("is_active");
+            entity.Property(snapshot => snapshot.CapturedAtUtc).HasColumnName("captured_at_utc");
+            entity.HasIndex(snapshot => new { snapshot.SnapshotDate, snapshot.ContentHash }).IsUnique();
+            entity.HasIndex(snapshot => snapshot.FirstSeenAt);
+        });
+
+        modelBuilder.Entity<ListingSnapshotRun>(entity =>
+        {
+            entity.ToTable("listing_snapshot_runs");
+            entity.HasKey(run => run.Id);
+            entity.Property(run => run.Id).HasColumnName("id");
+            entity.Property(run => run.SnapshotDate).HasColumnName("snapshot_date");
+            entity.Property(run => run.CapturedAtUtc).HasColumnName("captured_at_utc");
+            entity.Property(run => run.ListingCount).HasColumnName("listing_count");
+            entity.Property(run => run.ActiveCount).HasColumnName("active_count");
+            entity.Property(run => run.SourceCount).HasColumnName("source_count");
+            entity.Property(run => run.IdentifiableEmployerCount).HasColumnName("identifiable_employer_count");
+            entity.Property(run => run.SourceCoverageJson).HasColumnName("source_coverage_json").HasColumnType("jsonb");
+            entity.HasIndex(run => run.SnapshotDate).IsUnique();
         });
     }
 
