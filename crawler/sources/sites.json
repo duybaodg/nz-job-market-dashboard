@@ -260,7 +260,8 @@
       "sitemapJobUrls": 0,
       "fetcher": "firecrawl",
       "robotsAllows": true,
-      "notes": "Round 10: switched to the Firecrawl self-hosted fetch layer after the local browser path timed out on four consecutive days (0 jobs); Firecrawl completed the same crawl with 5 jobs. Browser fetch remains available via fetcher-override."
+      "maxPages": 12,
+      "notes": "Round 10: switched to the Firecrawl self-hosted fetch layer after the local browser path timed out on four consecutive days (0 jobs); Firecrawl completed the same crawl with 5 jobs. maxPages bounds the remote scrape inside the 360 s worker timeout; browser fetch remains available via fetcher-override."
     },
     {
       "name": "Hays NZ",
