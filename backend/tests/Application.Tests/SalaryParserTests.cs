@@ -6,6 +6,17 @@ namespace Application.Tests;
 public sealed class SalaryParserTests
 {
     [Fact]
+    public void Parses_a_currency_coded_jsonld_range_without_grouping()
+    {
+        var salary = SalaryParser.Parse("NZD 55000 - NZD 70000 per year", "IT Support Engineer");
+
+        salary.Min.Should().Be(55_000m);
+        salary.Max.Should().Be(70_000m);
+        salary.PayPeriod.Should().Be(SalaryPayPeriod.Year);
+        salary.Currency.Should().Be("NZD");
+    }
+
+    [Fact]
     public void Parses_an_anchored_annual_range_as_nzd_year()
     {
         var salary = SalaryParser.Parse("$120,000 - $150,000 per annum", "Software Engineer");

@@ -618,6 +618,20 @@ SALARY_FRAGMENT_RE = re.compile(
 )
 
 
+#: Salary-filter widgets ("Salary Annual Wage $0 $300,000+") sit in page
+#: navigation and are not advertised pay. Reject a text-scan match that is part
+#: of such a widget.
+SALARY_FILTER_LABEL_RE = re.compile(
+    r"annual\s+wage|salary\s+(?:range|filter)|salary\s+annual",
+    re.I,
+)
+
+
+def _is_salary_filter_match(text: str, start: int) -> bool:
+    window = text[max(0, start - 40) : start]
+    return bool(SALARY_FILTER_LABEL_RE.search(window))
+
+
 def extract_salary(text: str) -> str | None:
     labelled = extract_label(text, "Salary")
     if labelled:
@@ -626,14 +640,17 @@ def extract_salary(text: str) -> str | None:
         # not become the whole salary string.
         labelled = clean_text(labelled)
         fragment = SALARY_FRAGMENT_RE.search(labelled)
-        if fragment:
+        if fragment and not _is_salary_filter_match(labelled, fragment.start()):
             return clean_text(fragment.group(1))
         if len(labelled) <= 40 and any(ch.isdigit() for ch in labelled):
             return labelled
         return None
 
-    match = SALARY_FRAGMENT_RE.search(text)
-    return clean_text(match.group(1)) if match else None
+    for match in SALARY_FRAGMENT_RE.finditer(text):
+        if _is_salary_filter_match(text, match.start()):
+            continue
+        return clean_text(match.group(1))
+    return None
 
 
 MAX_LOCATION_LENGTH = 60
@@ -1296,6 +1313,58 @@ def structured_location(source_data: dict[str, Any]) -> str | None:
     return ", ".join(unique_parts) or None
 
 
+def structured_salary(source_data: dict[str, Any], text: str) -> str | None:
+    """Prefer Schema.org baseSalary over a whole-page text scan.
+
+    A detail page often carries a salary-filter widget ("Salary Annual Wage $0
+    $300,000+") in its navigation. Scanning the page text picked that bound up as
+    the advertised salary (the ZEIL support-role $300,000 misparse). The JSON-LD
+    ``baseSalary`` is the authoritative figure, so use it when present and only
+    fall back to the text scan otherwise.
+    """
+    base = source_data.get("baseSalary")
+    if not isinstance(base, dict):
+        return extract_salary(text)
+
+    currency = str(base.get("currency") or "NZD").strip() or "NZD"
+    value = base.get("value")
+    unit = ""
+    minimum = maximum = single = None
+
+    if isinstance(value, dict):
+        unit = str(value.get("unitText") or "").upper()
+        single = value.get("value")
+        minimum = value.get("minValue")
+        maximum = value.get("maxValue")
+    elif value is not None:
+        single = value
+
+    suffix = {"HOUR": " per hour", "DAY": " per day", "YEAR": " per year"}.get(unit, "")
+
+    def render(amount: Any) -> str | None:
+        text_value = str(amount).strip()
+        if not text_value or text_value.lower() == "none":
+            return None
+        return f"{currency} {text_value}"
+
+    if minimum is not None and maximum is not None:
+        low, high = render(minimum), render(maximum)
+        if low and high:
+            return f"{low} - {high}{suffix}"
+
+    if single is not None:
+        rendered = render(single)
+        if rendered:
+            return f"{rendered}{suffix}"
+
+    for amount in (minimum, maximum):
+        rendered = render(amount)
+        if rendered:
+            return f"{rendered}{suffix}"
+
+    return extract_salary(text)
+
+
 def structured_job_to_raw(
     source: str,
     url: str,
@@ -1325,7 +1394,7 @@ def structured_job_to_raw(
         title=clean_text(str(source_data.get("title") or fallback_title)),
         company=clean_text(str(company)) or None,
         location=clean_text(str(location)) or None,
-        salaryText=extract_salary(text),
+        salaryText=structured_salary(source_data, text),
         descriptionText=description[:12000] or None,
         url=job_url,
         postedDate=iso_date(source_data.get("datePosted")),
