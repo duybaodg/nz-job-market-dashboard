@@ -200,6 +200,39 @@ public sealed class JobQualityGuardRunTests
         dbContext.Jobs.Single(job => job.Url.EndsWith("/13")).Location.Should().BeNull();
     }
 
+    [Fact]
+    public async Task RunAsync_backfills_salary_provenance_and_flags_questionable_parses()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.JobSources.Add(new JobSource
+        {
+            Id = Guid.NewGuid(),
+            Name = "Acme",
+            BaseUrl = "https://acme.example/careers/",
+            Method = "Scrapling",
+            Parser = "generic"
+        });
+        var normal = CreateJob("Senior Software Engineer", "https://acme.example/jobs/s1");
+        normal.SalaryMin = 120_000m;
+        normal.SalaryMax = 140_000m;
+        var support = CreateJob("Tier 2 IT Support Specialist", "https://acme.example/jobs/s2");
+        support.SalaryMin = 300_000m;
+        dbContext.Jobs.AddRange(normal, support);
+        await dbContext.SaveChangesAsync();
+
+        var guard = CreateGuard(dbContext);
+        var first = await guard.RunAsync(CancellationToken.None);
+        var second = await guard.RunAsync(CancellationToken.None);
+
+        first.SalariesBackfilled.Should().Be(2);
+        second.SalariesBackfilled.Should().Be(0, "rows with provenance are skipped on the next run");
+        normal.SalaryText.Should().Be("$120000 - $140000");
+        normal.SalaryPeriod.Should().Be("Year");
+        normal.SalaryQuestionable.Should().BeFalse();
+        support.SalaryQuestionable.Should().BeTrue();
+        support.SalaryQuestionableReason.Should().Contain("support");
+    }
+
     private static JobQualityGuard CreateGuard(ApplicationDbContext dbContext) => new(
         dbContext,
         new JobContentValidator(),

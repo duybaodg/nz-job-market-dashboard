@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Application.Common;
 using Application.Deduplication;
+using Application.Metrics;
 using Application.Normalisation;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Jobs;
 
-public sealed record JobQualityGuardResult(int JunkRemoved, int RegionsNormalised, int LocationsRepaired);
+public sealed record JobQualityGuardResult(int JunkRemoved, int RegionsNormalised, int LocationsRepaired, int SalariesBackfilled);
 
 /// <summary>
 /// Startup repair pass for data written by older worker versions:
@@ -92,6 +93,7 @@ public sealed class JobQualityGuard(
         var junkRemoved = 0;
         var regionsNormalised = 0;
         var locationsRepaired = 0;
+        var salariesBackfilled = 0;
 
         foreach (var job in jobs)
         {
@@ -107,6 +109,27 @@ public sealed class JobQualityGuard(
                 dbContext.Jobs.Remove(job);
                 junkRemoved++;
                 continue;
+            }
+
+            // One-off provenance backfill for salary rows written before the
+            // advertised text/units existed. All legacy values were annual NZD,
+            // so synthesise a parse input from the numeric bounds and let the
+            // central parser set the period and flag questionable parses. Rows
+            // written by the current worker already carry salary_text and are
+            // skipped, which keeps this pass idempotent.
+            if (job.SalaryText is null && (job.SalaryMin is not null || job.SalaryMax is not null))
+            {
+                var synthetic = job.SalaryMin is not null && job.SalaryMax is not null
+                    ? $"${job.SalaryMin} - ${job.SalaryMax}"
+                    : $"${job.SalaryMin ?? job.SalaryMax}";
+                var salary = SalaryParser.Parse(synthetic, job.Title);
+                job.SalaryText = synthetic;
+                job.SalaryCurrency = salary.Currency;
+                job.SalaryPeriod = salary.PayPeriod.ToString();
+                job.SalaryQuestionable = salary.IsQuestionable;
+                job.SalaryQuestionableReason = salary.QuestionableReason;
+                job.UpdatedAt = now;
+                salariesBackfilled++;
             }
 
             // One-off repair for rows written before the shared location
@@ -132,17 +155,18 @@ public sealed class JobQualityGuard(
             }
         }
 
-        if (junkRemoved > 0 || regionsNormalised > 0 || locationsRepaired > 0)
+        if (junkRemoved > 0 || regionsNormalised > 0 || locationsRepaired > 0 || salariesBackfilled > 0)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         logger.LogInformation(
-            "Job quality guard: removed {JunkRemoved} junk records, normalised {RegionsNormalised} regions, repaired {LocationsRepaired} locations.",
+            "Job quality guard: removed {JunkRemoved} junk records, normalised {RegionsNormalised} regions, repaired {LocationsRepaired} locations, backfilled {SalariesBackfilled} salary rows.",
             junkRemoved,
             regionsNormalised,
-            locationsRepaired);
-        return new JobQualityGuardResult(junkRemoved, regionsNormalised, locationsRepaired);
+            locationsRepaired,
+            salariesBackfilled);
+        return new JobQualityGuardResult(junkRemoved, regionsNormalised, locationsRepaired, salariesBackfilled);
     }
 
     private static string? Summarise(string? text)
