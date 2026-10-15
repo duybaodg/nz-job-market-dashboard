@@ -37,7 +37,15 @@ public sealed record JobDto(
     string EmployerDisclosure,
     // Deterministic title classification; the original title is always retained.
     string RoleFamily,
-    bool RoleFamilyInferred);
+    bool RoleFamilyInferred,
+    // Soft duplicate grouping; null when the listing is standalone.
+    Guid? DuplicateGroupId,
+    int DuplicateCount,
+    IReadOnlyList<string> AlsoOnSources,
+    bool IsCanonicalListing,
+    // Admin-reviewed canonical employer (falls back to the displayed hiring employer).
+    Guid? EmployerCanonicalId,
+    string? EmployerCanonicalName);
 
 /// <summary>
 /// Job list filters. <c>Days</c> limits results to the freshest postings — the

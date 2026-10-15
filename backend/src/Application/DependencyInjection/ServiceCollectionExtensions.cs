@@ -1,6 +1,7 @@
 using Application.Analytics;
 using Application.Crawling;
 using Application.Deduplication;
+using Application.Employers;
 using Application.Health;
 using Application.History;
 using Application.Jobs;
@@ -26,6 +27,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<INormalisationService, NormalisationService>();
         services.AddScoped<IDeduplicationService, DeduplicationService>();
+        services.AddScoped<IEmployerIdentityService, EmployerIdentityService>();
+        services.AddScoped<IListingDeduplicationService, ListingDeduplicationService>();
         services.AddSingleton<HealthReportCache>();
         services.AddScoped<IHealthService, HealthService>();
 

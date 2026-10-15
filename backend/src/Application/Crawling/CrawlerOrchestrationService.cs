@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using System.Runtime.ExceptionServices;
 using Application.Common;
 using Application.Deduplication;
+using Application.Employers;
 using Application.Jobs;
 using Application.Metrics;
 using Application.Normalisation;
@@ -27,7 +28,8 @@ public sealed class CrawlerOrchestrationService(
     CrawlerLifecycleOptions? lifecycleOptions = null,
     IJobContentValidator? jobContentValidator = null,
     ILogger<CrawlerOrchestrationService>? logger = null,
-    SkillExtractor? skillExtractor = null)
+    SkillExtractor? skillExtractor = null,
+    IEmployerIdentityService? employerIdentityService = null)
     : ICrawlerOrchestrationService
 {
     private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
@@ -268,6 +270,7 @@ public sealed class CrawlerOrchestrationService(
             existingJob.Company = CleanOptional(candidate.Company) ?? existingJob.Company;
             existingJob.Location = CleanOptional(candidate.Location) ?? existingJob.Location;
             existingJob.DescriptionSummary = Summarise(candidate.DescriptionText) ?? existingJob.DescriptionSummary;
+            existingJob.DescriptionText = CleanDescription(candidate.DescriptionText) ?? existingJob.DescriptionText;
             existingJob.Region = regionHint ?? normalisationService.ResolveRegion(
                 existingJob.Location,
                 existingJob.DescriptionSummary ?? candidate.DescriptionText);
@@ -286,6 +289,7 @@ public sealed class CrawlerOrchestrationService(
             existingJob.IsActive = true;
             existingJob.ExpiredAt = null;
             existingJob.MissingCrawlCount = 0;
+            existingJob.EmployerCanonicalId = await ResolveEmployerAsync(candidate.Source, existingJob.Company, cancellationToken);
             return 0;
         }
 
@@ -313,6 +317,7 @@ public sealed class CrawlerOrchestrationService(
             ExperienceBand = InferExperienceBand(candidate.DescriptionText),
             Industry = "Unknown",
             DescriptionSummary = Summarise(candidate.DescriptionText),
+            DescriptionText = CleanDescription(candidate.DescriptionText),
             Url = candidate.Url,
             ContentHash = contentHash,
             PostedDate = candidate.PostedDate,
@@ -325,6 +330,7 @@ public sealed class CrawlerOrchestrationService(
         };
 
         SetSkills(job, candidate);
+        job.EmployerCanonicalId = await ResolveEmployerAsync(candidate.Source, job.Company, cancellationToken);
 
         dbContext.Jobs.Add(job);
         return 1;
@@ -382,6 +388,25 @@ public sealed class CrawlerOrchestrationService(
     private static string? CleanOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private async Task<Guid?> ResolveEmployerAsync(string source, string? company, CancellationToken cancellationToken)
+    {
+        return employerIdentityService is null
+            ? null
+            : await employerIdentityService.ResolveCanonicalEmployerAsync(source, company, cancellationToken);
+    }
+
+    /// <summary>Full description kept only for dedup similarity, capped so a pathological page cannot bloat a row.</summary>
+    private static string? CleanDescription(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var clean = value.Trim();
+        return clean.Length <= 20000 ? clean : clean[..20000];
     }
 
     private static string? ExtractHtmlTitle(string? html)

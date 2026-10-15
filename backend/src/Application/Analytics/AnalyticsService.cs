@@ -1,7 +1,9 @@
 using Application.Common;
 using Application.Crawling;
+using Application.Deduplication;
 using Application.Employers;
 using Application.Metrics;
+using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Application.Analytics;
@@ -22,7 +24,8 @@ public static class FreshnessWindows
 
 public sealed class AnalyticsService(
     IApplicationDbContext dbContext,
-    TimeProvider? timeProvider = null) : IAnalyticsService
+    TimeProvider? timeProvider = null,
+    IListingDeduplicationService? deduplicationService = null) : IAnalyticsService
 {
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
 
@@ -60,21 +63,16 @@ public sealed class AnalyticsService(
             ParsePayPeriod(job.SalaryPeriod),
             job.EmploymentType,
             job.SalaryQuestionable)));
-        var classifiedEmployers = active
-            .Select(job => EmployerClassifier.Classify(job.Source, CategoryFor(categories, job.Source), job.Company))
+        var employerRows = active
+            .Select(job => new EmployerRow(
+                EmployerClassifier.Classify(job.Source, CategoryFor(categories, job.Source), job.Company),
+                job.EmployerCanonicalId))
             .ToList();
-        var listingsWithEmployer = classifiedEmployers.Count(employer => employer.Disclosure == EmployerDisclosure.Disclosed);
-        var identifiable = classifiedEmployers
-            .Where(employer => employer.Disclosure == EmployerDisclosure.Disclosed && !string.IsNullOrWhiteSpace(employer.HiringEmployer))
-            .Select(employer => employer.HiringEmployer!.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
-        var employerCoverage = active.Count == 0
-            ? 0m
-            : Math.Round((decimal)listingsWithEmployer / active.Count * 100m, 1, MidpointRounding.AwayFromZero);
-        var employerSummary = BuildEmployerSummary(classifiedEmployers, active.Count, identifiable, listingsWithEmployer, employerCoverage);
+        var employerTypes = await LoadEmployerTypesAsync(cancellationToken);
+        var employerSummary = BuildEmployerSummary(employerRows, active.Count, employerTypes);
 
         var dataStatus = await BuildDataStatusAsync(now, cancellationToken);
+        var deduplication = await LoadDeduplicationAsync(active.Count, cancellationToken);
 
         return new OverviewDto(
             now,
@@ -98,7 +96,9 @@ public sealed class AnalyticsService(
                 .OrderByDescending(group => group.Count())
                 .Select(group => group.Key)
                 .FirstOrDefaultAsync(cancellationToken),
-            ToIntervalDto(interval, isPartial: false));
+            ToIntervalDto(interval, isPartial: false),
+            deduplication.UniqueVacancies,
+            deduplication);
     }
 
     public async Task<IReadOnlyList<SkillDemandDto>> GetTopSkillsAsync(CancellationToken cancellationToken)
@@ -167,11 +167,14 @@ public sealed class AnalyticsService(
                 comparisonAvailable));
         }
 
+        var deduplication = await LoadDeduplicationAsync(active.Count, cancellationToken);
         return new FreshnessDto(
             active.Count,
             now,
             await BuildDataStatusAsync(now, cancellationToken),
-            windows);
+            windows,
+            deduplication.UniqueVacancies,
+            deduplication);
     }
 
     private static ChangeDto BuildChange(int current, int? previous) =>
@@ -218,7 +221,8 @@ public sealed class AnalyticsService(
                 job.SalaryQuestionable,
                 job.EmploymentType,
                 job.Company,
-                job.Region))
+                job.Region,
+                job.EmployerCanonicalId))
             .ToListAsync(cancellationToken);
     }
 
@@ -241,21 +245,77 @@ public sealed class AnalyticsService(
         categories.TryGetValue(source, out var category) ? category : null;
 
     private static EmployerSummaryDto BuildEmployerSummary(
-        IReadOnlyList<EmployerClassification> classified,
+        IReadOnlyList<EmployerRow> rows,
         int activeCount,
-        int identifiable,
-        int listingsWithEmployer,
-        decimal coveragePercent)
+        IReadOnlyDictionary<Guid, EmployerType> employerTypes)
     {
+        var listingsWithEmployer = rows.Count(row => row.Classification.Disclosure == EmployerDisclosure.Disclosed);
+        var identifiable = rows
+            .Where(row => row.Classification.Disclosure == EmployerDisclosure.Disclosed)
+            .Select(row => row.CanonicalId is { } canonicalId
+                ? $"id:{canonicalId}"
+                : $"name:{EmployerNameNormaliser.Normalise(row.Classification.HiringEmployer)}")
+            .Where(key => key != "name:")
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        var canonicalIds = rows
+            .Where(row => row.CanonicalId != null)
+            .Select(row => row.CanonicalId!.Value)
+            .Distinct()
+            .ToList();
+        var unmatchedNames = rows
+            .Where(row => row.Classification.Disclosure == EmployerDisclosure.Disclosed
+                && row.CanonicalId is null
+                && !string.IsNullOrWhiteSpace(row.Classification.HiringEmployer))
+            .Select(row => EmployerNameNormaliser.Normalise(row.Classification.HiringEmployer))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        var coveragePercent = activeCount == 0
+            ? 0m
+            : Math.Round((decimal)listingsWithEmployer / activeCount * 100m, 1, MidpointRounding.AwayFromZero);
+
         return new EmployerSummaryDto(
             identifiable,
             listingsWithEmployer,
             activeCount - listingsWithEmployer,
             coveragePercent,
-            classified.Count(employer => employer.Disclosure == EmployerDisclosure.AgencyOnly),
-            classified.Count(employer => employer.AdvertiserType == AdvertiserType.DirectEmployer),
-            classified.Count(employer => employer.AdvertiserType == AdvertiserType.Agency),
-            classified.Count(employer => employer.AdvertiserType == AdvertiserType.Board));
+            rows.Count(row => row.Classification.Disclosure == EmployerDisclosure.AgencyOnly),
+            rows.Count(row => row.Classification.AdvertiserType == AdvertiserType.DirectEmployer),
+            rows.Count(row => row.Classification.AdvertiserType == AdvertiserType.Agency),
+            rows.Count(row => row.Classification.AdvertiserType == AdvertiserType.Board),
+            canonicalIds.Count,
+            canonicalIds.Count(id => employerTypes.GetValueOrDefault(id) == EmployerType.Agency),
+            canonicalIds.Count(id => employerTypes.GetValueOrDefault(id) == EmployerType.DirectEmployer),
+            unmatchedNames);
+    }
+
+    private async Task<DeduplicationSummaryDto> LoadDeduplicationAsync(int activeListings, CancellationToken cancellationToken)
+    {
+        if (deduplicationService is not null)
+        {
+            return await deduplicationService.GetSummaryAsync(cancellationToken);
+        }
+
+        return new DeduplicationSummaryDto(
+            false,
+            null,
+            DeduplicationMatchMethods.MatchVersion,
+            activeListings,
+            null,
+            0,
+            0,
+            0,
+            DeduplicationEngine.MaxGroupSize,
+            null);
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, EmployerType>> LoadEmployerTypesAsync(CancellationToken cancellationToken)
+    {
+        var employers = await dbContext.Employers
+            .AsNoTracking()
+            .Select(employer => new { employer.Id, employer.Type })
+            .ToListAsync(cancellationToken);
+        return employers.ToDictionary(employer => employer.Id, employer => employer.Type);
     }
 
     private async Task<DataStatusDto> BuildDataStatusAsync(DateTime now, CancellationToken cancellationToken)
@@ -316,5 +376,8 @@ public sealed class AnalyticsService(
         bool SalaryQuestionable,
         string EmploymentType,
         string? Company,
-        string? Region);
+        string? Region,
+        Guid? EmployerCanonicalId);
+
+    private sealed record EmployerRow(EmployerClassification Classification, Guid? CanonicalId);
 }

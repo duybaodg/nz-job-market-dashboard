@@ -55,8 +55,16 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
             .ToListAsync(cancellationToken);
 
         var categories = await LoadSourceCategoriesAsync(cancellationToken);
+        var duplicateInfo = await LoadDuplicateInfoAsync(entities.Select(job => job.DuplicateGroupId), cancellationToken);
+        var employerNames = await LoadEmployerNamesAsync(entities.Select(job => job.EmployerCanonicalId), cancellationToken);
 
-        return entities.Select(job => ToDto(job, categories)).ToList();
+        return entities
+            .Select(job => ToDto(
+                job,
+                categories,
+                duplicateInfo.GetValueOrDefault(job.DuplicateGroupId ?? Guid.Empty),
+                employerNames))
+            .ToList();
     }
 
     public async Task<JobDto?> GetJobAsync(Guid id, CancellationToken cancellationToken)
@@ -72,7 +80,9 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
         }
 
         var categories = await LoadSourceCategoriesAsync(cancellationToken);
-        return ToDto(job, categories);
+        var duplicateInfo = await LoadDuplicateInfoAsync([job.DuplicateGroupId], cancellationToken);
+        var employerNames = await LoadEmployerNamesAsync([job.EmployerCanonicalId], cancellationToken);
+        return ToDto(job, categories, duplicateInfo.GetValueOrDefault(job.DuplicateGroupId ?? Guid.Empty), employerNames);
     }
 
     private async Task<IReadOnlyDictionary<string, string>> LoadSourceCategoriesAsync(CancellationToken cancellationToken)
@@ -90,11 +100,70 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
                 StringComparer.OrdinalIgnoreCase);
     }
 
-    private static JobDto ToDto(Job job, IReadOnlyDictionary<string, string> sourceCategories)
+    private async Task<IReadOnlyDictionary<Guid, DuplicateGroupInfo>> LoadDuplicateInfoAsync(
+        IEnumerable<Guid?> groupIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = groupIds.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, DuplicateGroupInfo>();
+        }
+
+        var canonicalByGroup = await dbContext.DuplicateGroups
+            .AsNoTracking()
+            .Where(group => ids.Contains(group.Id))
+            .Select(group => new { group.Id, group.CanonicalListingId })
+            .ToDictionaryAsync(group => group.Id, group => group.CanonicalListingId, cancellationToken);
+
+        var members = await dbContext.Jobs
+            .AsNoTracking()
+            .Where(job => job.DuplicateGroupId != null && ids.Contains(job.DuplicateGroupId.Value))
+            .Select(job => new { job.DuplicateGroupId, job.Source })
+            .ToListAsync(cancellationToken);
+
+        return members
+            .GroupBy(member => member.DuplicateGroupId!.Value)
+            .ToDictionary(
+                group => group.Key,
+                group => new DuplicateGroupInfo(
+                    canonicalByGroup.GetValueOrDefault(group.Key),
+                    group.Count(),
+                    group.Select(member => member.Source).Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, string>> LoadEmployerNamesAsync(
+        IEnumerable<Guid?> employerIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = employerIds.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await dbContext.Employers
+            .AsNoTracking()
+            .Where(employer => ids.Contains(employer.Id))
+            .Select(employer => new { employer.Id, employer.CanonicalName })
+            .ToDictionaryAsync(employer => employer.Id, employer => employer.CanonicalName, cancellationToken);
+    }
+
+    private static JobDto ToDto(
+        Job job,
+        IReadOnlyDictionary<string, string> sourceCategories,
+        DuplicateGroupInfo? duplicateInfo,
+        IReadOnlyDictionary<Guid, string> employerNames)
     {
         sourceCategories.TryGetValue(job.Source, out var category);
         var employer = EmployerClassifier.Classify(job.Source, category, job.Company);
         var roleFamily = RoleFamilyClassifier.Classify(job.Title);
+        var memberCount = duplicateInfo?.MemberCount ?? 1;
+        var alsoOn = duplicateInfo is null
+            ? []
+            : duplicateInfo.Sources
+                .Where(source => !string.Equals(source, job.Source, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
         return new JobDto(
             job.Id,
@@ -131,6 +200,16 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
             employer.HiringEmployer,
             employer.Disclosure.ToString(),
             roleFamily.Family,
-            roleFamily.Inferred);
+            roleFamily.Inferred,
+            job.DuplicateGroupId,
+            Math.Max(0, memberCount - 1),
+            alsoOn,
+            duplicateInfo is not null && duplicateInfo.CanonicalListingId == job.Id,
+            job.EmployerCanonicalId,
+            job.EmployerCanonicalId is { } canonicalId && employerNames.TryGetValue(canonicalId, out var canonicalName)
+                ? canonicalName
+                : null);
     }
+
+    private sealed record DuplicateGroupInfo(Guid CanonicalListingId, int MemberCount, IReadOnlyList<string> Sources);
 }

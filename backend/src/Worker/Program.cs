@@ -1,5 +1,7 @@
 using Application.Crawling;
+using Application.Deduplication;
 using Application.DependencyInjection;
+using Application.Employers;
 using Application.History;
 using Application.Jobs;
 using Infrastructure.DependencyInjection;
@@ -24,6 +26,14 @@ using (var scope = host.Services.CreateScope())
     // Round 7: re-extract technical skills for every stored job from its
     // description with the shared taxonomy. Idempotent.
     await scope.ServiceProvider.GetRequiredService<ISkillBackfillService>().RunAsync(CancellationToken.None);
+    // Round 8: bootstrap canonical employers once from the distinct company
+    // values, then re-resolve every job by exact/alias match (no fuzzy merge).
+    var employerIdentity = scope.ServiceProvider.GetRequiredService<IEmployerIdentityService>();
+    await employerIdentity.SeedFromCompaniesAsync("worker:startup", CancellationToken.None);
+    await employerIdentity.MatchJobsAsync("worker:startup", CancellationToken.None);
+    // Round 8: conservative, auditable listing deduplication pass. Incremental
+    // and idempotent; publishes unique vacancies only after validation.
+    await scope.ServiceProvider.GetRequiredService<IListingDeduplicationService>().RunAsync("worker:startup", CancellationToken.None);
     // Retention: hard-delete jobs and crawl history older than
     // CRAWLER_RETENTION_DAYS (default 20). Idempotent.
     await scope.ServiceProvider.GetRequiredService<ICrawlDataRetentionService>().PurgeAsync(CancellationToken.None);

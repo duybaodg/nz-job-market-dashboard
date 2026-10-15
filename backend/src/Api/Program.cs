@@ -1,6 +1,8 @@
 using Application.Analytics;
 using Application.Crawling;
+using Application.Deduplication;
 using Application.DependencyInjection;
+using Application.Employers;
 using Application.Health;
 using Application.History;
 using Application.Jobs;
@@ -134,5 +136,99 @@ app.MapGet("/api/admin/crawl-runs/{id:guid}", async (
         return crawlRun is null ? Results.NotFound() : Results.Ok(crawlRun);
     })
     .WithName("GetCrawlRun");
+
+// --- Round 8: canonical employer identity (admin-reviewed) -----------------
+
+app.MapGet("/api/admin/employers", async (
+        IEmployerIdentityService employerService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await employerService.GetReportAsync(cancellationToken)))
+    .WithName("GetEmployers");
+
+app.MapPost("/api/admin/employers", async (
+        CreateEmployerRequest request,
+        IEmployerIdentityService employerService,
+        CancellationToken cancellationToken) =>
+    {
+        if (string.IsNullOrWhiteSpace(request.CanonicalName))
+        {
+            return Results.BadRequest(new { error = "canonicalName is required" });
+        }
+
+        var employer = await employerService.CreateEmployerAsync(request, cancellationToken);
+        return Results.Ok(employer);
+    })
+    .WithName("CreateEmployer");
+
+app.MapPost("/api/admin/employers/{id:guid}/aliases", async (
+        Guid id,
+        AddEmployerAliasRequest request,
+        IEmployerIdentityService employerService,
+        CancellationToken cancellationToken) =>
+    {
+        if (string.IsNullOrWhiteSpace(request.Alias))
+        {
+            return Results.BadRequest(new { error = "alias is required" });
+        }
+
+        var employer = await employerService.AddAliasAsync(id, request, cancellationToken);
+        return employer is null
+            ? Results.Conflict(new { error = "alias already belongs to another canonical or the employer was not found" })
+            : Results.Ok(employer);
+    })
+    .WithName("AddEmployerAlias");
+
+app.MapDelete("/api/admin/employers/{id:guid}/aliases/{alias}", async (
+        Guid id,
+        string alias,
+        string? actor,
+        IEmployerIdentityService employerService,
+        CancellationToken cancellationToken) =>
+    {
+        var removed = await employerService.RemoveAliasAsync(id, alias, actor ?? "admin", cancellationToken);
+        return removed ? Results.NoContent() : Results.NotFound();
+    })
+    .WithName("RemoveEmployerAlias");
+
+app.MapDelete("/api/admin/employers/{id:guid}/aliases", async (
+        Guid id,
+        string alias,
+        string? actor,
+        IEmployerIdentityService employerService,
+        CancellationToken cancellationToken) =>
+    {
+        var removed = await employerService.RemoveAliasAsync(id, alias, actor ?? "admin", cancellationToken);
+        return removed ? Results.NoContent() : Results.NotFound();
+    })
+    .WithName("RemoveEmployerAliasByQuery");
+
+app.MapPost("/api/admin/employers/seed", async (
+        string? actor,
+        IEmployerIdentityService employerService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await employerService.SeedFromCompaniesAsync(actor ?? "admin", cancellationToken)))
+    .WithName("SeedEmployers");
+
+app.MapPost("/api/admin/employers/match", async (
+        string? actor,
+        IEmployerIdentityService employerService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await employerService.MatchJobsAsync(actor ?? "admin", cancellationToken)))
+    .WithName("MatchEmployers");
+
+// --- Round 8: listing deduplication provenance -----------------------------
+
+app.MapGet("/api/admin/duplicates", async (
+        IListingDeduplicationService dedupService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await dedupService.GetGroupsAsync(cancellationToken)))
+    .WithName("GetDuplicateGroups");
+
+app.MapPost("/api/admin/dedup/run", async (
+        string? trigger,
+        IListingDeduplicationService dedupService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await dedupService.RunAsync(trigger ?? "manual", cancellationToken)))
+    .WithName("RunDeduplication");
 
 app.Run();

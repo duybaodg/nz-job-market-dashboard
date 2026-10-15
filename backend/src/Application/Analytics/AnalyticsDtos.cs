@@ -1,3 +1,5 @@
+using Application.Deduplication;
+
 namespace Application.Analytics;
 
 public sealed record SkillDemandDto(string SkillName, int JobCount);
@@ -53,7 +55,11 @@ public sealed record EmployerSummaryDto(
     int AgencyOnlyListings,
     int DirectEmployerListings,
     int AgencyAdvertisedListings,
-    int BoardAdvertisedListings);
+    int BoardAdvertisedListings,
+    int CanonicalEmployers,
+    int AgencyCanonicals,
+    int DirectEmployerCanonicals,
+    int UnmatchedEmployerNames);
 
 public sealed record DataStatusDto(
     string State,
@@ -80,7 +86,9 @@ public sealed record OverviewDto(
     DataStatusDto DataStatus,
     string? MostActiveRegion,
     string? MostRequestedSkill,
-    MetricIntervalDto Interval);
+    MetricIntervalDto Interval,
+    int? UniqueVacancies,
+    DeduplicationSummaryDto Deduplication);
 
 public sealed record FreshnessWindowDto(
     int Days,
@@ -97,4 +105,6 @@ public sealed record FreshnessDto(
     int TotalActiveJobs,
     DateTime GeneratedAtUtc,
     DataStatusDto DataStatus,
-    IReadOnlyList<FreshnessWindowDto> Windows);
+    IReadOnlyList<FreshnessWindowDto> Windows,
+    int? UniqueVacancies,
+    DeduplicationSummaryDto Deduplication);
