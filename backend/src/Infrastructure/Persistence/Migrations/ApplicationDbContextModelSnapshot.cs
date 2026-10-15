@@ -348,6 +348,14 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTime?>("AiEnrichedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ai_enriched_at");
+
+                    b.Property<string>("AiEnrichmentModel")
+                        .HasColumnType("text")
+                        .HasColumnName("ai_enrichment_model");
+
                     b.Property<DateTime?>("ClosingDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("closing_date");
@@ -385,6 +393,10 @@ namespace Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("employment_type");
+
+                    b.Property<string>("EmploymentTypeSource")
+                        .HasColumnType("text")
+                        .HasColumnName("employment_type_source");
 
                     b.Property<string>("ExperienceBand")
                         .IsRequired()
@@ -459,6 +471,10 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("salary_questionable_reason");
 
+                    b.Property<string>("SalarySource")
+                        .HasColumnType("text")
+                        .HasColumnName("salary_source");
+
                     b.Property<string>("SalaryText")
                         .HasColumnType("text")
                         .HasColumnName("salary_text");
@@ -467,6 +483,14 @@ namespace Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("seniority");
+
+                    b.Property<decimal?>("SeniorityConfidence")
+                        .HasColumnType("numeric")
+                        .HasColumnName("seniority_confidence");
+
+                    b.Property<string>("SenioritySource")
+                        .HasColumnType("text")
+                        .HasColumnName("seniority_source");
 
                     b.Property<string>("Source")
                         .IsRequired()
@@ -495,6 +519,14 @@ namespace Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("work_mode");
+
+                    b.Property<decimal?>("WorkModeConfidence")
+                        .HasColumnType("numeric")
+                        .HasColumnName("work_mode_confidence");
+
+                    b.Property<string>("WorkModeSource")
+                        .HasColumnType("text")
+                        .HasColumnName("work_mode_source");
 
                     b.HasKey("Id");
 

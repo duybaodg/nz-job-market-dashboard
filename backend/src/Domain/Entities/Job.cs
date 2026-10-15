@@ -18,10 +18,33 @@ public sealed class Job
     public string SalaryPeriod { get; set; } = "Unknown";
     public bool SalaryQuestionable { get; set; }
     public string? SalaryQuestionableReason { get; set; }
+    /// <summary>
+    /// How the numeric salary bounds were derived: <c>source</c> (advertised
+    /// text supplied by the crawl), <c>description</c> (deep text scan) or
+    /// <c>ai-enrichment</c>. The advertised text is always retained in
+    /// <see cref="SalaryText"/> regardless of the source.
+    /// </summary>
+    public string? SalarySource { get; set; }
     public string EmploymentType { get; set; } = "Unknown";
+    /// <summary>How <see cref="EmploymentType"/> was derived.</summary>
+    public string? EmploymentTypeSource { get; set; }
     public string Seniority { get; set; } = "Unknown";
+    /// <summary>How <see cref="Seniority"/> was derived: title, description or ai-enrichment.</summary>
+    public string? SenioritySource { get; set; }
+    public decimal? SeniorityConfidence { get; set; }
     public string WorkMode { get; set; } = "Unknown";
+    /// <summary>
+    /// How <see cref="WorkMode"/> was derived. Ordered strongest first:
+    /// <c>statement</c> (explicit sentence), <c>title</c>, <c>location</c>
+    /// (low-confidence inference) and <c>ai-enrichment</c>.
+    /// </summary>
+    public string? WorkModeSource { get; set; }
+    public decimal? WorkModeConfidence { get; set; }
     public string ExperienceBand { get; set; } = "Unknown";
+    /// <summary>Model name recorded when the last AI enrichment touched this row.</summary>
+    public string? AiEnrichmentModel { get; set; }
+    /// <summary>When AI enrichment last evaluated this row (throttle + audit).</summary>
+    public DateTime? AiEnrichedAt { get; set; }
     public string? Industry { get; set; }
     public string? DescriptionSummary { get; set; }
     /// <summary>
