@@ -180,7 +180,7 @@ GET /api/jobs/{id}
 GET /api/analytics/overview
 GET /api/analytics/top-skills
 GET /api/analytics/jobs-by-region
-GET /api/analytics/freshness         # active-job counts for the 2, 7 and 15 day windows
+GET /api/analytics/freshness         # posted + first-seen counts for the 2, 7 and 15 NZ-day windows
 POST /api/admin/crawl-runs
 GET /api/admin/crawl-runs
 GET /api/admin/crawl-runs/{id}
@@ -190,13 +190,27 @@ GET /api/admin/health                  # per-source crawler health (30s in-memor
 
 ## Job freshness windows (2 / 7 / 15 days)
 
-Posting recency is a first-class dimension:
+Posting recency is a first-class dimension. The central `Application/Metrics`
+module defines every period, count and salary calculation so cards, charts and
+the API cannot silently diverge:
 
-- The dashboard's **Posted within** filter offers 2, 7 and 15 days, using
-  `posted_date` and falling back to `first_seen_at` when a source omits it.
-- `GET /api/jobs?days=N` applies the same window server-side.
-- `GET /api/analytics/freshness` returns active-job counts for all three windows,
-  rendered on the dashboard as the **Posting freshness** panel.
+- Reporting intervals are **complete Pacific/Auckland local days**, inclusive
+  start / exclusive end, so daylight-saving transitions are handled explicitly.
+- **Newly posted** counts use `posted_date` only (a missing posted date is never
+  substituted); **newly discovered** counts use `first_seen_at`. The dashboard
+  and `GET /api/analytics/freshness` show both bases with an equal-duration
+  previous-period comparison, and declare "comparison unavailable" when the
+  prior period predates the 20-day retention window.
+- `GET /api/jobs?days=N` keeps the convenience posted-within filter, using
+  `posted_date` and falling back to `first_seen_at`; each result row labels which
+  basis it used.
+- `GET /api/analytics/overview` returns the active cohort, posted-date coverage,
+  salary median with sample/coverage/exclusion metadata, identifiable-employer
+  coverage and a fresh/stale/partial/unavailable data status.
+- Advertised salary parsing keeps the raw text, currency and pay period
+  (`salary_text`, `salary_currency`, `salary_period`) and flags questionable
+  parses. Hourly/daily and non-NZD values are never annualised or mixed into the
+  annual NZD median; groups below 5 comparable observations are suppressed.
 - The lifecycle uses the same horizon: a job not seen for
   `CRAWLER_JOB_STALE_DAYS` (default **15**) is expired even if the source never
   marks it closed, and a job missing from `CRAWLER_MISSING_CRAWL_THRESHOLD`
