@@ -1,5 +1,8 @@
 export type SalaryPeriod = 'Year' | 'Hour' | 'Day' | 'Unknown'
 
+export type AdvertiserType = 'DirectEmployer' | 'Agency' | 'Board' | 'Unknown'
+export type EmployerDisclosure = 'Disclosed' | 'AgencyOnly' | 'Unknown'
+
 export type Job = {
   id: string
   source: string
@@ -29,6 +32,13 @@ export type Job = {
   expiredAt: string | null
   skills: string[]
   programmingLanguages: string[]
+  sourceCategory: string
+  advertiser: string
+  advertiserType: AdvertiserType
+  hiringEmployer: string | null
+  employerDisclosure: EmployerDisclosure
+  roleFamily: string
+  roleFamilyInferred: boolean
 }
 
 export type MetricInterval = {
@@ -71,6 +81,10 @@ export type EmployerSummary = {
   listingsWithEmployer: number
   listingsWithoutEmployer: number
   coveragePercent: number
+  agencyOnlyListings: number
+  directEmployerListings: number
+  agencyAdvertisedListings: number
+  boardAdvertisedListings: number
 }
 
 export type DataFreshnessState = 'Fresh' | 'Stale' | 'Partial' | 'Unavailable'
@@ -160,4 +174,45 @@ export type HealthReport = {
   generatedAt: string
   summary: HealthSummary
   sources: SourceHealth[]
+}
+
+export type SnapshotCoverage = {
+  firstDate: string | null
+  lastDate: string | null
+  snapshotDays: number
+  expectedDays: number
+  missingDates: string[]
+  hasHistory: boolean
+  note: string
+}
+
+export type WeeklyNewListingPoint = {
+  weekStartLocal: string
+  weekEndLocalExclusive: string
+  count: number
+  isPartial: boolean
+  coverageStartDate: string | null
+  note: string | null
+}
+
+export type ActiveTrendPoint = {
+  snapshotDate: string
+  activeCount: number
+  sourceCount: number
+  coverageChanged: boolean
+  sourcesAdded: string[]
+  sourcesRemoved: string[]
+}
+
+export type History = {
+  generatedAtUtc: string
+  coverage: SnapshotCoverage
+  latestActiveCount: number
+  latestSnapshotDate: string | null
+  activeChange: Change
+  comparableFromDate: string | null
+  weeklyNewListings: WeeklyNewListingPoint[]
+  activeTrend: ActiveTrendPoint[]
+  weeklyDateBasis: string
+  note: string
 }

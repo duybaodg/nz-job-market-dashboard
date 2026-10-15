@@ -1,30 +1,37 @@
-import { Activity, BarChart3, BriefcaseBusiness, HeartPulse } from 'lucide-react'
+import { Activity, BriefcaseBusiness, HeartPulse } from 'lucide-react'
 
-function currentPath() {
-  return typeof window === 'undefined' ? '/' : window.location.pathname
+type AppSidebarProps = {
+  currentPath?: string
 }
 
-export function AppSidebar() {
-  const isHealth = currentPath().startsWith('/health')
+function resolvePath(currentPath?: string) {
+  if (currentPath) return currentPath
+  return typeof window === 'undefined' ? '/jobs' : window.location.pathname
+}
+
+export function AppSidebar({ currentPath }: AppSidebarProps) {
+  const path = resolvePath(currentPath)
+  const isJobs = path.startsWith('/jobs') || path === '/'
+  const isTrends = path.startsWith('/trends')
+  const isHealth = path.startsWith('/health')
 
   const navItems = [
-    { label: 'Overview', icon: BarChart3, href: '/', active: !isHealth },
-    { label: 'Market signals', icon: Activity, href: '/#market-signals', active: false },
-    { label: 'Latest jobs', icon: BriefcaseBusiness, href: '/#jobs', active: false },
+    { label: 'Find jobs', icon: BriefcaseBusiness, href: '/jobs', active: isJobs },
+    { label: 'Market trends', icon: Activity, href: '/trends', active: isTrends },
     { label: 'Crawler health', icon: HeartPulse, href: '/health', active: isHealth },
   ]
 
   return (
     <aside className="sidebar">
-      <div className="brand">
+      <a className="brand" href="/jobs">
         <span className="brand-mark">
           <BriefcaseBusiness aria-hidden="true" />
         </span>
         <span>NZ Jobs Intel</span>
-      </div>
-      <nav aria-label="Dashboard sections">
+      </a>
+      <nav aria-label="Dashboard views">
         {navItems.map((item) => (
-          <a key={item.label} className={item.active ? 'active' : ''} href={item.href}>
+          <a key={item.label} className={item.active ? 'active' : ''} href={item.href} aria-current={item.active ? 'page' : undefined}>
             <item.icon aria-hidden="true" />
             {item.label}
           </a>
@@ -33,7 +40,7 @@ export function AppSidebar() {
       <div className="sidebar-note">
         <span className="live-dot" aria-hidden="true" />
         <div>
-          <strong>Live data</strong>
+          <strong>Tracked NZ tech listings</strong>
           <small>Daily source refresh</small>
           <a href="/health">View crawler health</a>
         </div>

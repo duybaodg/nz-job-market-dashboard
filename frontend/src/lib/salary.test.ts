@@ -32,6 +32,13 @@ function job(overrides: Partial<Job> = {}): Job {
     expiredAt: null,
     skills: [],
     programmingLanguages: [],
+    sourceCategory: 'company',
+    advertiser: 'Test',
+    advertiserType: 'DirectEmployer',
+    hiringEmployer: 'Example',
+    employerDisclosure: 'Disclosed',
+    roleFamily: 'Software Engineering',
+    roleFamilyInferred: true,
     ...overrides,
   }
 }
