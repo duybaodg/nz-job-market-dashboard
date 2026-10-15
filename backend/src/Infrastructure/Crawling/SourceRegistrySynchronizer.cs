@@ -49,6 +49,7 @@ public sealed class SourceRegistrySynchronizer(
 
             registryNames.Add(site.Name);
             var parser = string.IsNullOrWhiteSpace(site.Parser) ? "generic" : site.Parser!;
+            var category = string.IsNullOrWhiteSpace(site.Category) ? "unknown" : site.Category!.Trim().ToLowerInvariant();
             var baseUrl = site.JobsUrl ?? site.Homepage;
             var enabled = site.Enabled ?? true;
             var frequency = site.FrequencyMinutes is > 0 ? site.FrequencyMinutes.Value : 1440;
@@ -60,12 +61,14 @@ public sealed class SourceRegistrySynchronizer(
                 var changed =
                     entity.BaseUrl != baseUrl ||
                     entity.Parser != parser ||
+                    entity.Category != category ||
                     entity.Enabled != enabled ||
                     entity.CrawlFrequencyMinutes != frequency ||
                     !string.Equals(entity.Method, "Scrapling", StringComparison.Ordinal);
 
                 entity.BaseUrl = baseUrl;
                 entity.Parser = parser;
+                entity.Category = category;
                 entity.Enabled = enabled;
                 entity.Method = "Scrapling";
                 entity.CrawlFrequencyMinutes = frequency;
@@ -85,6 +88,7 @@ public sealed class SourceRegistrySynchronizer(
                     BaseUrl = baseUrl,
                     Method = "Scrapling",
                     Parser = parser,
+                    Category = category,
                     Enabled = enabled,
                     CrawlFrequencyMinutes = frequency,
                     TermsCheckedAt = termsCheckedAt,

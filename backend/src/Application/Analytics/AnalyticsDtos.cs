@@ -49,7 +49,11 @@ public sealed record EmployerSummaryDto(
     int IdentifiableEmployers,
     int ListingsWithEmployer,
     int ListingsWithoutEmployer,
-    decimal CoveragePercent);
+    decimal CoveragePercent,
+    int AgencyOnlyListings,
+    int DirectEmployerListings,
+    int AgencyAdvertisedListings,
+    int BoardAdvertisedListings);
 
 public sealed record DataStatusDto(
     string State,

@@ -130,6 +130,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(source => source.BaseUrl).HasColumnName("base_url");
             entity.Property(source => source.Method).HasColumnName("method").IsRequired();
             entity.Property(source => source.Parser).HasColumnName("parser").IsRequired();
+            entity.Property(source => source.Category).HasColumnName("source_category").HasDefaultValue("unknown");
             entity.Property(source => source.Enabled).HasColumnName("enabled");
             entity.Property(source => source.CrawlFrequencyMinutes).HasColumnName("crawl_frequency_minutes");
             entity.Property(source => source.LastCrawledAt).HasColumnName("last_crawled_at");

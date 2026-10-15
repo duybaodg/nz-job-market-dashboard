@@ -7,6 +7,8 @@ public sealed class JobSource
     public string? BaseUrl { get; set; }
     public string Method { get; set; } = string.Empty;
     public string Parser { get; set; } = "generic";
+    /// <summary>Reviewed registry category: company | government | recruiter | job-board | aggregator | graduate.</summary>
+    public string Category { get; set; } = "unknown";
     public bool Enabled { get; set; } = true;
     public int CrawlFrequencyMinutes { get; set; } = 1440;
     public DateTime? LastCrawledAt { get; set; }

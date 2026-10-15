@@ -21,6 +21,7 @@ internal static class SourceRegistryReader
         [property: JsonPropertyName("jobs_url")] string? JobsUrl,
         [property: JsonPropertyName("parser")] string? Parser,
         [property: JsonPropertyName("strategy")] string? Strategy,
+        [property: JsonPropertyName("category")] string? Category,
         [property: JsonPropertyName("platform")] string? Platform,
         [property: JsonPropertyName("robotsAllows")] bool? RobotsAllows,
         [property: JsonPropertyName("enabled")] bool? Enabled,

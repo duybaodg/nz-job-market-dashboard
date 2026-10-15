@@ -1,4 +1,6 @@
 using Application.Common;
+using Application.Employers;
+using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Application.Jobs;
@@ -48,65 +50,87 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
             jobs = jobs.Where(job => (job.PostedDate ?? job.FirstSeenAt) >= cutoff);
         }
 
-        return await jobs
+        var entities = await jobs
             .OrderByDescending(job => job.PostedDate ?? job.FirstSeenAt)
-            .Select(job => new JobDto(
-                job.Id,
-                job.Source,
-                job.Title,
-                job.Company,
-                job.Location,
-                job.Region,
-                job.SalaryMin,
-                job.SalaryMax,
-                job.EmploymentType,
-                job.Seniority,
-                job.WorkMode,
-                job.ExperienceBand,
-                job.Industry,
-                job.DescriptionSummary,
-                job.Url,
-                job.PostedDate,
-                job.ClosingDate,
-                job.FirstSeenAt,
-                job.LastSeenAt,
-                job.IsActive,
-                job.ExpiredAt,
-                job.Skills.OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList(),
-                job.Skills.Where(skill => skill.SkillType == "ProgrammingLanguage").OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList()))
             .ToListAsync(cancellationToken);
+
+        var categories = await LoadSourceCategoriesAsync(cancellationToken);
+
+        return entities.Select(job => ToDto(job, categories)).ToList();
     }
 
     public async Task<JobDto?> GetJobAsync(Guid id, CancellationToken cancellationToken)
     {
-        return await dbContext.Jobs
+        var job = await dbContext.Jobs
             .AsNoTracking()
-            .Include(job => job.Skills)
-            .Where(job => job.Id == id)
-            .Select(job => new JobDto(
-                job.Id,
-                job.Source,
-                job.Title,
-                job.Company,
-                job.Location,
-                job.Region,
-                job.SalaryMin,
-                job.SalaryMax,
-                job.EmploymentType,
-                job.Seniority,
-                job.WorkMode,
-                job.ExperienceBand,
-                job.Industry,
-                job.DescriptionSummary,
-                job.Url,
-                job.PostedDate,
-                job.ClosingDate,
-                job.FirstSeenAt,
-                job.LastSeenAt,
-                job.IsActive,
-                job.ExpiredAt,
-                job.Skills.OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList(),
-                job.Skills.Where(skill => skill.SkillType == "ProgrammingLanguage").OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList()))
-            .SingleOrDefaultAsync(cancellationToken);
+            .Include(entity => entity.Skills)
+            .SingleOrDefaultAsync(entity => entity.Id == id, cancellationToken);
+
+        if (job is null)
+        {
+            return null;
+        }
+
+        var categories = await LoadSourceCategoriesAsync(cancellationToken);
+        return ToDto(job, categories);
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> LoadSourceCategoriesAsync(CancellationToken cancellationToken)
+    {
+        var categories = await dbContext.JobSources
+            .AsNoTracking()
+            .Select(source => new { source.Name, source.Category })
+            .ToListAsync(cancellationToken);
+
+        return categories
+            .GroupBy(source => source.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => string.IsNullOrWhiteSpace(group.First().Category) ? "unknown" : group.First().Category,
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static JobDto ToDto(Job job, IReadOnlyDictionary<string, string> sourceCategories)
+    {
+        sourceCategories.TryGetValue(job.Source, out var category);
+        var employer = EmployerClassifier.Classify(job.Source, category, job.Company);
+        var roleFamily = RoleFamilyClassifier.Classify(job.Title);
+
+        return new JobDto(
+            job.Id,
+            job.Source,
+            job.Title,
+            job.Company,
+            job.Location,
+            job.Region,
+            job.SalaryMin,
+            job.SalaryMax,
+            job.SalaryText,
+            job.SalaryCurrency,
+            job.SalaryPeriod,
+            job.SalaryQuestionable,
+            job.SalaryQuestionableReason,
+            job.EmploymentType,
+            job.Seniority,
+            job.WorkMode,
+            job.ExperienceBand,
+            job.Industry,
+            job.DescriptionSummary,
+            job.Url,
+            job.PostedDate,
+            job.ClosingDate,
+            job.FirstSeenAt,
+            job.LastSeenAt,
+            job.IsActive,
+            job.ExpiredAt,
+            job.Skills.OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList(),
+            job.Skills.Where(skill => skill.SkillType == "ProgrammingLanguage").OrderBy(skill => skill.SkillName).Select(skill => skill.SkillName).ToList(),
+            employer.SourceCategory,
+            employer.Advertiser,
+            employer.AdvertiserType.ToString(),
+            employer.HiringEmployer,
+            employer.Disclosure.ToString(),
+            roleFamily.Family,
+            roleFamily.Inferred);
     }
 }

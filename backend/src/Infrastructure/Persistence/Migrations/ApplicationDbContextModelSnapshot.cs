@@ -267,6 +267,13 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("base_url");
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("source_category")
+                        .HasDefaultValue("unknown");
+
                     b.Property<int>("CrawlFrequencyMinutes")
                         .HasColumnType("integer")
                         .HasColumnName("crawl_frequency_minutes");

@@ -144,6 +144,32 @@ public sealed class AnalyticsServiceTests
         overview.DataStatus.EnabledSourcesWithRecentSuccess.Should().Be(1);
     }
 
+    [Fact]
+    public async Task Overview_separates_direct_employers_from_agency_only_listings()
+    {
+        await using var dbContext = CreateDbContext();
+        AddJob(dbContext, "Xero", company: "Xero");
+        AddJob(dbContext, "Beyond Recruitment", company: "Beyond Recruitment");
+        AddJob(dbContext, "Tribe Recruitment", company: "Tau Mai");
+        AddJob(dbContext, "SEEK NZ", company: null);
+        dbContext.JobSources.AddRange(
+            new JobSource { Id = Guid.NewGuid(), Name = "Xero", Method = "scraping", Parser = "jsonld", Category = "company", BaseUrl = "https://xero.example", CreatedAt = Now, UpdatedAt = Now },
+            new JobSource { Id = Guid.NewGuid(), Name = "Beyond Recruitment", Method = "scraping", Parser = "generic", Category = "recruiter", BaseUrl = "https://beyond.example", CreatedAt = Now, UpdatedAt = Now },
+            new JobSource { Id = Guid.NewGuid(), Name = "Tribe Recruitment", Method = "scraping", Parser = "generic", Category = "recruiter", BaseUrl = "https://tribe.example", CreatedAt = Now, UpdatedAt = Now },
+            new JobSource { Id = Guid.NewGuid(), Name = "SEEK NZ", Method = "scraping", Parser = "seek", Category = "job-board", BaseUrl = "https://seek.example", CreatedAt = Now, UpdatedAt = Now });
+        await dbContext.SaveChangesAsync();
+
+        var overview = await new AnalyticsService(dbContext, new FixedTimeProvider(Now)).GetOverviewAsync(CancellationToken.None);
+
+        overview.Employers.DirectEmployerListings.Should().Be(1);
+        overview.Employers.AgencyAdvertisedListings.Should().Be(2);
+        overview.Employers.BoardAdvertisedListings.Should().Be(1);
+        overview.Employers.AgencyOnlyListings.Should().Be(1, "Beyond Recruitment advertises its own brand");
+        overview.Employers.ListingsWithEmployer.Should().Be(2, "Xero and the named Tau Mai client");
+        overview.Employers.ListingsWithoutEmployer.Should().Be(2);
+        overview.Employers.IdentifiableEmployers.Should().Be(2);
+    }
+
     private static void AddJob(
         ApplicationDbContext dbContext,
         string source,
@@ -154,7 +180,8 @@ public sealed class AnalyticsServiceTests
         decimal? salaryMax = null,
         string? salaryText = null,
         string salaryPeriod = "Year",
-        string employmentType = "Full-time")
+        string employmentType = "Full-time",
+        string? company = null)
     {
         var seen = firstSeen ?? new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
         dbContext.Jobs.Add(new Job
@@ -162,6 +189,7 @@ public sealed class AnalyticsServiceTests
             Id = Guid.NewGuid(),
             Source = source,
             Title = "Software Engineer",
+            Company = company,
             Url = $"https://{source.ToLowerInvariant()}.example/jobs/{Guid.NewGuid()}",
             ContentHash = Guid.NewGuid().ToString(),
             IsActive = active,

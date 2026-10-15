@@ -1,5 +1,6 @@
 using Application.Common;
 using Application.Crawling;
+using Application.Employers;
 using Application.Metrics;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,6 +30,7 @@ public sealed class AnalyticsService(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var active = await LoadActiveListingsAsync(cancellationToken);
+        var categories = await LoadSourceCategoriesAsync(cancellationToken);
         var dateObservations = active
             .Select(job => new ListingDateObservation(job.PostedDate, job.FirstSeenAt))
             .ToList();
@@ -58,15 +60,19 @@ public sealed class AnalyticsService(
             ParsePayPeriod(job.SalaryPeriod),
             job.EmploymentType,
             job.SalaryQuestionable)));
-        var listingsWithEmployer = active.Count(job => !string.IsNullOrWhiteSpace(job.Company));
-        var identifiable = active
-            .Where(job => !string.IsNullOrWhiteSpace(job.Company))
-            .Select(job => job.Company!.Trim())
+        var classifiedEmployers = active
+            .Select(job => EmployerClassifier.Classify(job.Source, CategoryFor(categories, job.Source), job.Company))
+            .ToList();
+        var listingsWithEmployer = classifiedEmployers.Count(employer => employer.Disclosure == EmployerDisclosure.Disclosed);
+        var identifiable = classifiedEmployers
+            .Where(employer => employer.Disclosure == EmployerDisclosure.Disclosed && !string.IsNullOrWhiteSpace(employer.HiringEmployer))
+            .Select(employer => employer.HiringEmployer!.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
         var employerCoverage = active.Count == 0
             ? 0m
             : Math.Round((decimal)listingsWithEmployer / active.Count * 100m, 1, MidpointRounding.AwayFromZero);
+        var employerSummary = BuildEmployerSummary(classifiedEmployers, active.Count, identifiable, listingsWithEmployer, employerCoverage);
 
         var dataStatus = await BuildDataStatusAsync(now, cancellationToken);
 
@@ -78,7 +84,7 @@ public sealed class AnalyticsService(
             discoveredChange,
             postedChange,
             ToSalaryDto(salary),
-            new EmployerSummaryDto(identifiable, listingsWithEmployer, active.Count - listingsWithEmployer, employerCoverage),
+            employerSummary,
             dataStatus,
             active
                 .Where(job => !string.IsNullOrWhiteSpace(job.Region))
@@ -210,6 +216,7 @@ public sealed class AnalyticsService(
             .AsNoTracking()
             .Where(job => job.IsActive)
             .Select(job => new ActiveListing(
+                job.Source,
                 job.PostedDate,
                 job.FirstSeenAt,
                 job.LastSeenAt,
@@ -223,6 +230,42 @@ public sealed class AnalyticsService(
                 job.Company,
                 job.Region))
             .ToListAsync(cancellationToken);
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> LoadSourceCategoriesAsync(CancellationToken cancellationToken)
+    {
+        var categories = await dbContext.JobSources
+            .AsNoTracking()
+            .Select(source => new { source.Name, source.Category })
+            .ToListAsync(cancellationToken);
+
+        return categories
+            .GroupBy(source => source.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => string.IsNullOrWhiteSpace(group.First().Category) ? "unknown" : group.First().Category,
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? CategoryFor(IReadOnlyDictionary<string, string> categories, string source) =>
+        categories.TryGetValue(source, out var category) ? category : null;
+
+    private static EmployerSummaryDto BuildEmployerSummary(
+        IReadOnlyList<EmployerClassification> classified,
+        int activeCount,
+        int identifiable,
+        int listingsWithEmployer,
+        decimal coveragePercent)
+    {
+        return new EmployerSummaryDto(
+            identifiable,
+            listingsWithEmployer,
+            activeCount - listingsWithEmployer,
+            coveragePercent,
+            classified.Count(employer => employer.Disclosure == EmployerDisclosure.AgencyOnly),
+            classified.Count(employer => employer.AdvertiserType == AdvertiserType.DirectEmployer),
+            classified.Count(employer => employer.AdvertiserType == AdvertiserType.Agency),
+            classified.Count(employer => employer.AdvertiserType == AdvertiserType.Board));
     }
 
     private async Task<DataStatusDto> BuildDataStatusAsync(DateTime now, CancellationToken cancellationToken)
@@ -278,6 +321,7 @@ public sealed class AnalyticsService(
             : SalaryPayPeriod.Year;
 
     private sealed record ActiveListing(
+        string Source,
         DateTime? PostedDate,
         DateTime FirstSeenAt,
         DateTime LastSeenAt,

@@ -9,6 +9,11 @@ public sealed record JobDto(
     string? Region,
     decimal? SalaryMin,
     decimal? SalaryMax,
+    string? SalaryText,
+    string SalaryCurrency,
+    string SalaryPeriod,
+    bool SalaryQuestionable,
+    string? SalaryQuestionableReason,
     string EmploymentType,
     string Seniority,
     string WorkMode,
@@ -23,7 +28,16 @@ public sealed record JobDto(
     bool IsActive,
     DateTime? ExpiredAt,
     IReadOnlyList<string> Skills,
-    IReadOnlyList<string> ProgrammingLanguages);
+    IReadOnlyList<string> ProgrammingLanguages,
+    // Advertiser vs hiring employer, derived centrally so every view agrees.
+    string SourceCategory,
+    string Advertiser,
+    string AdvertiserType,
+    string? HiringEmployer,
+    string EmployerDisclosure,
+    // Deterministic title classification; the original title is always retained.
+    string RoleFamily,
+    bool RoleFamilyInferred);
 
 /// <summary>
 /// Job list filters. <c>Days</c> limits results to the freshest postings — the
