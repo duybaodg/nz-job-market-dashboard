@@ -29,6 +29,35 @@ echo
 
 check "analytics overview" "${BASE_URL}/api/analytics/overview"
 check "freshness (2/7/15 days)" "${BASE_URL}/api/analytics/freshness"
+check "history (P2 snapshots)" "${BASE_URL}/api/analytics/history?days=7"
+
+printf '%-28s ' "job fields (P1)"
+fields_jobs=$(mktemp)
+if ! curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" -o "$fields_jobs" 2>/dev/null; then
+  echo "FAIL"
+  fail=1
+elif ! fields_output=$(python3 - "$fields_jobs" <<'PY'
+import json
+import sys
+
+jobs = json.load(open(sys.argv[1], encoding="utf-8"))
+required = ["roleFamily", "advertiserType", "employerDisclosure", "sourceCategory", "salaryPeriod"]
+missing = [key for key in required if any(key not in job for job in jobs)]
+if missing:
+    print("missing keys: " + ", ".join(missing))
+    raise SystemExit(1)
+employers = sum(1 for job in jobs if job.get("employerDisclosure") == "Disclosed")
+agency = sum(1 for job in jobs if job.get("employerDisclosure") == "AgencyOnly")
+families = {job["roleFamily"] for job in jobs}
+print(f"OK ({len(jobs)} jobs, {employers} disclosed employers, {agency} agency-only, {len(families)} role families)")
+PY
+); then
+  echo "FAIL ($fields_output)"
+  fail=1
+else
+  echo "$fields_output"
+fi
+rm -f "$fields_jobs"
 
 printf '%-28s ' "source registry"
 sources=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/sources" 2>/dev/null || true)

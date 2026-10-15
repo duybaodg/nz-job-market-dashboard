@@ -181,6 +181,7 @@ GET /api/analytics/overview
 GET /api/analytics/top-skills
 GET /api/analytics/jobs-by-region
 GET /api/analytics/freshness         # posted + first-seen counts for the 2, 7 and 15 NZ-day windows
+GET /api/analytics/history           # ?days=7|15|30 daily-snapshot history, weekly trend, coverage changes
 POST /api/admin/crawl-runs
 GET /api/admin/crawl-runs
 GET /api/admin/crawl-runs/{id}
@@ -218,8 +219,66 @@ the API cannot silently diverge:
 - Hub/landing-page records left behind by older worker versions are deactivated
   by `JobQualityGuard` at worker startup.
 
-## Skill extraction (shared taxonomy)
+## Audience views (Find jobs / Market trends)
 
+The frontend has two audience views, both driven by URL state so refresh,
+copy-link and browser Back/Forward reproduce the exact view:
+
+- **Find jobs (`/jobs`, default):** compact title + shared freshness indicator,
+  primary filters (search, location, work mode, seniority, salary), matching
+  count with selected-filter chips and Clear all, responsive job cards with
+  sorting and pagination, then compact market context. Each card exposes the
+  linked title; the hiring employer **and** the advertiser/recruiter separately;
+  city/region/nationwide plus work mode; the advertised salary with its own
+  currency and pay period or “Salary not advertised”; employment type and
+  seniority; skill tags with a details overflow; the posted date or an explicit
+  “First seen” label; and the closing date. Company, source, employment type,
+  posted-date window, skill, role family, experience and programming language
+  live under **More filters**. Pagination resets whenever a filter changes.
+- **Market trends (`/trends`):** scope, reporting period, comparison period and
+  freshness; four primary metrics (active tracked listings, new listings with an
+  equal-period comparison, median advertised salary with sample and coverage, and
+  hiring employers separated from agency-only/unknown listings); weekly
+  new-listing trend; active-listing history; demand by role family (with
+  seniority drill-down), region and skill; salary distribution and median salary
+  by role family; and employer activity. Every chart has a visible table or
+  ranked-bar alternative and can be operated by keyboard; chart bars apply a
+  visible filter and link through to the matching Find-jobs results.
+
+Advertiser vs hiring employer and role family are classified centrally in
+`Application/Employers/EmployerClassifier` and
+`Application/Jobs/RoleFamilyClassifier` and returned on every `JobDto`, so the
+cards, charts and CSV export cannot diverge. A reviewed agency alias table keeps
+agency-only listings from inventing the agency's client.
+
+## Daily snapshots and historical analysis
+
+`ListingSnapshotService` writes one listing-level snapshot per Pacific/Auckland
+day (`listing_snapshots` + `listing_snapshot_runs`, added by the reversible
+`AddListingSnapshots` migration). This happens once at worker startup and on
+every poll, and is idempotent per NZ day. Snapshot rows are self-contained and
+are **not** deleted by the 20-day job retention purge, so history survives even
+after the underlying job row is gone.
+
+`GET /api/analytics/history?days=7|15|30` reads only those snapshots:
+
+- **Weekly new listings** are grouped into Monday–Sunday NZ weeks by first-seen
+  date. Weeks before snapshot coverage starts are omitted (they would be
+  biased low), the first partial week and the current week are labelled
+  incomplete, and weeks with missing snapshot days are flagged.
+- **Active counts** are per snapshot day, with source-coverage changes
+  annotated so an added or removed source cannot silently appear as demand
+  growth. The active change compares the latest snapshot with the snapshot
+  exactly seven days earlier, or declares the comparison unavailable.
+- **New-listing comparisons** use equal-duration complete-day intervals and are
+  declared unavailable when the previous period predates retained snapshots.
+
+The Market trends page labels all of this; where daily snapshots are not yet
+retained it falls back to today's retained rows and says so explicitly.
+Filtered CSV export on Find jobs writes the applied filters, period, metric
+definitions and extraction timestamp and reuses the same screen calculations.
+
+## Skill extraction (shared taxonomy)
 Technical skills are extracted from the **full** job description (languages,
 frameworks, cloud, databases, data/BI, DevOps, testing, security,
 integration/ERP and process keywords), not just a programming-language list.
@@ -242,7 +301,7 @@ integration/ERP and process keywords), not just a programming-language list.
 
 ## Current Scope
 
-Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, frontend overview dashboard, scheduled registry-driven crawling of 67 NZ IT job sites, and optional Firecrawl plumbing.
+Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, the Find jobs and Market trends audience views, daily listing snapshots with retained-history analytics, scheduled registry-driven crawling of 67 NZ IT job sites, and optional Firecrawl plumbing.
 
 Crawling direction: the primary crawler is the Python Scrapling worker, driven by
 `crawler/sources/sites.json`. Each source declares a strategy (`api`, `rss`,
