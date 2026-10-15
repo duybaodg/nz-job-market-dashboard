@@ -3048,14 +3048,6 @@ def _crawl_api_platform(
         raise RuntimeError(f"Robots.txt does not allow crawling {args.url}")
 
     config = dict(source_config)
-    if platform == "adzuna":
-        config.setdefault("appId", os.environ.get("ADZUNA_APP_ID", ""))
-        config.setdefault("appKey", os.environ.get("ADZUNA_APP_KEY", ""))
-        if not config.get("appId") or not config.get("appKey"):
-            raise RuntimeError(
-                "Adzuna crawling requires ADZUNA_APP_ID and ADZUNA_APP_KEY environment variables."
-            )
-
     raw_jobs = crawl_platform(platform, api_fetch, source=args.source, config=config)
     jobs = [
         job
@@ -3152,7 +3144,6 @@ PARSER_CHOICES = (
     "smartrecruiters",
     "bamboohr",
     "workday",
-    "adzuna",
     "tribe",
     "oracle",
     "salesforce",

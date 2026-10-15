@@ -11,7 +11,7 @@ Analytics dashboard for New Zealand job-market trends using live, normalized job
 ## Local Development
 
 ```bash
-cp .env.example .env                 # DATABASE_URL, SCRAPLING_*, ADZUNA_* etc.
+cp .env.example .env                 # DATABASE_URL, SCRAPLING_*, FIRECRAWL_* etc.
 docker compose up -d postgres
 
 # Python crawler dependency (needed to crawl locally; skip if you only use Docker)
@@ -368,7 +368,7 @@ Crawling direction: the primary crawler is the Python Scrapling worker, driven b
 `jsonld`, `dynamic`, `custom`, `generic` or `blocked`) and the worker resolves it
 by source name, so the .NET adapter only needs the name and URL. Public ATS JSON
 APIs (Workday, Ashby, BambooHR, Greenhouse, SmartRecruiters, Oracle Recruiting,
-Salesforce Apex, Tribe, Adzuna) and SuccessFactors RSS feeds are crawled without a
+Salesforce Apex, Tribe) and SuccessFactors RSS feeds are crawled without a
 browser; everything else is rendered and parsed with JSON-LD-first extraction.
 Firecrawl remains disabled until `FIRECRAWL_API_KEY` is set and is fallback
 plumbing, not the main crawler path.
@@ -389,7 +389,6 @@ how to add a source.
 | `CRAWLER_JOB_STALE_DAYS` | 15 | Expire jobs not seen for this many days |
 | `CRAWLER_MISSING_CRAWL_THRESHOLD` | 2 | Expire after N complete crawls without the job |
 | `CRAWLER_RETENTION_DAYS` | 20 | Hard-delete jobs and crawl history older than this many days |
-| `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | – | Optional, required only for the Adzuna source |
 
 Per-source scheduling comes from each row's `crawl_frequency_minutes`.
 

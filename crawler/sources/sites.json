@@ -1283,26 +1283,6 @@
       "notes": "DISABLED 2026-10-12 (Round 3): www.myjobspace.co.nz redirects to jobspace.co.nz which now answers automated clients with a 405 'Human Verification' page. Crawling would require bypassing bot protection. Round 4 re-probe: still 405 Human Verification."
     },
     {
-      "name": "Adzuna NZ",
-      "tier": 4,
-      "category": "aggregator",
-      "homepage": "https://www.adzuna.co.nz/",
-      "jobs_url": "https://www.adzuna.co.nz/search?q=IT",
-      "platform": "adzuna",
-      "enabled": false,
-      "frequency_minutes": 1440,
-      "strategy": "api",
-      "httpStatus": 200,
-      "parser": "adzuna",
-      "what": "IT",
-      "country": "nz",
-      "pages": 2,
-      "notes": "Requires ADZUNA_APP_ID / ADZUNA_APP_KEY env credentials | DISABLED 2026-10-12 (Round 2): needs ADZUNA_APP_ID/ADZUNA_APP_KEY (absent) and the web search path is robots-disallowed. Re-enable only with provisioned API credentials.",
-      "sitemapJobUrls": 0,
-      "fetcher": "http",
-      "robotsAllows": false
-    },
-    {
       "name": "LinkedIn Jobs",
       "tier": 4,
       "category": "aggregator",

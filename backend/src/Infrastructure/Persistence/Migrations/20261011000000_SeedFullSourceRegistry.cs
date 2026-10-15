@@ -115,8 +115,6 @@ public sealed class SeedFullSourceRegistry : Migration
              NOW(), NOW(), NOW()),
             ('da05185d-d1b8-5613-a57e-e3869ab3cbbd', 'ASB', 'https://www.asb.co.nz/careers.html', 'Scrapling', 'generic', FALSE, 1440,
              NOW(), NOW(), NOW()),
-            ('b3406339-e8a5-5e54-a8fc-4b3e29af6e2c', 'Adzuna NZ', 'https://www.adzuna.co.nz/search?q=IT', 'Scrapling', 'adzuna', TRUE, 1440,
-             NOW(), NOW(), NOW()),
             ('e8041419-d78f-5012-a090-a1d462730df1', 'Air New Zealand', 'https://api.smartrecruiters.com/v1/companies/airnewzealand/postings?limit=100', 'Scrapling', 'smartrecruiters', TRUE, 1440,
              NOW(), NOW(), NOW()),
             ('4958c358-7cb0-5814-b049-2e219f4b346b', 'BNZ', 'https://nab.eightfold.ai/careers?microsite=bnz', 'Scrapling', 'generic', TRUE, 1440,
@@ -178,7 +176,7 @@ public sealed class SeedFullSourceRegistry : Migration
         """);
 
     protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("""
-        DELETE FROM job_sources WHERE name IN ('Absolute IT', 'Beyond Recruitment', 'Indeed NZ', 'Jora NZ', 'NZ Government Jobs', 'Potentia', 'Recruit IT', 'SEEK NZ', 'Talent Army', 'Trade Me Jobs', 'Alpha Recruitment', 'Comspek International', 'Consult Recruitment', 'Digital Garage', 'H2R Technology', 'Hays NZ', 'JobSeek', 'Madison Recruitment', 'PlaceMe IT', 'Presto Resourcing', 'Randstad NZ', 'Robert Walters NZ', 'Salt NZ', 'TEKsystems NZ', 'Talent International NZ', 'Talent Vault', 'Tribe Recruitment', 'WorkHere', 'Younity', 'ZEIL', 'DOC Careers', 'GradConnection NZ', 'Health NZ Careers', 'Inland Revenue Careers', 'MPI Careers', 'NZ Defence Careers', 'Prosple NZ', 'Student Job Search', 'Summer of Tech', 'ANZ NZ', 'ASB', 'Adzuna NZ', 'Air New Zealand', 'BNZ', 'Datacom', 'EROAD', 'Fisher & Paykel', 'Fonterra', 'Gallagher', 'Halter', 'Jade Software', 'LIC', 'LinkedIn Jobs', 'MyJobSpace', 'NZ Police', 'One NZ', 'Orion Health', 'Pushpay', 'Rocket Lab', 'Ryman Healthcare', 'Serko', 'Spark NZ', 'Trade Me', 'Trimble', 'Vista Group', 'Westpac NZ', 'Xero')
+        DELETE FROM job_sources WHERE name IN ('Absolute IT', 'Beyond Recruitment', 'Indeed NZ', 'Jora NZ', 'NZ Government Jobs', 'Potentia', 'Recruit IT', 'SEEK NZ', 'Talent Army', 'Trade Me Jobs', 'Alpha Recruitment', 'Comspek International', 'Consult Recruitment', 'Digital Garage', 'H2R Technology', 'Hays NZ', 'JobSeek', 'Madison Recruitment', 'PlaceMe IT', 'Presto Resourcing', 'Randstad NZ', 'Robert Walters NZ', 'Salt NZ', 'TEKsystems NZ', 'Talent International NZ', 'Talent Vault', 'Tribe Recruitment', 'WorkHere', 'Younity', 'ZEIL', 'DOC Careers', 'GradConnection NZ', 'Health NZ Careers', 'Inland Revenue Careers', 'MPI Careers', 'NZ Defence Careers', 'Prosple NZ', 'Student Job Search', 'Summer of Tech', 'ANZ NZ', 'ASB', 'Air New Zealand', 'BNZ', 'Datacom', 'EROAD', 'Fisher & Paykel', 'Fonterra', 'Gallagher', 'Halter', 'Jade Software', 'LIC', 'LinkedIn Jobs', 'MyJobSpace', 'NZ Police', 'One NZ', 'Orion Health', 'Pushpay', 'Rocket Lab', 'Ryman Healthcare', 'Serko', 'Spark NZ', 'Trade Me', 'Trimble', 'Vista Group', 'Westpac NZ', 'Xero')
           AND name NOT IN ('Salt', 'LinkedIn');
         """);
 }

@@ -73,7 +73,7 @@ python3 crawler/tools/coverage_report.py --report /tmp/coverage.json
 | Strategy | How it works | Examples |
 | --- | --- | --- |
 | `custom` | Hand-written, unit-tested HTML/feed parser | NZ Government Jobs, MPI (`jobtools`), Absolute IT, Talent Army, Beyond Recruitment, Consult, Comspek, Salt, Digital Garage, JobSeek, Hays (`job-search` + JSON-LD), ANZ/One NZ/LIC (`pageup` microdata), Trade Me Jobs, SEEK, Halter |
-| `api` | Official public ATS JSON postings API | Jade Software (BambooHR), DOC Careers (Workday), Halter (Ashby), Xero (Ashby), Fisher & Paykel (Workday), EROAD (Workday), Pushpay (Greenhouse), Air New Zealand (SmartRecruiters), Inland Revenue (Oracle Recruiting), NZ Defence (Salesforce Apex), Adzuna, Tribe Recruitment (`/api/jobs`) |
+| `api` | Official public ATS JSON postings API | Jade Software (BambooHR), DOC Careers (Workday), Halter (Ashby), Xero (Ashby), Fisher & Paykel (Workday), EROAD (Workday), Pushpay (Greenhouse), Air New Zealand (SmartRecruiters), Inland Revenue (Oracle Recruiting), NZ Defence (Salesforce Apex), Tribe Recruitment (`/api/jobs`) |
 | `jsonld` | Schema.org `JobPosting` JSON-LD on the listing/detail page | Gallagher |
 | `rss` | Job RSS/XML feed listing every vacancy | Spark NZ, Fonterra (SuccessFactors `SearchJobs/feed`) |
 | `dynamic` | Browser-render the listing, follow job links, extract JSON-LD → HTML heuristics | company career pages and government sites |
@@ -181,12 +181,6 @@ Re-run the probe when site markup changes:
 python3 crawler/tools/probe_sources.py --deep --report /tmp/probe.json --write
 python3 crawler/tools/generate_source_migration.py --write
 ```
-
-## Adzuna credentials
-
-The Adzuna aggregator needs a free API key. Set `ADZUNA_APP_ID` and
-`ADZUNA_APP_KEY`; without them the Adzuna source fails cleanly and the worker
-continues with the remaining sources.
 
 ## Adding a source
 

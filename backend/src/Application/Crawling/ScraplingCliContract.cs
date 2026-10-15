@@ -4,7 +4,7 @@ namespace Application.Crawling;
 /// The single source of truth for the values the .NET crawler may pass to
 /// <c>scrapling_worker.py</c>.
 ///
-/// The Xero / Trade Me Jobs / Gallagher / Adzuna failures were caused by the
+/// The Xero / Trade Me Jobs / Gallagher failures were caused by the
 /// CLI's <c>--parser</c> choices falling behind the source registry: the
 /// adapter forwarded a registry value such as <c>ashby</c> and argparse exited
 /// with status 2 (<c>invalid choice</c>). Both crawl paths — the worker's
@@ -47,7 +47,6 @@ public static class ScraplingCliContract
         "smartrecruiters",
         "bamboohr",
         "workday",
-        "adzuna",
         "tribe",
         "oracle",
         "salesforce",

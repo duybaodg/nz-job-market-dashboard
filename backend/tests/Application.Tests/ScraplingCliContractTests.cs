@@ -52,7 +52,6 @@ public sealed class ScraplingCliContractTests
     [InlineData("ashby", "ashby")]
     [InlineData("trade-me", "trade-me")]
     [InlineData("jsonld", "jsonld")]
-    [InlineData("adzuna", "adzuna")]
     [InlineData("custom", "generic")]
     [InlineData("successfactors", "rss")]
     [InlineData("json-ld", "jsonld")]

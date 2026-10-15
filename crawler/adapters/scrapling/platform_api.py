@@ -30,7 +30,6 @@ API_PLATFORMS = (
     "smartrecruiters",
     "bamboohr",
     "workday",
-    "adzuna",
     "tribe",
     "oracle",
     "salesforce",
@@ -453,55 +452,6 @@ def workday_jobs(
 
 
 # --------------------------------------------------------------------------- #
-# Adzuna — https://api.adzuna.com/v1/api/jobs/{country}/search/{page}
-# --------------------------------------------------------------------------- #
-def adzuna_jobs(
-    fetch: JsonFetcher,
-    *,
-    source: str,
-    app_id: str,
-    app_key: str,
-    country: str = "nz",
-    what: str = "IT",
-    pages: int = 2,
-    results_per_page: int = 50,
-) -> list[dict[str, Any]]:
-    jobs: list[dict[str, Any]] = []
-    for page in range(1, max(pages, 1) + 1):
-        payload = fetch(
-            f"https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
-            f"?app_id={app_id}&app_key={app_key}&results_per_page={results_per_page}"
-            f"&what={what}&content-type=application/json"
-        )
-        results = _as_list(payload, "results")
-        if not results:
-            break
-        for value in results:
-            if not isinstance(value, Mapping):
-                continue
-            location = value.get("location") if isinstance(value.get("location"), Mapping) else {}
-            company = value.get("company") if isinstance(value.get("company"), Mapping) else {}
-            salary_min, salary_max = value.get("salary_min"), value.get("salary_max")
-            salary_text = None
-            if salary_min or salary_max:
-                salary_text = f"${int(salary_min or salary_max):,} - ${int(salary_max or salary_min):,}"
-            jobs.append(
-                make_job(
-                    source=source,
-                    source_job_id=value.get("id"),
-                    title=str(value.get("title") or "Untitled job"),
-                    company=company.get("display_name"),
-                    location=location.get("display_name"),
-                    salary_text=salary_text,
-                    description=value.get("description"),
-                    url=str(value.get("redirect_url") or ""),
-                    posted_date=iso_date(value.get("created")),
-                )
-            )
-    return [job for job in jobs if job["url"]]
-
-
-# --------------------------------------------------------------------------- #
 # Tribe Recruitment — public JSON feed at https://www.tribegroup.com/api/jobs
 # --------------------------------------------------------------------------- #
 def tribe_jobs(
@@ -684,9 +634,8 @@ def crawl_platform(
     """Run the API client for ``platform`` using a registry entry's config.
 
     ``config`` may contain: ``token``, ``company``, ``country``, ``requireTerms``,
-    ``locationTerms`` (keep only jobs whose location matches one of these),
-    ``host``/``tenant``/``site`` (Workday), ``appId``/``appKey``/``what``/``pages``
-    (Adzuna).
+    ``locationTerms`` (keep only jobs whose location matches one of these), and
+    ``host``/``tenant``/``site`` (Workday).
     """
     jobs = _dispatch_platform(platform, fetch, source=source, config=config)
     location_terms = [str(term).lower() for term in (config.get("locationTerms") or [])]
@@ -747,16 +696,6 @@ def _dispatch_platform(
             company=company,
             limit=int(config.get("limit", 100)),
             search_text=str(config.get("searchText", "")),
-        )
-    if platform == "adzuna":
-        return adzuna_jobs(
-            fetch,
-            source=source,
-            app_id=config["appId"],
-            app_key=config["appKey"],
-            country=str(config.get("country", "nz")),
-            what=str(config.get("what", "IT")),
-            pages=int(config.get("pages", 2)),
         )
     if platform == "tribe":
         return tribe_jobs(

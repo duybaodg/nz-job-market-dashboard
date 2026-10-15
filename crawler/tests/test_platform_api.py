@@ -10,7 +10,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from adapters.scrapling.platform_api import (  # noqa: E402
-    adzuna_jobs,
     oracle_jobs,
     salesforce_jobs,
     tribe_jobs,
@@ -272,28 +271,6 @@ class PlatformApiTests(unittest.TestCase):
         self.assertEqual("JR1", jobs[0]["sourceJobId"])
         self.assertIn("/en-US/DOC/job/Wellington/Ranger_JR1", jobs[0]["url"])
         self.assertIsNotNone(jobs[0]["postedDate"])
-
-    def test_adzuna_mapper_formats_salary(self) -> None:
-        payload = {
-            "results": [
-                {
-                    "id": "ad-1",
-                    "title": "DevOps Engineer",
-                    "company": {"display_name": "Acme"},
-                    "location": {"display_name": "Auckland, New Zealand"},
-                    "description": "Terraform and AWS",
-                    "redirect_url": "https://www.adzuna.co.nz/jobs/ad-1",
-                    "created": "2026-08-19T01:00:00Z",
-                    "salary_min": 100000,
-                    "salary_max": 130000,
-                }
-            ]
-        }
-        jobs = adzuna_jobs(fetcher(payload), source="Adzuna NZ", app_id="id", app_key="key", pages=1)
-
-        self.assertEqual("Acme", jobs[0]["company"])
-        self.assertEqual("$100,000 - $130,000", jobs[0]["salaryText"])
-
 
     def test_salesforce_apex_mapper_reads_open_vacancies(self) -> None:
         payload = {
