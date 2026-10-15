@@ -135,8 +135,11 @@ public static class EmployerClassifier
                     employer = null;
                     disclosure = EmployerDisclosure.AgencyOnly;
                 }
-                else if (candidate is null)
+                else if (candidate is null || NamesMatch(candidate, advertiser))
                 {
+                    // A board repeating its own name in the company field is not
+                    // evidence of an employer, so it stays unknown rather than
+                    // being counted as a hiring employer.
                     employer = null;
                     disclosure = EmployerDisclosure.Unknown;
                 }
@@ -161,4 +164,16 @@ public static class EmployerClassifier
 
     public static string NormaliseCategory(string? category) =>
         string.IsNullOrWhiteSpace(category) ? "unknown" : category.Trim().ToLowerInvariant();
+
+    /// <summary>
+    /// Loose equality used only to detect a board echoing its own name in the
+    /// company field. Punctuation and whitespace are ignored.
+    /// </summary>
+    private static bool NamesMatch(string left, string right)
+    {
+        static string Normalise(string value) => new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+        var a = Normalise(left);
+        var b = Normalise(right);
+        return a.Length > 0 && b.Length > 0 && (a == b || a.Contains(b, StringComparison.Ordinal) || b.Contains(a, StringComparison.Ordinal));
+    }
 }

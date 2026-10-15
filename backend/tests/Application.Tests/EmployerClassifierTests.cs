@@ -70,4 +70,13 @@ public sealed class EmployerClassifierTests
         result.Disclosure.Should().Be(EmployerDisclosure.Unknown);
         result.HiringEmployer.Should().BeNull();
     }
+
+    [Fact]
+    public void Board_echoing_its_own_name_is_not_counted_as_an_employer()
+    {
+        var result = EmployerClassifier.Classify("Trade Me Jobs", "job-board", "Trade Me");
+
+        result.Disclosure.Should().Be(EmployerDisclosure.Unknown);
+        result.HiringEmployer.Should().BeNull("the board repeating its own name is not employer evidence");
+    }
 }
