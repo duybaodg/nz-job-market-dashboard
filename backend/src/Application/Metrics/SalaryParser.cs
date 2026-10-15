@@ -23,7 +23,9 @@ public sealed record SalaryParse(
     SalaryPayPeriod PayPeriod,
     bool IsSingleAmount,
     bool IsQuestionable,
-    string? QuestionableReason)
+    string? QuestionableReason,
+    bool IsOpenEnded = false,
+    string? OpenDirection = null)
 {
     public static readonly SalaryParse Empty = new(null, null, "NZD", SalaryPayPeriod.Unknown, false, false, null);
 
@@ -33,6 +35,23 @@ public sealed record SalaryParse(
     public decimal? Midpoint => HasValue
         ? ((Min ?? Max!.Value) + (Max ?? Min!.Value)) / 2m
         : null;
+
+    /// <summary>True when the advertised figure is a contract hourly/daily rate.</summary>
+    public bool IsConverted => PayPeriod is SalaryPayPeriod.Hour or SalaryPayPeriod.Day;
+
+    /// <summary>
+    /// Documented annualised equivalent (Brief §4): an hourly rate assumes a
+    /// 38-hour week over 52 weeks; a day rate assumes a 5-day week over 52
+    /// weeks. This is a labelled derived display value only — the original
+    /// bounds and pay period are always retained and never overwritten.
+    /// </summary>
+    public decimal? AnnualEquivalent => PayPeriod switch
+    {
+        SalaryPayPeriod.Hour when Midpoint is { } hourly => decimal.Round(hourly * SalaryParser.HoursPerWeek * SalaryParser.WeeksPerYear, 2),
+        SalaryPayPeriod.Day when Midpoint is { } daily => decimal.Round(daily * SalaryParser.WorkingDaysPerYear, 2),
+        SalaryPayPeriod.Year => Midpoint,
+        _ => null
+    };
 }
 
 /// <summary>
@@ -57,16 +76,28 @@ public static class SalaryParser
     // A salary amount must be anchored by a currency symbol/code, an explicit "k"
     // suffix or a fully written 4-6 digit number. The currency-anchored form also
     // accepts small un-grouped figures ("$85") so hourly/daily rates survive.
-    private const string CurrencyCode = @"(?:\$|NZD|AUD|USD|GBP|EUR|CAD|INR)";
+    private const string CurrencyCode = @"(?:(?:NZ|A|US|C|HK)\$|\$|NZD|AUD|USD|GBP|EUR|CAD|INR)";
     private const string AmountPattern =
         CurrencyCode + @"\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?"            // $120,000
         + "|" + CurrencyCode + @"\s*\d{1,6}(?:\.\d+)?\s*[kK]?"      // $85 / $120k / NZD 55000
         + @"|\d{2,3}\s*[kK]"                                          // 130k
         + @"|\d{4,6}";                                                // 120000
 
+    // Open ranges ("up to", "from", "starting at") must still be anchored by a
+    // currency or an explicit "k" so a bare year ("from 2026") cannot be read as
+    // a figure. A one-sided bound is preserved but never turned into a range.
+    private const string AnchoredAmountPattern =
+        CurrencyCode + @"\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?"
+        + "|" + CurrencyCode + @"\s*\d{1,6}(?:\.\d+)?\s*[kK]?"
+        + @"|\d{2,3}\s*[kK]";
+
     private static readonly Regex RangeRegex = new(
         $@"(?<a>{AmountPattern})\s*(?:-|–|—|to)\s*(?<b>{AmountPattern})",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex OpenRangeRegex = new(
+        @"(?ix)(?<dir>up\s+to|no\s+more\s+than|maximum\s+of|from|starting\s+(?:at|from)|at\s+least|minimum\s+of)\s*(?<a>" + AnchoredAmountPattern + ")",
+        RegexOptions.Compiled);
 
     private static readonly Regex SingleRegex = new(
         $@"(?<a>{AmountPattern})",
@@ -88,10 +119,18 @@ public static class SalaryParser
         @"(?ix)(?:\bAUD\b|A\$|\bUSD\b|US\$|\bGBP\b|£|\bEUR\b|€|\bCAD\b|C\$|\bINR\b|₹)",
         RegexOptions.Compiled);
 
-    private const decimal AnnualMin = 30_000m;
-    private const decimal AnnualMax = 500_000m;
-    private const decimal HourlyMax = 500m;
-    private const decimal DailyMax = 5_000m;
+    public const decimal MinimumAnnual = 30_000m;
+    private const decimal AnnualMin = MinimumAnnual;
+    private const decimal AnnualMax = 400_000m;
+    private const decimal HourlyMin = 20m;
+    private const decimal HourlyMax = 200m;
+    private const decimal DailyMin = 150m;
+    private const decimal DailyMax = 3_000m;
+
+    /// <summary>Documented annualisation assumptions (Brief §4).</summary>
+    public const decimal HoursPerWeek = 38m;
+    public const decimal WeeksPerYear = 52m;
+    public const decimal WorkingDaysPerYear = 260m;
 
     public static SalaryParse Parse(string? salaryText, string? title = null)
     {
@@ -110,6 +149,8 @@ public static class SalaryParser
         decimal? min = null;
         decimal? max = null;
         var isSingle = false;
+        var isOpen = false;
+        string? openDirection = null;
 
         var range = RangeRegex.Match(text);
         if (range.Success)
@@ -124,20 +165,42 @@ public static class SalaryParser
         }
         else
         {
-            var single = SingleRegex.Match(text);
-            if (!single.Success)
+            var open = OpenRangeRegex.Match(text);
+            if (open.Success)
             {
-                return SalaryParse.Empty with { Currency = currency, PayPeriod = period };
-            }
+                var amount = ToSalary(open.Groups["a"].Value);
+                var direction = open.Groups["dir"].Value.ToLowerInvariant();
+                var isCeiling = direction.StartsWith("up") || direction.StartsWith("no more") || direction.StartsWith("maximum");
+                if (isCeiling)
+                {
+                    max = amount;
+                    openDirection = "up";
+                }
+                else
+                {
+                    min = amount;
+                    openDirection = "from";
+                }
 
-            min = ToSalary(single.Groups["a"].Value);
-            isSingle = true;
+                isOpen = true;
+            }
+            else
+            {
+                var single = SingleRegex.Match(text);
+                if (!single.Success)
+                {
+                    return SalaryParse.Empty with { Currency = currency, PayPeriod = period };
+                }
+
+                min = ToSalary(single.Groups["a"].Value);
+                isSingle = true;
+            }
         }
 
         var (periodMin, periodMax) = period switch
         {
-            SalaryPayPeriod.Hour => (20m, HourlyMax),
-            SalaryPayPeriod.Day => (150m, DailyMax),
+            SalaryPayPeriod.Hour => (HourlyMin, HourlyMax),
+            SalaryPayPeriod.Day => (DailyMin, DailyMax),
             _ => (AnnualMin, AnnualMax)
         };
 
@@ -180,7 +243,9 @@ public static class SalaryParser
             period,
             isSingle,
             questionable,
-            questionable ? string.Join("; ", reasons) : null);
+            questionable ? string.Join("; ", reasons) : null,
+            isOpen,
+            openDirection);
     }
 
     private static string DetectCurrency(string text)

@@ -127,6 +127,13 @@ app.MapGet("/api/admin/health", async (
     Results.Ok(await healthService.GetHealthAsync(cancellationToken)))
     .WithName("GetHealth");
 
+// --- Round 9: per-field coverage for the active listing cohort -------------
+app.MapGet("/api/admin/coverage", async (
+        ICoverageService coverageService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await coverageService.GetCoverageAsync(cancellationToken)))
+    .WithName("GetCoverage");
+
 app.MapGet("/api/admin/crawl-runs/{id:guid}", async (
         Guid id,
         ICrawlerOrchestrationService crawlerService,

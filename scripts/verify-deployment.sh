@@ -115,6 +115,31 @@ print("OK (%d groups, %d listings merged, unique vacancies %s of %d listings, %d
 '
 fi
 
+printf '%-28s ' "field coverage"
+coverage=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/coverage" 2>/dev/null || true)
+if [[ -z "$coverage" ]]; then
+  echo "FAIL"
+  fail=1
+else
+  echo "$coverage" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+fields = {field["field"]: field for field in data["fields"]}
+required = ["salary", "workMode", "seniority", "employmentType", "skills", "postedDate", "employerCanonical"]
+missing = [name for name in required if name not in fields]
+if missing:
+    print("FAIL (missing fields: " + ", ".join(missing) + ")")
+    raise SystemExit(1)
+print("OK (%d active listings)" % data["activeJobs"])
+for name in required:
+    field = fields[name]
+    print("  %-18s %5.1f%% (%d/%d)" % (name, field["percentage"], field["known"], field["total"]))
+salary = data["salary"]
+print("  hourly/daily converted: %d, open-ended: %d, questionable: %d" % (
+    salary["converted"], salary["openEnded"], salary["questionable"]))
+'
+fi
+
 printf '%-28s ' "jobs feed"
 jobs=$(curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" 2>/dev/null || true)
 if [[ -z "$jobs" ]]; then

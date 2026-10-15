@@ -26,6 +26,9 @@ using (var scope = host.Services.CreateScope())
     // Round 7: re-extract technical skills for every stored job from its
     // description with the shared taxonomy. Idempotent.
     await scope.ServiceProvider.GetRequiredService<ISkillBackfillService>().RunAsync(CancellationToken.None);
+    // Round 9: deterministic deep extraction for work mode, seniority,
+    // employment type and salary. Only fills blanks; idempotent.
+    await scope.ServiceProvider.GetRequiredService<IJobFieldExtractionService>().BackfillAsync(CancellationToken.None);
     // Round 8: bootstrap canonical employers once from the distinct company
     // values, then re-resolve every job by exact/alias match (no fuzzy merge).
     var employerIdentity = scope.ServiceProvider.GetRequiredService<IEmployerIdentityService>();

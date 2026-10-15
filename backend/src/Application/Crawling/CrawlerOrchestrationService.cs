@@ -29,12 +29,15 @@ public sealed class CrawlerOrchestrationService(
     IJobContentValidator? jobContentValidator = null,
     ILogger<CrawlerOrchestrationService>? logger = null,
     SkillExtractor? skillExtractor = null,
-    IEmployerIdentityService? employerIdentityService = null)
+    IEmployerIdentityService? employerIdentityService = null,
+    IJobFieldExtractionService? fieldExtractionService = null)
     : ICrawlerOrchestrationService
 {
     private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
     private readonly IJobContentValidator contentValidator = jobContentValidator ?? new JobContentValidator();
     private readonly SkillExtractor skillExtractor = skillExtractor ?? SkillExtractor.Default;
+    private readonly IJobFieldExtractionService fieldExtraction =
+        fieldExtractionService ?? new JobFieldExtractionService(dbContext);
     private static readonly Regex HtmlTitleRegex = new(
         @"<title[^>]*>(.*?)</title>",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
@@ -266,6 +269,14 @@ public sealed class CrawlerOrchestrationService(
         {
             existingJob.LastSeenAt = DateTime.UtcNow;
             existingJob.UpdatedAt = DateTime.UtcNow;
+            // The board is authoritative for the advertised title; re-crawls
+            // refresh it so title-derived fields (seniority, role family) stay
+            // in step with the source.
+            if (!string.IsNullOrWhiteSpace(candidate.Title))
+            {
+                existingJob.Title = candidate.Title.Trim();
+            }
+
             existingJob.ClosingDate = candidate.ClosingDate ?? existingJob.ClosingDate;
             existingJob.Company = CleanOptional(candidate.Company) ?? existingJob.Company;
             existingJob.Location = CleanOptional(candidate.Location) ?? existingJob.Location;
@@ -274,18 +285,16 @@ public sealed class CrawlerOrchestrationService(
             existingJob.Region = regionHint ?? normalisationService.ResolveRegion(
                 existingJob.Location,
                 existingJob.DescriptionSummary ?? candidate.DescriptionText);
-            existingJob.EmploymentType = InferEmploymentType(candidate.DescriptionText);
-            existingJob.WorkMode = InferWorkMode(candidate.DescriptionText);
             existingJob.ExperienceBand = InferExperienceBand(candidate.DescriptionText);
             // Refresh the fields that a better parser or a re-crawl can now fill
             // in; never overwrite a known value with a missing one.
             existingJob.PostedDate = candidate.PostedDate ?? existingJob.PostedDate;
             ApplySalary(existingJob, candidate.SalaryText, candidate.Title);
-            if (!string.IsNullOrWhiteSpace(candidate.Title))
-            {
-                existingJob.Seniority = normalisationService.StandardiseSeniority(candidate.Title);
-            }
             SetSkills(existingJob, candidate);
+            // Round 9: deterministic deep extraction fills any still-blank work
+            // mode, seniority, employment type or salary. Source-provided and
+            // already-derived values are never overwritten.
+            fieldExtraction.ApplyDeterministic(existingJob);
             existingJob.IsActive = true;
             existingJob.ExpiredAt = null;
             existingJob.MissingCrawlCount = 0;
@@ -311,9 +320,9 @@ public sealed class CrawlerOrchestrationService(
             SalaryPeriod = salary.PayPeriod.ToString(),
             SalaryQuestionable = salary.IsQuestionable,
             SalaryQuestionableReason = salary.QuestionableReason,
-            EmploymentType = InferEmploymentType(candidate.DescriptionText),
-            Seniority = normalisationService.StandardiseSeniority(candidate.Title),
-            WorkMode = InferWorkMode(candidate.DescriptionText),
+            EmploymentType = "Unknown",
+            Seniority = "Unknown",
+            WorkMode = "Unknown",
             ExperienceBand = InferExperienceBand(candidate.DescriptionText),
             Industry = "Unknown",
             DescriptionSummary = Summarise(candidate.DescriptionText),
@@ -331,6 +340,7 @@ public sealed class CrawlerOrchestrationService(
 
         SetSkills(job, candidate);
         job.EmployerCanonicalId = await ResolveEmployerAsync(candidate.Source, job.Company, cancellationToken);
+        fieldExtraction.ApplyDeterministic(job);
 
         dbContext.Jobs.Add(job);
         return 1;
@@ -449,47 +459,8 @@ public sealed class CrawlerOrchestrationService(
         {
             job.SalaryMin = salary.Min;
             job.SalaryMax = salary.Max;
+            job.SalarySource = "source";
         }
-    }
-
-    private static string InferEmploymentType(string? text)
-    {
-        var value = text?.ToLowerInvariant() ?? string.Empty;
-        var labelled = Regex.Match(value, @"employment type:\s*(part-time|full-time|contract|internship)");
-
-        if (labelled.Success) return labelled.Groups[1].Value.ToLowerInvariant() switch
-        {
-            "part-time" => "Part-time",
-            "full-time" => "Full-time",
-            "contract" => "Contract",
-            _ => "Internship"
-        };
-
-        if (value.Contains("part-time")) return "Part-time";
-        if (value.Contains("contract")) return "Contract";
-        if (value.Contains("internship")) return "Internship";
-        if (value.Contains("full-time")) return "Full-time";
-
-        return "Unknown";
-    }
-
-    private static string InferWorkMode(string? text)
-    {
-        var value = text?.ToLowerInvariant() ?? string.Empty;
-        var labelled = Regex.Match(value, @"work mode:\s*(remote|hybrid|on-site|onsite)");
-
-        if (labelled.Success) return labelled.Groups[1].Value.ToLowerInvariant() switch
-        {
-            "remote" => "Remote",
-            "hybrid" => "Hybrid",
-            _ => "On-site"
-        };
-
-        if (value.Contains("remote")) return "Remote";
-        if (value.Contains("hybrid")) return "Hybrid";
-        if (value.Contains("on-site") || value.Contains("onsite")) return "On-site";
-
-        return "Unknown";
     }
 
     private static string InferExperienceBand(string? text)
