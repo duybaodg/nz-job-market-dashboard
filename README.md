@@ -188,7 +188,7 @@ POST /api/admin/crawl-runs
 GET /api/admin/crawl-runs
 GET /api/admin/crawl-runs/{id}
 GET /api/admin/sources
-GET /api/admin/health                  # per-source crawler health (30s in-memory cache, read-only)
+GET /api/admin/health                  # per-source crawler health (password-protected, 30s in-memory cache, read-only)
 GET /api/admin/employers               # canonical employers + aliases + job counts + unmatched names
 POST /api/admin/employers              # { canonicalName, type, notes, actor } create a canonical
 POST /api/admin/employers/{id}/aliases # { alias, actor } add an alias and rematch immediately
@@ -198,6 +198,68 @@ POST /api/admin/employers/match        # repair pass: re-resolve every job by ex
 GET /api/admin/duplicates              # duplicate groups + review candidates (provenance)
 POST /api/admin/dedup/run              # run the incremental, validated dedup pass now
 ```
+
+## Crawler health password (Round 13)
+
+`GET /api/admin/health` and the `/health` view expose operational detail
+(per-source states, error strings, infrastructure hints), so they are gated by a
+single shared secret — this is not a user-account system.
+
+### Configure
+
+```bash
+# .env (never committed; .env.example ships an empty value)
+HEALTH_ACCESS_PASSWORD=<a strong random value>
+```
+
+- The backend reads `HEALTH_ACCESS_PASSWORD` from its environment.
+  `docker-compose.yml` forwards it to the backend container.
+- **Fail closed:** if the variable is unset or empty, the endpoint never opens.
+  Every request returns `401` and the `/health` page stays locked. There is no
+  fallback password and no "dev mode" bypass.
+- The public dashboard endpoints (`/api/jobs`, `/api/analytics/*`) are **not**
+  protected; only the health endpoint is in scope for this gate.
+
+Generate a value with `openssl rand -hex 32`, then restart the backend
+(`docker compose up -d backend`) after changing it.
+
+### Calling the API
+
+Send the secret as an `Authorization: Bearer` header (preferred) or an
+`X-Health-Password` header. A `?password=` query parameter is deliberately
+**not** supported, because query strings leak into access logs, browser history
+and referrers.
+
+```bash
+curl -fsS -H "Authorization: Bearer $HEALTH_ACCESS_PASSWORD" \
+  http://localhost:5050/api/admin/health
+```
+
+Wrong or missing credentials return a generic `401` (constant-time comparison,
+so the response time does not leak the secret). After **10 failed attempts from
+one IP within 5 minutes**, further attempts return `429 Too Many Requests` until
+the window expires.
+
+### Scripts and the UI
+
+All three internal consumers read the same environment variable:
+
+| Consumer | How it authenticates |
+| --- | --- |
+| `scripts/verify-deployment.sh` | Sends `Authorization: Bearer $HEALTH_ACCESS_PASSWORD` on the health check and exports it to the reconciliation script. |
+| `scripts/verify-crawler-health.py` | Adds the same Bearer header to every request; run it with `HEALTH_ACCESS_PASSWORD` set. |
+| `scripts/health-watcher.sh` | Reads `$HEALTH_ACCESS_PASSWORD`, falling back to `../.env` for cron/systemd runs. |
+
+```bash
+HEALTH_ACCESS_PASSWORD=$(grep '^HEALTH_ACCESS_PASSWORD=' .env | cut -d= -f2-) \
+  ./scripts/verify-deployment.sh
+```
+
+The `/health` page shows a password prompt (green health styling). On success
+the value is kept in **`sessionStorage` only** — it is forgotten when the tab
+closes — and sent as the Bearer header on every health fetch; it is never placed
+in the URL. A wrong password shows an inline error without a redirect, and a
+`401` mid-session clears the stored value and re-locks the page.
 
 ## Job freshness windows (2 / 7 / 15 days)
 

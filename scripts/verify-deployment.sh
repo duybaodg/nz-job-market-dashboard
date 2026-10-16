@@ -11,6 +11,14 @@ set -euo pipefail
 BASE_URL="${1:-http://localhost:5050}"
 fail=0
 
+# Round 13: /api/admin/health is gated by HEALTH_ACCESS_PASSWORD. Send it as an
+# Authorization: Bearer header; when it is unset the endpoint fails closed and
+# the health checks below will report FAIL (which is the correct behaviour).
+HEALTH_AUTH=()
+if [[ -n "${HEALTH_ACCESS_PASSWORD:-}" ]]; then
+  HEALTH_AUTH=(-H "Authorization: Bearer ${HEALTH_ACCESS_PASSWORD}")
+fi
+
 check() {
   local name="$1" url="$2"
   local body
@@ -26,6 +34,12 @@ check() {
 
 echo "Verifying ${BASE_URL} ..."
 echo
+
+if [[ -z "${HEALTH_ACCESS_PASSWORD:-}" ]]; then
+  echo "Note: HEALTH_ACCESS_PASSWORD is unset — the health endpoint fails closed,"
+  echo "      so the crawler-health checks below will report FAIL by design."
+  echo
+fi
 
 check "analytics overview" "${BASE_URL}/api/analytics/overview"
 check "freshness (2/7/15 days)" "${BASE_URL}/api/analytics/freshness"
@@ -257,7 +271,7 @@ print("OK (no bare-k non-pay salary bounds; Potentia iOS misparse is cleared)")
 fi
 
 printf '%-28s ' "crawler health"
-health=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/health" 2>/dev/null || true)
+health=$(curl -fsS --max-time 20 "${HEALTH_AUTH[@]}" "${BASE_URL}/api/admin/health" 2>/dev/null || true)
 if [[ -z "$health" ]]; then
   echo "FAIL"
   fail=1

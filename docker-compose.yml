@@ -22,6 +22,8 @@ services:
     environment:
       ASPNETCORE_URLS: http://+:8080
       DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB:-nz_job_market};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      # Round 13: shared secret gating /api/admin/health. Empty means fail closed.
+      HEALTH_ACCESS_PASSWORD: ${HEALTH_ACCESS_PASSWORD:-}
       AI_EXTRACTION_ENABLED: ${AI_EXTRACTION_ENABLED:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}

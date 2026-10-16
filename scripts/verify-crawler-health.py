@@ -20,17 +20,28 @@ Checks:
 
 Usage:
   ./scripts/verify-crawler-health.py [base-url]   # default http://localhost:5050
+
+Round 13: `/api/admin/health` is protected by the shared secret in
+`HEALTH_ACCESS_PASSWORD`, sent as an `Authorization: Bearer` header. Set that
+environment variable before running (the deployment verify script passes it
+through). With it unset the endpoint fails closed and this script reports 401.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
+import urllib.error
 import urllib.request
 from collections import Counter
 from datetime import datetime, timedelta
 
 BASE_URL = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:5050").rstrip("/")
+
+# The health endpoint requires this; other admin endpoints stay open but the
+# header is harmless for them.
+HEALTH_ACCESS_PASSWORD = os.environ.get("HEALTH_ACCESS_PASSWORD", "").strip()
 
 REMOVED = [
     "Presto Resourcing",
@@ -49,7 +60,10 @@ warnings: list[str] = []
 
 
 def fetch(path: str):
-    with urllib.request.urlopen(f"{BASE_URL}{path}", timeout=30) as response:
+    request = urllib.request.Request(f"{BASE_URL}{path}")
+    if HEALTH_ACCESS_PASSWORD:
+        request.add_header("Authorization", f"Bearer {HEALTH_ACCESS_PASSWORD}")
+    with urllib.request.urlopen(request, timeout=30) as response:
         return json.load(response)
 
 
@@ -243,4 +257,14 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except urllib.error.HTTPError as error:
+        if error.code == 429:
+            hint = "Too many failed attempts — wait five minutes, then retry with HEALTH_ACCESS_PASSWORD."
+        elif error.code == 401:
+            hint = "Set HEALTH_ACCESS_PASSWORD to the shared health secret."
+        else:
+            hint = ""
+        print(f"FAIL: {error.url} returned HTTP {error.code}. {hint}".rstrip())
+        raise SystemExit(1)
