@@ -97,6 +97,44 @@ else
   fail=1
 fi
 
+printf '%-28s ' "Round 12 removals retired"
+# Eight sources were deleted from the registry; the startup sync must leave no
+# live row enabled (they are retired, not deleted, so historical jobs keep a
+# source label).
+if echo "${sources:-[]}" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+removed = ["Presto Resourcing", "WorkHere", "Trade Me", "Vista Group",
+           "Summer of Tech", "H2R Technology", "Health NZ Careers", "Jora NZ"]
+enabled = [s["name"] for s in data if s["name"] in removed and s["enabled"]]
+if enabled:
+    print("FAIL (still enabled: " + ", ".join(enabled) + ")")
+    raise SystemExit(1)
+present = [s["name"] for s in data if s["name"] in removed]
+print(f"OK (none enabled; {len(present)} present but disabled)")
+'; then
+  :
+else
+  fail=1
+fi
+
+printf '%-28s ' "Round 12 revivals enabled"
+if echo "${sources:-[]}" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+by_name = {s["name"]: s for s in data}
+problems = [name for name in ("PlaceMe IT", "Talent International NZ")
+            if not by_name.get(name, {}).get("enabled")]
+if problems:
+    print("FAIL (not enabled: " + ", ".join(problems) + ")")
+    raise SystemExit(1)
+print("OK (PlaceMe IT and Talent International NZ enabled)")
+'; then
+  :
+else
+  fail=1
+fi
+
 printf '%-28s ' "employer identity"
 employers=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/employers" 2>/dev/null || true)
 if [[ -z "$employers" ]]; then
