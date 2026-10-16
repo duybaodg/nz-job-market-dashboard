@@ -160,6 +160,85 @@ public sealed class SalaryAuditServiceTests
     }
 
     [Fact]
+    public async Task RunAsync_ignores_a_quantity_even_when_the_stored_value_is_out_of_range()
+    {
+        // "500k" was parsed out of "over 500k users"; the parser had already
+        // dropped the implausible bound, so the audit matches the stored bound.
+        await using var dbContext = CreateDbContext();
+        var job = CreateJob(
+            "Digital Content Manager | Website & Content",
+            "https://talent.army/job-ads/1981996",
+            description: "Day-to-day management of a website with over 500k users.");
+        job.SalaryMin = 500_000m;
+        job.SalaryPeriod = "Year";
+        job.SalarySource = "source";
+        job.SalaryText = "500k";
+        job.SalaryQuestionable = true;
+        job.SalaryQuestionableReason = "lower bound outside the plausible range";
+        dbContext.Jobs.Add(job);
+        await dbContext.SaveChangesAsync();
+
+        var result = await CreateService(dbContext).RunAsync(CancellationToken.None);
+
+        result.NonPaySalaryIgnored.Should().Be(1);
+        job.SalaryMin.Should().BeNull();
+        job.SalaryQuestionableReason.Should().Contain("non-pay token");
+    }
+
+    [Fact]
+    public async Task RunAsync_ignores_a_decimal_thousands_rate()
+    {
+        // "$87.62 k/yr" produced a stored "62 k"; a real "$87,624 ... per year"
+        // later on the page is what should have been read.
+        await using var dbContext = CreateDbContext();
+        var job = CreateJob(
+            "Digital Teaching and Innovation Specialist",
+            "https://www.zeil.com/jobs/job/tcgvz");
+        job.Seniority = "Intermediate";
+        job.SalaryMin = 62_000m;
+        job.SalaryPeriod = "Year";
+        job.SalarySource = "source";
+        job.SalaryText = "62 k";
+        dbContext.Jobs.Add(job);
+        dbContext.RawJobPages.Add(new RawJobPage
+        {
+            Id = Guid.NewGuid(),
+            Source = "ZEIL",
+            Url = job.Url,
+            Markdown = "Starting at $87.62 k/yr Hamilton The salary will begin at $87,624 pro-rata, per year.",
+            CrawledAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
+        var result = await CreateService(dbContext).RunAsync(CancellationToken.None);
+
+        result.NonPaySalaryIgnored.Should().Be(1);
+        job.SalaryMin.Should().BeNull();
+        job.SalaryQuestionable.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RunAsync_upgrades_legacy_rows_cleared_before_the_ignored_marker()
+    {
+        await using var dbContext = CreateDbContext();
+        var job = CreateJob("Digital Content Manager", "https://talent.army/job-ads/1981996");
+        job.SalaryMin = null;
+        job.SalaryMax = null;
+        job.SalaryText = "500k";
+        job.SalarySource = "source";
+        job.SalaryQuestionable = true;
+        job.SalaryQuestionableReason =
+            "lower bound outside the plausible range; advertised salary '500k' ignored: it is a non-pay token";
+        dbContext.Jobs.Add(job);
+        await dbContext.SaveChangesAsync();
+
+        var result = await CreateService(dbContext).RunAsync(CancellationToken.None);
+
+        result.NonPaySalaryIgnored.Should().Be(0);
+        job.SalarySource.Should().Be("ignored");
+    }
+
+    [Fact]
     public async Task RunAsync_is_idempotent()
     {
         await using var dbContext = CreateDbContext();

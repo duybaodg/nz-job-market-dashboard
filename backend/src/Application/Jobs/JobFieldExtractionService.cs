@@ -241,6 +241,14 @@ public sealed class JobFieldExtractionService(
     /// </summary>
     private static bool ApplySalary(Job job)
     {
+        // Round 11: the salary audit marks a non-pay token as "ignored" after it
+        // clears the bogus bounds. Do not re-derive the same value from the
+        // retained text.
+        if (string.Equals(job.SalarySource, "ignored", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         var hasBounds = job.SalaryMin is not null || job.SalaryMax is not null;
         if (hasBounds)
         {

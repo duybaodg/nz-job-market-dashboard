@@ -73,6 +73,34 @@ public sealed class JobFieldExtractionServiceTests
     }
 
     [Fact]
+    public async Task Does_not_re_derive_a_salary_the_audit_marked_as_ignored()
+    {
+        // Round 11: the audit clears the bogus bounds and marks the retained
+        // "64k" text as ignored; the extractor must not resurrect them.
+        await using var dbContext = CreateDbContext();
+        var job = CreateJob(
+            title: "Senior Software Engineer - iOS",
+            location: "Auckland",
+            region: "Auckland",
+            description: "Contract iOS role. Contact +64kayla@potentia.co.nz.");
+        job.SalaryMin = null;
+        job.SalaryMax = null;
+        job.SalaryText = "64k";
+        job.SalarySource = "ignored";
+        job.SalaryQuestionable = true;
+        job.SalaryQuestionableReason = "advertised salary '64k' ignored: it is a non-pay token";
+        dbContext.Jobs.Add(job);
+        await dbContext.SaveChangesAsync();
+
+        var change = new JobFieldExtractionService(dbContext).ApplyDeterministic(job);
+
+        change.Salary.Should().BeFalse();
+        job.SalaryMin.Should().BeNull();
+        job.SalaryMax.Should().BeNull();
+        job.SalarySource.Should().Be("ignored");
+    }
+
+    [Fact]
     public async Task Backfill_is_idempotent()
     {
         await using var dbContext = CreateDbContext();

@@ -49,6 +49,10 @@ public sealed class SalaryAuditService(
         @"^\s*\$?\s*(?:\d{2,3}\s?[kK]|\d{4,6})\s*$",
         RegexOptions.Compiled);
 
+    private static readonly Regex BareAmountValueRegex = new(
+        @"^\s*\$?\s*(?:(?<k>\d{2,3})\s?[kK]|(?<n>\d{4,6}))\s*$",
+        RegexOptions.Compiled);
+
     public async Task<SalaryAuditResult> RunAsync(CancellationToken cancellationToken)
     {
         var jobs = await dbContext.Jobs
@@ -73,14 +77,30 @@ public sealed class SalaryAuditService(
 
         foreach (var job in jobs)
         {
+            // Upgrade rows an earlier audit cleared before the "ignored" marker
+            // existed, so the deterministic extractor no longer re-parses them.
+            if (job.SalaryMin is null && job.SalaryMax is null
+                && (AlreadyNoted(job.SalaryQuestionableReason, "non-pay token")
+                    || AlreadyNoted(job.SalaryQuestionableReason, "below the annual floor"))
+                && !string.Equals(job.SalarySource, "ignored", StringComparison.OrdinalIgnoreCase))
+            {
+                job.SalarySource = "ignored";
+                job.UpdatedAt = DateTime.UtcNow;
+                changed = true;
+            }
+
             pageByUrl.TryGetValue(job.Url, out var page);
             var context = string.Join(
                 "\n",
                 new[] { job.DescriptionText, page?.Markdown, page?.RawHtml }.Where(value => !string.IsNullOrWhiteSpace(value)));
 
             // 1. A bare "NNk"/"NN000" salary text that is really page chrome.
+            //    The parser has already dropped an implausible bound, so read the
+            //    value straight from the text when no bound survives.
+            var salaryAmount = job.SalaryMin ?? job.SalaryMax ?? BareAmountValue(job.SalaryText);
             if (LooksLikeBareAmount(job.SalaryText)
-                && NonPaySalaryEvidence.Matches(context, job.SalaryText))
+                && salaryAmount is { } amount
+                && NonPaySalaryEvidence.Matches(context, job.SalaryText, amount))
             {
                 if (!AlreadyNoted(job.SalaryQuestionableReason, "non-pay token"))
                 {
@@ -152,6 +172,9 @@ public sealed class SalaryAuditService(
         job.SalaryMin = null;
         job.SalaryMax = null;
         job.SalaryPeriod = SalaryPayPeriod.Unknown.ToString();
+        // Mark the retained text as ignored so the deterministic extractor does
+        // not re-derive the same bogus bounds on the next startup.
+        job.SalarySource = "ignored";
         job.SalaryQuestionable = true;
         job.SalaryQuestionableReason = Join(job.SalaryQuestionableReason, reason);
         job.UpdatedAt = DateTime.UtcNow;
@@ -159,6 +182,31 @@ public sealed class SalaryAuditService(
 
     private static bool LooksLikeBareAmount(string? salaryText)
         => !string.IsNullOrWhiteSpace(salaryText) && BareAmountRegex.IsMatch(salaryText);
+
+    /// <summary>
+    /// Reads the numeric value of a bare "NNk"/"NN000" text even when the parser
+    /// dropped it as implausibly large (which is exactly what "500k" does).
+    /// </summary>
+    private static decimal? BareAmountValue(string? salaryText)
+    {
+        if (string.IsNullOrWhiteSpace(salaryText))
+        {
+            return null;
+        }
+
+        var match = BareAmountValueRegex.Match(salaryText);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        if (match.Groups["k"].Success)
+        {
+            return decimal.Parse(match.Groups["k"].Value) * 1000m;
+        }
+
+        return decimal.Parse(match.Groups["n"].Value);
+    }
 
     private static decimal? Midpoint(Domain.Entities.Job job)
     {
@@ -199,7 +247,7 @@ internal static class NonPaySalaryEvidence
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex DecimalThousands = new(
-        @"(?<![\d.])\.(?<n>\d{2,3})\s?[kK]\b",
+        @"(?<!\.)\.(?<n>\d{2,3})\s?[kK]\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex FileSize = new(
@@ -210,15 +258,9 @@ internal static class NonPaySalaryEvidence
         @"(?<![\d.])(?<n>\d{1,4})\s?(?<u>[kKmM]?)\s*(?:users?|followers?|customers?|subscribers?|downloads?|installs?|records?|rows?|employees?|clients?|companies|businesses|students?|members?|visits?|views?|hits?|pages?|results?)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public static bool Matches(string? context, string? salaryText)
+    public static bool Matches(string? context, string? salaryText, decimal amount)
     {
         if (string.IsNullOrWhiteSpace(context) || string.IsNullOrWhiteSpace(salaryText))
-        {
-            return false;
-        }
-
-        var salary = SalaryParser.Parse(salaryText);
-        if (salary.Midpoint is not { } amount)
         {
             return false;
         }
