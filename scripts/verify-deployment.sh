@@ -98,20 +98,19 @@ else
 fi
 
 printf '%-28s ' "Round 12 removals retired"
-# Eight sources were deleted from the registry; the startup sync must leave no
-# live row enabled (they are retired, not deleted, so historical jobs keep a
-# source label).
+# Eight sources were deleted from the registry; they must disappear from the
+# current-registry list (they are retired, not deleted, so historical jobs keep
+# a source label, but retirement is tracked separately from "disabled").
 if echo "${sources:-[]}" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
 removed = ["Presto Resourcing", "WorkHere", "Trade Me", "Vista Group",
            "Summer of Tech", "H2R Technology", "Health NZ Careers", "Jora NZ"]
-enabled = [s["name"] for s in data if s["name"] in removed and s["enabled"]]
-if enabled:
-    print("FAIL (still enabled: " + ", ".join(enabled) + ")")
-    raise SystemExit(1)
 present = [s["name"] for s in data if s["name"] in removed]
-print(f"OK (none enabled; {len(present)} present but disabled)")
+if present:
+    print("FAIL (still in the current registry: " + ", ".join(present) + ")")
+    raise SystemExit(1)
+print("OK (all 8 absent from the current registry)")
 '; then
   :
 else
@@ -268,13 +267,28 @@ import json, sys
 data = json.load(sys.stdin)
 order = ["healthy", "degraded", "stale", "empty", "disabled", "never-run"]
 counts = {state: sum(1 for source in data["sources"] if source["state"] == state) for state in order}
-print("OK (" + ", ".join(state + "=" + str(counts[state]) for state in order) + ")")
+print("OK (" + ", ".join(state + "=" + str(counts[state]) for state in order)
+      + ", retired=" + str(data["summary"].get("retired", 0)) + ")")
 for state in ("degraded", "stale"):
     names = [source["source"] for source in data["sources"] if source["state"] == state]
     if names:
         print("  " + state + ": " + ", ".join(names))
-print("  total sources: " + str(data["summary"]["totalSources"]))
+print("  current-registry sources: " + str(data["summary"]["totalSources"]))
 '
+fi
+
+printf '%-28s ' "health reconciliation"
+if command -v python3 >/dev/null 2>&1 && [[ -f "$(dirname "$0")/verify-crawler-health.py" ]]; then
+  if python3 "$(dirname "$0")/verify-crawler-health.py" "$BASE_URL" >/tmp/verify-crawler-health.out 2>&1; then
+    echo "OK"
+    sed 's/^/  /' /tmp/verify-crawler-health.out
+  else
+    echo "FAIL"
+    sed 's/^/  /' /tmp/verify-crawler-health.out
+    fail=1
+  fi
+else
+  echo "SKIP (verify-crawler-health.py not found)"
 fi
 
 printf '%-28s ' "skill extraction"

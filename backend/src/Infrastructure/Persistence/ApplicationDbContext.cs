@@ -159,6 +159,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(source => source.CrawlFrequencyMinutes).HasColumnName("crawl_frequency_minutes");
             entity.Property(source => source.LastCrawledAt).HasColumnName("last_crawled_at");
             entity.Property(source => source.TermsCheckedAt).HasColumnName("terms_checked_at");
+            entity.Property(source => source.RetiredAt).HasColumnName("retired_at");
             entity.Property(source => source.CreatedAt).HasColumnName("created_at");
             entity.Property(source => source.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(source => source.Name).IsUnique();

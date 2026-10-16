@@ -169,7 +169,14 @@ export type Freshness = {
   deduplication: DeduplicationSummary
 }
 
-export type SourceHealthState = 'healthy' | 'empty' | 'degraded' | 'stale' | 'disabled' | 'never-run'
+export type SourceHealthState =
+  | 'healthy'
+  | 'empty'
+  | 'degraded'
+  | 'stale'
+  | 'disabled'
+  | 'never-run'
+  | 'retired'
 
 export type SourceHealth = {
   source: string
@@ -194,6 +201,7 @@ export type HealthSummary = {
   empty: number
   disabled: number
   neverRun: number
+  retired: number
   totalSources: number
 }
 
@@ -201,6 +209,7 @@ export type HealthReport = {
   generatedAt: string
   summary: HealthSummary
   sources: SourceHealth[]
+  retiredSources: SourceHealth[]
 }
 
 export type SnapshotCoverage = {

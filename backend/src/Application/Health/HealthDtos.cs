@@ -22,9 +22,11 @@ public sealed record HealthSummaryDto(
     int Empty,
     int Disabled,
     int NeverRun,
+    int Retired,
     int TotalSources);
 
 public sealed record HealthReportDto(
     DateTime GeneratedAt,
     HealthSummaryDto Summary,
-    IReadOnlyList<SourceHealthDto> Sources);
+    IReadOnlyList<SourceHealthDto> Sources,
+    IReadOnlyList<SourceHealthDto> RetiredSources);

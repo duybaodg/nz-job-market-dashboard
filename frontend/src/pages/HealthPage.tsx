@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { CircleSlash, Clock, HeartPulse, PackageOpen, ShieldAlert } from 'lucide-react'
+import { Archive, CircleSlash, Clock, HeartPulse, PackageOpen, ShieldAlert } from 'lucide-react'
 import { AppSidebar } from '../components/layout/AppSidebar'
 import { StatCard } from '../components/dashboard/StatCard'
 import { SourceHealthTable } from '../components/health/SourceHealthTable'
@@ -42,6 +42,7 @@ export function HealthPage() {
           <StatCard icon={Clock} label="Stale" value={summary?.stale ?? 0} detail="Overdue by 3x frequency" />
           <StatCard icon={PackageOpen} label="Empty" value={summary?.empty ?? 0} detail="Healthy but no IT roles" />
           <StatCard icon={CircleSlash} label="Disabled" value={summary?.disabled ?? 0} detail="Off in the registry" />
+          <StatCard icon={Archive} label="Retired" value={summary?.retired ?? 0} detail="Removed from registry" />
         </section>
 
         <section className="panel jobs-panel" id="sources">

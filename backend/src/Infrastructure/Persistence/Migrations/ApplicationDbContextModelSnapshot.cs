@@ -626,6 +626,10 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("parser");
 
+                    b.Property<DateTime?>("RetiredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("retired_at");
+
                     b.Property<DateTime?>("TermsCheckedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("terms_checked_at");

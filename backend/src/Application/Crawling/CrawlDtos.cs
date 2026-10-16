@@ -53,4 +53,5 @@ public sealed record JobSourceDto(
     bool Enabled,
     int CrawlFrequencyMinutes,
     DateTime? LastCrawledAt,
-    DateTime? TermsCheckedAt);
+    DateTime? TermsCheckedAt,
+    DateTime? RetiredAt);

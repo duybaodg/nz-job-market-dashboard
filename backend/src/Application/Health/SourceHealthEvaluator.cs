@@ -1,6 +1,6 @@
 namespace Application.Health;
 
-/// <summary>The six crawler-health states surfaced by GET /api/admin/health.</summary>
+/// <summary>The crawler-health states surfaced by GET /api/admin/health.</summary>
 public static class SourceHealthState
 {
     public const string Healthy = "healthy";
@@ -9,6 +9,8 @@ public static class SourceHealthState
     public const string Stale = "stale";
     public const string Disabled = "disabled";
     public const string NeverRun = "never-run";
+    /// <summary>Removed from the registry; kept only for historical provenance.</summary>
+    public const string Retired = "retired";
 }
 
 /// <summary>A terminal crawl run reduced to the fields the state machine needs.</summary>

@@ -63,8 +63,10 @@ the 2/7/15-day windows. On an older image those last two checks fail, which is
 how you can tell a rebuild is still pending.
 
 After the rebuild the worker reconciles `job_sources` with
-`crawler/sources/sites.json` on startup and retires hub/landing-page records left
-by earlier versions.
+`crawler/sources/sites.json` on startup: new sites are inserted, retired sites are
+stamped `retired_at` (disabled and hidden from `/api/admin/sources` and the
+crawler-health report, but kept so historical jobs keep a source label), and a
+site that returns to the registry is revived.
 
 ## Crawling new data
 

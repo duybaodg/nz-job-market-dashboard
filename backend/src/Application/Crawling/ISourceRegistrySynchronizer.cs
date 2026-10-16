@@ -16,5 +16,6 @@ public interface ISourceRegistrySynchronizer
 public sealed record SourceSyncResult(
     int Inserted,
     int Updated,
-    int Disabled,
+    int Retired,
+    int Revived,
     int RegistryEntries);

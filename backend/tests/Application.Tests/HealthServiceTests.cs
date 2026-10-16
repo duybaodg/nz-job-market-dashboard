@@ -1,4 +1,5 @@
 using Application.Health;
+using Application.Jobs;
 using Domain.Entities;
 using FluentAssertions;
 using Infrastructure.Persistence;
@@ -112,7 +113,7 @@ public sealed class HealthServiceTests
     public void HealthReportCache_expires_at_the_thirty_second_boundary()
     {
         var cache = new HealthReportCache();
-        var report = new HealthReportDto(Now, new HealthSummaryDto(0, 0, 0, 0, 0, 0, 0), []);
+        var report = new HealthReportDto(Now, new HealthSummaryDto(0, 0, 0, 0, 0, 0, 0, 0), [], []);
         cache.Set(Now, report, TimeSpan.FromSeconds(30));
 
         cache.TryGet(Now.AddSeconds(29.999), out var fresh).Should().BeTrue();
@@ -125,7 +126,67 @@ public sealed class HealthServiceTests
         cache.TryGet(Now, out _).Should().BeFalse();
     }
 
-    private static JobSource Source(string name, bool enabled, DateTime? lastCrawledAt, int frequencyMinutes = 1440) => new()
+    [Fact]
+    public async Task ComputeAsync_moves_registry_removals_to_the_retired_bucket()
+    {
+        // Regression for the live divergence: rows removed from sites.json were
+        // left as ordinary 'disabled' rows, so the health report kept returning
+        // them and its totals did not match the current registry.
+        await using var dbContext = CreateDbContext();
+        dbContext.JobSources.AddRange(
+            Source("Current", enabled: true, lastCrawledAt: Now.AddHours(-1)),
+            Source("Gone", enabled: false, lastCrawledAt: Now.AddDays(-3), retiredAt: Now.AddDays(-1)));
+        dbContext.CrawlRuns.Add(Run("Gone", "Completed", Now.AddDays(-3), found: 2));
+        dbContext.Jobs.AddRange(Job("Current", active: true), Job("Gone", active: true));
+        await dbContext.SaveChangesAsync();
+
+        var report = await new HealthService(dbContext, new HealthReportCache()).ComputeAsync(Now, CancellationToken.None);
+
+        report.Sources.Select(source => source.Source).Should().NotContain("Gone");
+        report.Sources.Should().ContainSingle(source => source.Source == "Current");
+        report.RetiredSources.Should().ContainSingle(source => source.Source == "Gone");
+        report.RetiredSources.Single().State.Should().Be(SourceHealthState.Retired);
+        report.RetiredSources.Single().DegradeReason.Should().Contain("Removed from the source registry");
+        report.Summary.Retired.Should().Be(1);
+        report.Summary.TotalSources.Should().Be(1);
+        report.Sources.Should().HaveCount(report.Summary.TotalSources);
+    }
+
+    [Fact]
+    public async Task ComputeAsync_jobsYielded_matches_the_active_jobs_feed_per_source()
+    {
+        // The health tab must not disagree with the live jobs feed. Both read
+        // active jobs, so the per-source counts have to be identical.
+        await using var dbContext = CreateDbContext();
+        dbContext.JobSources.AddRange(
+            Source("Acme", enabled: true, lastCrawledAt: Now.AddHours(-1)),
+            Source("Beta", enabled: true, lastCrawledAt: Now.AddHours(-1)));
+        dbContext.Jobs.AddRange(
+            Job("Acme", active: true),
+            Job("Acme", active: true),
+            Job("Acme", active: false),
+            Job("Beta", active: true));
+        await dbContext.SaveChangesAsync();
+
+        var report = await new HealthService(dbContext, new HealthReportCache()).ComputeAsync(Now, CancellationToken.None);
+        var feed = await new JobService(dbContext).GetJobsAsync(
+            new JobListQuery(null, null, null, null, null),
+            CancellationToken.None);
+
+        var feedCounts = feed
+            .GroupBy(job => job.Source, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in report.Sources)
+        {
+            entry.JobsYielded.Should().Be(feedCounts.TryGetValue(entry.Source, out var count) ? count : 0, entry.Source);
+        }
+
+        report.Sources.Where(entry => entry.JobsYielded > 0).Select(entry => entry.Source)
+            .Should().BeEquivalentTo(feedCounts.Keys);
+    }
+
+    private static JobSource Source(string name, bool enabled, DateTime? lastCrawledAt, int frequencyMinutes = 1440, DateTime? retiredAt = null) => new()
     {
         Id = Guid.NewGuid(),
         Name = name,
@@ -135,6 +196,7 @@ public sealed class HealthServiceTests
         Enabled = enabled,
         CrawlFrequencyMinutes = frequencyMinutes,
         LastCrawledAt = lastCrawledAt,
+        RetiredAt = retiredAt,
         CreatedAt = Now.AddDays(-30),
         UpdatedAt = Now.AddDays(-30)
     };

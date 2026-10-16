@@ -9,7 +9,8 @@ const stateRank: Record<SourceHealthState, number> = {
   'never-run': 2,
   empty: 3,
   disabled: 4,
-  healthy: 5,
+  retired: 5,
+  healthy: 6,
 }
 
 const stateLabels: Record<SourceHealthState, string> = {
@@ -19,7 +20,12 @@ const stateLabels: Record<SourceHealthState, string> = {
   stale: 'Stale',
   disabled: 'Disabled',
   'never-run': 'Never run',
+  retired: 'Retired',
 }
+
+// Retired rows live in their own bucket on the report, never in the active
+// source list this table renders, so they are not a filter option here.
+const activeStates = (Object.keys(stateLabels) as SourceHealthState[]).filter((state) => state !== 'retired')
 
 type SortKey = 'state' | 'source' | 'jobs' | 'lastCrawl' | 'failures' | 'zeroYield'
 type SortDirection = 'asc' | 'desc'
@@ -97,7 +103,7 @@ export function SourceHealthTable({ sources }: SourceHealthTableProps) {
           <span>Filter by state</span>
           <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value as 'all' | SourceHealthState)}>
             <option value="all">All states ({sources.length})</option>
-            {(Object.keys(stateLabels) as SourceHealthState[]).map((state) => (
+            {activeStates.map((state) => (
               <option key={state} value={state}>
                 {stateLabels[state]} ({sources.filter((source) => source.state === state).length})
               </option>

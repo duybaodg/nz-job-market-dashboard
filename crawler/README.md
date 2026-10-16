@@ -191,9 +191,13 @@ query URLs), and SEEK is read from listing pages only (its robots.txt disallows
 | `tools/generate_source_migration.py --write` | Render the EF Core seed migration for `job_sources` from the registry. `--check` fails if they drift. |
 
 The API and worker also run a **registry sync at startup** (`SourceRegistrySynchronizer`):
-`job_sources` is reconciled with `sites.json` (insert/update/disable) on every boot, so
-adding or retuning a site is a registry edit plus a restart — no new migration needed.
-The seed migration remains for a fresh database.
+`job_sources` is reconciled with `sites.json` (insert/update/disable/retire) on every
+boot, so adding or retuning a site is a registry edit plus a restart — no new
+migration needed. A row absent from the registry is **retired** (`retired_at` set,
+`enabled=false`) rather than deleted, so historical jobs keep their source label
+while `/api/admin/sources` and `/api/admin/health` show only the current registry;
+a row that returns to the registry is revived. The seed migration remains for a
+fresh database.
 
 Re-run the probe when site markup changes:
 

@@ -110,6 +110,7 @@ public sealed class HealthService(IApplicationDbContext dbContext, HealthReportC
                 StringComparer.OrdinalIgnoreCase);
 
         var entries = new List<SourceHealthDto>(sources.Count);
+        var retiredEntries = new List<SourceHealthDto>();
 
         foreach (var source in sources)
         {
@@ -125,7 +126,12 @@ public sealed class HealthService(IApplicationDbContext dbContext, HealthReportC
                     sourceRuns),
                 now);
 
-            entries.Add(new SourceHealthDto(
+            // A row removed from the registry is retired rather than disabled.
+            // It is reported in a separate bucket so the active list (and the
+            // state counts) reflect only the current registry.
+            var isRetired = source.RetiredAt.HasValue;
+
+            var entry = new SourceHealthDto(
                 source.Name,
                 source.Enabled,
                 source.Parser,
@@ -136,9 +142,20 @@ public sealed class HealthService(IApplicationDbContext dbContext, HealthReportC
                 evaluation.ConsecutiveFailures,
                 evaluation.ConsecutiveZeroYield,
                 jobsYielded,
-                evaluation.State,
-                evaluation.DegradeReason,
-                source.CrawlFrequencyMinutes));
+                isRetired ? SourceHealthState.Retired : evaluation.State,
+                isRetired
+                    ? $"Removed from the source registry on {source.RetiredAt:yyyy-MM-dd}."
+                    : evaluation.DegradeReason,
+                source.CrawlFrequencyMinutes);
+
+            if (isRetired)
+            {
+                retiredEntries.Add(entry);
+            }
+            else
+            {
+                entries.Add(entry);
+            }
         }
 
         var summary = new HealthSummaryDto(
@@ -148,8 +165,9 @@ public sealed class HealthService(IApplicationDbContext dbContext, HealthReportC
             entries.Count(entry => entry.State == SourceHealthState.Empty),
             entries.Count(entry => entry.State == SourceHealthState.Disabled),
             entries.Count(entry => entry.State == SourceHealthState.NeverRun),
+            retiredEntries.Count,
             entries.Count);
 
-        return new HealthReportDto(now, summary, entries);
+        return new HealthReportDto(now, summary, entries, retiredEntries);
     }
 }

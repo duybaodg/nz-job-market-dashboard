@@ -23,14 +23,14 @@ public sealed class SourceRegistrySynchronizer(
         if (path is null)
         {
             logger.LogWarning("Crawler source registry was not found; skipping job_sources sync.");
-            return new SourceSyncResult(0, 0, 0, 0);
+            return new SourceSyncResult(0, 0, 0, 0, 0);
         }
 
         var sites = SourceRegistryReader.Load(path);
         if (sites.Count == 0)
         {
             logger.LogWarning("Registry {Path} has no 'sites' entries; skipping sync.", path);
-            return new SourceSyncResult(0, 0, 0, 0);
+            return new SourceSyncResult(0, 0, 0, 0, 0);
         }
 
         var existing = await dbContext.JobSources.ToListAsync(cancellationToken);
@@ -39,6 +39,7 @@ public sealed class SourceRegistrySynchronizer(
         var now = DateTime.UtcNow;
         var inserted = 0;
         var updated = 0;
+        var revived = 0;
 
         foreach (var site in sites)
         {
@@ -58,12 +59,16 @@ public sealed class SourceRegistrySynchronizer(
 
             if (byName.TryGetValue(site.Name, out var entity))
             {
+                // A row that is back in the registry is no longer retired, even
+                // if the registry keeps it disabled for review.
+                var wasRetired = entity.RetiredAt.HasValue;
                 var changed =
                     entity.BaseUrl != baseUrl ||
                     entity.Parser != parser ||
                     entity.Category != category ||
                     entity.Enabled != enabled ||
                     entity.CrawlFrequencyMinutes != frequency ||
+                    wasRetired ||
                     !string.Equals(entity.Method, "Scrapling", StringComparison.Ordinal);
 
                 entity.BaseUrl = baseUrl;
@@ -73,6 +78,12 @@ public sealed class SourceRegistrySynchronizer(
                 entity.Method = "Scrapling";
                 entity.CrawlFrequencyMinutes = frequency;
                 entity.TermsCheckedAt ??= termsCheckedAt;
+                if (wasRetired)
+                {
+                    entity.RetiredAt = null;
+                    revived++;
+                }
+
                 if (changed)
                 {
                     entity.UpdatedAt = now;
@@ -99,26 +110,31 @@ public sealed class SourceRegistrySynchronizer(
             }
         }
 
-        // Anything enabled in the database but absent from the registry is retired.
-        var disabled = 0;
-        foreach (var entity in existing.Where(source => source.Enabled && !registryNames.Contains(source.Name)))
+        // Anything absent from the registry is retired: disabled AND stamped
+        // with retired_at. retired_at is what distinguishes it from a source the
+        // registry deliberately keeps disabled, so the health report can show
+        // only the current registry while the historical rows stay in place.
+        var retired = 0;
+        foreach (var entity in existing.Where(source => !registryNames.Contains(source.Name) && !source.RetiredAt.HasValue))
         {
             entity.Enabled = false;
+            entity.RetiredAt = now;
             entity.UpdatedAt = now;
-            disabled++;
+            retired++;
         }
 
-        if (inserted + updated + disabled > 0)
+        if (inserted + updated + retired + revived > 0)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         logger.LogInformation(
-            "Source registry sync: {Inserted} inserted, {Updated} updated, {Disabled} retired, {Total} registry entries",
+            "Source registry sync: {Inserted} inserted, {Updated} updated, {Retired} retired, {Revived} revived, {Total} registry entries",
             inserted,
             updated,
-            disabled,
+            retired,
+            revived,
             sites.Count);
-        return new SourceSyncResult(inserted, updated, disabled, sites.Count);
+        return new SourceSyncResult(inserted, updated, retired, revived, sites.Count);
     }
 }

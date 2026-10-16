@@ -206,6 +206,9 @@ public sealed class CrawlerOrchestrationService(
     {
         return await dbContext.JobSources
             .AsNoTracking()
+            // Retired rows are kept for historical jobs but are not part of the
+            // current registry, so they never surface in the admin source list.
+            .Where(source => source.RetiredAt == null)
             .OrderBy(source => source.Name)
             .Select(source => new JobSourceDto(
                 source.Id,
@@ -216,7 +219,8 @@ public sealed class CrawlerOrchestrationService(
                 source.Enabled,
                 source.CrawlFrequencyMinutes,
                 source.LastCrawledAt,
-                source.TermsCheckedAt))
+                source.TermsCheckedAt,
+                source.RetiredAt))
             .ToListAsync(cancellationToken);
     }
 
