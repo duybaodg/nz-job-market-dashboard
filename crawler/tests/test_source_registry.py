@@ -120,6 +120,30 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertEqual("http", talent["fetcher"])
         self.assertTrue(talent["robotsAllows"])
 
+    def test_round13_revives_student_job_search_with_the_class_filter(self) -> None:
+        # Round 13 addendum: the old /job-seeker/jobs URL rendered an empty
+        # shell. The Next.js board is revived on the class-filtered URL, which
+        # IS the ICT filter and is allowed for generic agents by robots.txt.
+        sjs = lookup_source("Student Job Search")
+
+        self.assertIsNotNone(sjs)
+        self.assertTrue(sjs["enabled"])
+        self.assertEqual(
+            "https://www.sjs.co.nz/job-seeker/jobs?class=information-communication-technology",
+            sjs["jobs_url"],
+        )
+        self.assertEqual("dynamic", sjs["strategy"])
+        self.assertEqual("dynamic", sjs["fetcher"])
+        self.assertEqual("generic", sjs["parser"])
+        self.assertTrue(sjs["robotsAllows"])
+        # The detail pages carry no JobPosting JSON-LD, so only /job-details/
+        # candidates are wanted and the sitemap probe is skipped.
+        self.assertEqual("/job-details/", sjs["jobUrlContains"])
+        self.assertIn("JobCard_jobCard", sjs["renderWaitSelector"])
+        self.assertTrue(sjs["skipSitemap"])
+        self.assertIn("IndeedJobBot", sjs["notes"])
+        self.assertIn("User-Agent: *", sjs["notes"])
+
     def test_title_from_url_produces_readable_fallback(self) -> None:
         self.assertEqual(
             "Senior Software Engineer",
@@ -527,6 +551,60 @@ class JobQualityFilterTests(unittest.TestCase):
 
         self.assertEqual("Senior SOC Analyst - Incident Response", job.title)
         self.assertIn("Splunk", job.descriptionText or "")
+
+    def test_generic_detail_prefers_listing_title_over_placeholder_page_title(self) -> None:
+        # Student Job Search's Next.js detail route leaves "Job Details" as the
+        # document title and puts the real role in the rendered <h3>, so the
+        # listing card's anchor text must win.
+        from adapters.scrapling.scrapling_worker import parse_job_detail
+
+        html = (
+            "<html><head><title>Job Details | Student Job Search NZ</title></head>"
+            "<body><h3>AI Systems Builder</h3>"
+            "<p>Build practical AI, automation and software solutions.</p></body></html>"
+        )
+        job = parse_job_detail(
+            "Student Job Search",
+            "https://www.sjs.co.nz/job-details/43127/ai-systems-builder-6907",
+            html,
+            "Job Details AI Systems Builder Build practical AI, automation and software solutions.",
+            "AI Systems Builder",
+            "generic",
+        )
+
+        self.assertEqual("AI Systems Builder", job.title)
+        self.assertIn("automation", job.descriptionText or "")
+
+    def test_generic_detail_prefers_listing_title_over_breadcrumb_text(self) -> None:
+        # The rendered page can omit <title>/<h1>; extract_title then falls back
+        # to the first 80 characters of the page text, which starts with the
+        # "See more results" back-link. The listing title is still correct.
+        from adapters.scrapling.scrapling_worker import parse_job_detail
+
+        html = (
+            "<html><body><h3>Junior DevOps Engineer</h3>"
+            "<p>Support the platform team with Docker and Kubernetes.</p></body></html>"
+        )
+        job = parse_job_detail(
+            "Student Job Search",
+            "https://www.sjs.co.nz/job-details/1603/junior-devops-engineer-0025",
+            html,
+            "See more results Acme Ltd Junior DevOps Engineer Auckland",
+            "Junior DevOps Engineer",
+            "generic",
+        )
+
+        self.assertEqual("Junior DevOps Engineer", job.title)
+
+    def test_extract_label_stops_before_date_labels(self) -> None:
+        # Student Job Search renders "Employer: X Date Posted: ... Date
+        # Expires: ...", which used to leave a trailing " Date" on the company.
+        from adapters.scrapling.scrapling_worker import extract_label
+
+        text = "Employer: Robinson Group Limited Date Posted: Oct 7, 2026 Date Expires: Dec 1, 2026"
+        self.assertEqual("Robinson Group Limited", extract_label(text, "Employer"))
+        self.assertEqual("Acme Ltd", extract_label("Company: Acme Ltd Location: Auckland", "Company"))
+
 
     def test_structured_location_handles_country_objects(self) -> None:
         location = structured_location(

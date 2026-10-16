@@ -53,7 +53,7 @@ REMOVED = [
     "Health NZ Careers",
     "Jora NZ",
 ]
-REVIVED = ["PlaceMe IT", "Talent International NZ"]
+REVIVED = ["PlaceMe IT", "Talent International NZ", "Student Job Search"]
 
 problems: list[str] = []
 warnings: list[str] = []

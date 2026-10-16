@@ -148,6 +148,32 @@ else
   fail=1
 fi
 
+printf '%-28s ' "Round 13 SJS revival"
+# Round 13 addendum: Student Job Search is back on the filtered Next.js board.
+# The ?class=information-communication-technology query IS the ICT filter and
+# robots.txt allows it for generic agents, so the query must be kept verbatim.
+if echo "${sources:-[]}" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+sjs = next((s for s in data if s["name"] == "Student Job Search"), None)
+problems = []
+if sjs is None:
+    problems.append("missing from the registry")
+else:
+    if not sjs.get("enabled"):
+        problems.append("not enabled")
+    if "class=information-communication-technology" not in (sjs.get("baseUrl") or ""):
+        problems.append("ICT class filter missing from baseUrl")
+if problems:
+    print("FAIL (" + "; ".join(problems) + ")")
+    raise SystemExit(1)
+print("OK (Student Job Search enabled with the ICT class filter)")
+'; then
+  :
+else
+  fail=1
+fi
+
 printf '%-28s ' "employer identity"
 employers=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/employers" 2>/dev/null || true)
 if [[ -z "$employers" ]]; then

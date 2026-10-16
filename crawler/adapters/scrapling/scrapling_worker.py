@@ -215,6 +215,20 @@ HUB_TITLE_RE = re.compile(
 )
 
 
+#: Placeholder page titles a JavaScript job board leaves on its detail route
+#: before (or instead of) the role name. Student Job Search's Next.js detail
+#: pages title the document "Job Details" or prepend a "See more results"
+#: back-link breadcrumb, while the real title lives in the rendered <h3>. When
+#: the listing gave us the card's anchor text, prefer that over these strings.
+GENERIC_DETAIL_TITLE_RE = re.compile(
+    r"""(?ix)
+    ^\s*(?:see\s+more(?:\s+results)?|view\s+(?:job|details?)|job\s+details?
+        |job\s+description|apply(?:\s+now)?|back\s+to\s+(?:jobs|results?)
+        |share\s+(?:this\s+)?job|print\s+(?:this\s+)?job|loading)\b
+    """
+)
+
+
 def is_plausible_job_title(title: str | None, source: str | None = None) -> bool:
     """Reject navigation/hub-page titles that look like jobs to a keyword filter.
 
@@ -599,7 +613,11 @@ def extract_label(text: str, label: str) -> str | None:
         rf"(?:\*\*)?{label}(?:\*\*)?\s*:\s*(.+?)"
         r"(?:\s+(?:Category|Type|Apply|Sector|Posted|Work|Job|Employ|Salary|Location|"
         r"Discipline|Reference|Industry|Contact(?:\s+name)?|Career\s+growth|"
-        r"Closing\s+date|Department):|$)",
+        # "Date" alone and "Date Posted"/"Date Expires" are stop labels: Student
+        # Job Search renders "Employer: X Date Posted: ... Date Expires: ...",
+        # which previously left a trailing " Date" on every company name.
+        r"Closing\s+date|Department|Date(?:\s+(?:Posted|Expires|Listed|Updated|Closes?))?"
+        r"):|$)",
         text,
         re.I,
     )
@@ -1395,13 +1413,25 @@ def fetch_with_scrapling(
     if args.proxy_url:
         fetch_kwargs["proxy"] = args.proxy_url
 
+    # A registry ``renderWaitSelector`` overrides the network-idle default for
+    # boards that never reach idle. Student Job Search keeps long-lived
+    # analytics/Maps connections open, so waiting for network silence cost ~40 s
+    # per page and still raced the job-data XHR; waiting for the rendered card or
+    # detail container returns as soon as the content exists.
+    source_config = lookup_source(getattr(args, "source", None)) or {}
+    wait_selector = str(source_config.get("renderWaitSelector") or "").strip()
+
     is_dynamic = mode in ("dynamic", "stealth")
     if is_dynamic:
         fetch_kwargs.setdefault("headless", True)
         # Wait for the SPA's network to settle. Several boards (Robert Walters,
         # Datacom, ZEIL) only render the posting list after their XHR finishes;
         # an early snapshot looks empty and is easily mistaken for a bot block.
-        fetch_kwargs.setdefault("network_idle", True)
+        if wait_selector:
+            fetch_kwargs["network_idle"] = False
+            fetch_kwargs["wait_selector"] = wait_selector
+        else:
+            fetch_kwargs.setdefault("network_idle", True)
         fetch_kwargs.setdefault(
             "timeout", max(int(getattr(args, "browser_timeout", 45) or 45), 45) * 1000
         )
@@ -1626,10 +1656,22 @@ def parse_job_detail(
 
     parsed = parse_jobs(source, url, html, text)
     detail = parsed[0]
-    title = extract_title(html, text)
-    if title == "Untitled job" or len(title) > 160:
-        title = fallback_title
-    title = clean_job_title(title, source)
+    extracted = clean_job_title(extract_title(html, text), source)
+    fallback = clean_job_title(fallback_title, source) if fallback_title else ""
+    # A Next.js detail route can leave a placeholder document title ("Job
+    # Details") or a concatenated back-link breadcrumb as the page title even
+    # though the listing card already carried the real role name. Prefer the
+    # listing title when the page title is one of those placeholders; a page
+    # <h1> (the Talent International case) is still trusted over the fallback.
+    if fallback and (
+        not extracted
+        or extracted == "Untitled job"
+        or len(extracted) > 160
+        or GENERIC_DETAIL_TITLE_RE.search(extracted)
+    ):
+        title = fallback
+    else:
+        title = extracted
 
     return RawJobInput(
         source=source,
@@ -3091,11 +3133,18 @@ def crawl(
     # JavaScript but publish a static XML sitemap of their openings.
     sitemap_candidates: dict[str, str] = {}
     strategy = str(source_config.get("strategy") or "")
-    if (
+    # A registry ``skipSitemap`` disables the sitemap probe. Some dynamic boards
+    # (Student Job Search) publish a sitemap that contains no job-details and
+    # whose probe URLs never match the render selector, so probing it only added
+    # four timeout waits per crawl.
+    discover_via_sitemap = (
         getattr(args, "use_sitemap", False)
         or strategy in ("sitemap-html", "dynamic")
         or parser == "jsonld"
-    ):
+    )
+    if source_config.get("skipSitemap"):
+        discover_via_sitemap = False
+    if discover_via_sitemap:
         try:
             for job_url in discover_sitemap_job_urls(
                 args.url,

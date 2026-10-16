@@ -97,7 +97,7 @@ public sealed class SeedFullSourceRegistry : Migration
              NOW(), NOW(), NOW()),
             ('07bae331-4210-55e9-85f4-d3139b348315', 'Prosple NZ', 'https://nz.prosple.com/graduate-jobs', 'Scrapling', 'generic', FALSE, 1440,
              NOW(), NOW(), NOW()),
-            ('7abd9d4e-34e0-5968-845d-2f816c99e62e', 'Student Job Search', 'https://www.sjs.co.nz/job-seeker/jobs', 'Scrapling', 'generic', FALSE, 1440,
+            ('7abd9d4e-34e0-5968-845d-2f816c99e62e', 'Student Job Search', 'https://www.sjs.co.nz/job-seeker/jobs?class=information-communication-technology', 'Scrapling', 'generic', TRUE, 1440,
              NOW(), NOW(), NOW()),
             ('8d32b40a-545e-5ded-b8de-179ab0d31dd0', 'ANZ NZ', 'https://careers.anz.com/search/?q=technology&locationsearch=New+Zealand', 'Scrapling', 'pageup', TRUE, 1440,
              NOW(), NOW(), NOW()),
