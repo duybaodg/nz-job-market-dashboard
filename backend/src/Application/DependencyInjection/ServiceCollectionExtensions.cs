@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IJobQualityGuard, JobQualityGuard>();
         services.AddScoped<ISkillBackfillService, SkillBackfillService>();
         services.AddScoped<IJobFieldExtractionService, JobFieldExtractionService>();
+        services.AddScoped<ISalaryAuditService, SalaryAuditService>();
         services.AddScoped<IAiFieldEnrichmentService, AiFieldEnrichmentService>();
         services.AddScoped<ICoverageService, CoverageService>();
         services.AddScoped<ICrawlDataRetentionService, CrawlDataRetentionService>();

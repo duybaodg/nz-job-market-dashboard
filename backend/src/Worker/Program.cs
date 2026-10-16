@@ -29,6 +29,10 @@ using (var scope = host.Services.CreateScope())
     // Round 9: deterministic deep extraction for work mode, seniority,
     // employment type and salary. Only fills blanks; idempotent.
     await scope.ServiceProvider.GetRequiredService<IJobFieldExtractionService>().BackfillAsync(CancellationToken.None);
+    // Round 11: re-flag salaries lifted from non-pay page tokens (contact
+    // strings, file sizes, quantities) and low annual pay for Senior/Lead
+    // titles, and clear below-floor annual rows. Idempotent.
+    await scope.ServiceProvider.GetRequiredService<ISalaryAuditService>().RunAsync(CancellationToken.None);
     // Round 9: one bounded AI enrichment batch at startup, only when enabled.
     var aiEnrichment = scope.ServiceProvider.GetRequiredService<IAiFieldEnrichmentService>();
     if (aiEnrichment.IsEnabled)

@@ -186,4 +186,21 @@ public sealed class SalaryParserTests
         SalaryParser.Parse("$450,000", "Engineer").HasValue.Should().BeFalse();
         SalaryParser.Parse("$3,500 per day", "Contractor").HasValue.Should().BeFalse();
     }
+
+    [Fact]
+    public void A_low_annual_figure_against_a_senior_title_is_flagged_for_review()
+    {
+        // Round 11: the Potentia "Senior Software Engineer - iOS" $64k misparse.
+        var salary = SalaryParser.Parse("64k", "Senior Software Engineer - iOS");
+
+        salary.Min.Should().Be(64_000m);
+        salary.IsQuestionable.Should().BeTrue();
+        salary.QuestionableReason.Should().Contain("Senior/Lead");
+    }
+
+    [Fact]
+    public void The_same_figure_against_a_mid_level_title_is_not_flagged()
+    {
+        SalaryParser.Parse("64k", "Software Engineer").IsQuestionable.Should().BeFalse();
+    }
 }

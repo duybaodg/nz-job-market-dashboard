@@ -115,6 +115,17 @@ public static class SalaryParser
         @"(?ix)\b(?:support|service\s+desk|help\s*desk|administrator|administration|coordinator|assistant|receptionist|data\s+entry)\b",
         RegexOptions.Compiled);
 
+    // Round 11: an annual figure in this band is plausible for a mid-level role
+    // but unusually low for a Senior/Lead title, so it is surfaced for review.
+    // The Potentia "Senior Software Engineer - iOS" $64k phone-code misparse is
+    // the case that motivated the rule.
+    private static readonly Regex SeniorLeadTitleRegex = new(
+        @"(?ix)\b(?:senior|snr|sr\.?|lead)\b",
+        RegexOptions.Compiled);
+
+    private const decimal SeniorAnnualFloor = 50_000m;
+    private const decimal SeniorAnnualCeiling = 80_000m;
+
     private static readonly Regex NonNzdCurrencyRegex = new(
         @"(?ix)(?:\bAUD\b|A\$|\bUSD\b|US\$|\bGBP\b|£|\bEUR\b|€|\bCAD\b|C\$|\bINR\b|₹)",
         RegexOptions.Compiled);
@@ -234,6 +245,17 @@ public static class SalaryParser
         {
             questionable = true;
             reasons.Add("annual salary is unusually high for a support/administration title");
+        }
+
+        // Round 11: a low annual figure against a Senior/Lead title is surfaced
+        // for review rather than silently published as a comparable salary.
+        if (period == SalaryPayPeriod.Year
+            && midpoint is >= SeniorAnnualFloor and <= SeniorAnnualCeiling
+            && !string.IsNullOrWhiteSpace(title)
+            && SeniorLeadTitleRegex.IsMatch(title))
+        {
+            questionable = true;
+            reasons.Add("annual salary looks low for a Senior/Lead title");
         }
 
         return new SalaryParse(

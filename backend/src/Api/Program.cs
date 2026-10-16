@@ -238,4 +238,12 @@ app.MapPost("/api/admin/dedup/run", async (
     Results.Ok(await dedupService.RunAsync(trigger ?? "manual", cancellationToken)))
     .WithName("RunDeduplication");
 
+// --- Round 11: salary parse audit ------------------------------------------
+
+app.MapPost("/api/admin/salaries/audit", async (
+        ISalaryAuditService salaryAuditService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await salaryAuditService.RunAsync(cancellationToken)))
+    .WithName("RunSalaryAudit");
+
 app.Run();
