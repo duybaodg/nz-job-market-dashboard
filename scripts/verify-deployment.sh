@@ -171,6 +171,54 @@ for source, count in Counter(j["source"] for j in data).most_common(10):
 '
 fi
 
+printf '%-28s ' "salary parse audit"
+salary_audit=$(curl -fsS --max-time 90 -X POST "${BASE_URL}/api/admin/salaries/audit" 2>/dev/null || true)
+if [[ -z "$salary_audit" ]]; then
+  echo "FAIL"
+  fail=1
+else
+  echo "$salary_audit" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+print("OK (scanned=%d, non-pay ignored=%d, low senior/lead flagged=%d, below-floor cleared=%d)" % (
+    data["jobsScanned"], data["nonPaySalaryIgnored"], data["seniorLowPayFlagged"], data["outOfRangeCleared"]))
+'
+fi
+
+printf '%-28s ' "non-pay salary tokens"
+# Round 11: no stored salary may come from a bare-k page token (contact string,
+# file size, quantity or decimal rate). Salary text is retained as provenance,
+# so the check is on rows that still publish numeric bounds.
+if [[ -z "${jobs:-}" ]]; then
+  jobs=$(curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" 2>/dev/null || true)
+fi
+if [[ -z "$jobs" ]]; then
+  echo "FAIL"
+  fail=1
+else
+  echo "$jobs" | python3 -c '
+import json, sys, re
+jobs = json.load(sys.stdin)
+bare_k = re.compile(r"^\d{2,3}\s?[kK]$")
+targets = [j for j in jobs if j.get("source") == "Potentia" and j.get("title") == "Senior Software Engineer - iOS"]
+offenders = [
+    j for j in jobs
+    if (j.get("salaryMin") is not None or j.get("salaryMax") is not None)
+    and bare_k.match((j.get("salaryText") or "").strip())
+]
+problems = []
+if offenders:
+    problems.append("%d stored salary bound(s) are a bare-k token: %s" % (
+        len(offenders), ", ".join(j["title"] for j in offenders[:5])))
+if targets and targets[0].get("salaryMin") is not None:
+    problems.append("Potentia Senior Software Engineer - iOS still reports salaryMin=%s" % targets[0]["salaryMin"])
+if problems:
+    print("FAIL (" + "; ".join(problems) + ")")
+    raise SystemExit(1)
+print("OK (no bare-k non-pay salary bounds; Potentia iOS misparse is cleared)")
+'
+fi
+
 printf '%-28s ' "crawler health"
 health=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/health" 2>/dev/null || true)
 if [[ -z "$health" ]]; then
