@@ -1,3 +1,4 @@
+using Api.Health;
 using Application.Analytics;
 using Application.Crawling;
 using Application.Deduplication;
@@ -26,6 +27,10 @@ builder.Services.AddCors(options =>
 });
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
+
+// Round 13: shared-secret gate for the crawler health view. When the env var is
+// absent the guard fails closed and every health request is refused.
+builder.Services.AddSingleton(new HealthAccessGuard(builder.Configuration["HEALTH_ACCESS_PASSWORD"]));
 
 var app = builder.Build();
 
@@ -121,11 +126,8 @@ app.MapGet("/api/admin/sources", async (
     Results.Ok(await crawlerService.GetSourcesAsync(cancellationToken)))
     .WithName("GetSources");
 
-app.MapGet("/api/admin/health", async (
-        IHealthService healthService,
-        CancellationToken cancellationToken) =>
-    Results.Ok(await healthService.GetHealthAsync(cancellationToken)))
-    .WithName("GetHealth");
+// Round 13: protected by the shared HEALTH_ACCESS_PASSWORD secret.
+app.MapHealthEndpoint();
 
 // --- Round 9: per-field coverage for the active listing cohort -------------
 app.MapGet("/api/admin/coverage", async (
