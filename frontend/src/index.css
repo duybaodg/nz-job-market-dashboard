@@ -183,7 +183,7 @@ tbody tr:hover { background: #f8faf9; }
   .app-shell { width: 100%; overflow: hidden; }
   .sidebar { display: block; padding: 13px 16px; }
   .sidebar { min-width: 0; }
-  .sidebar nav { max-width: 100%; justify-content: flex-start; gap: 4px; margin-top: 12px; overflow-x: auto; }
+  .sidebar nav { max-width: 100%; flex-wrap: wrap; justify-content: flex-start; gap: 4px; margin-top: 12px; overflow-x: visible; }
   .sidebar a { min-width: max-content; min-height: 38px; padding: 8px 10px; }
   main { padding: 24px 14px 40px; }
   .page-header, .filter-heading { display: grid; }
@@ -224,6 +224,11 @@ tbody tr:hover { background: #f8faf9; }
 .freshness-fresh { border-color: #bfe0d6; background: #eef8f5; }
 .freshness-stale, .freshness-partial { border-color: #dfbd72; background: #fff8e9; }
 .freshness-unavailable, .freshness-unknown { border-color: #e0a3a3; background: #fdf1f1; }
+/* The dot inside the freshness pill must match the state: green healthy,
+   amber partial/stale, red unavailable/unknown. */
+.freshness-fresh .live-dot { background: #2fae6b; box-shadow: 0 0 0 4px rgba(47, 174, 107, .14); }
+.freshness-stale .live-dot, .freshness-partial .live-dot { background: #d69e4c; box-shadow: 0 0 0 4px rgba(214, 158, 76, .16); }
+.freshness-unavailable .live-dot, .freshness-unknown .live-dot { background: #d9534f; box-shadow: 0 0 0 4px rgba(217, 83, 79, .16); }
 .health-link { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; color: #29443f; background: #fff; font-weight: 800; font-size: 13px; text-decoration: none; }
 .health-link svg { width: 15px; height: 15px; }
 
@@ -259,7 +264,7 @@ tbody tr:hover { background: #f8faf9; }
 .job-meta dd { margin: 2px 0 0; color: #26312f; font-size: 13px; overflow-wrap: anywhere; }
 .job-meta dd small { color: var(--muted); }
 .job-skills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.skill-tag { border-radius: 999px; padding: 4px 8px; color: #155f58; background: #e9f5f2; font-size: 12px; font-weight: 800; }
+.skill-tag { flex: 0 0 auto; white-space: nowrap; border-radius: 999px; padding: 4px 8px; color: #155f58; background: #e9f5f2; font-size: 12px; font-weight: 800; }
 .skill-overflow summary { cursor: pointer; align-self: center; color: var(--brand); font-size: 12px; font-weight: 800; }
 .skill-overflow div { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .skill-none { margin-top: 10px; font-size: 12px; }
@@ -333,5 +338,19 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
   .role-salary-table tr { display: table-row; border: 0; padding: 0; }
   .role-salary-table th, .role-salary-table td { display: table-cell; padding: 6px; }
   .role-salary-table td::before { content: none; }
+  /* Condense job cards so roughly two fit on a 390px-tall viewport: the five
+     label/value pairs sit in a compact two-column grid and tags stay whole. */
+  .job-list { gap: 10px; }
+  .job-card { padding: 13px; }
+  .job-card-head { gap: 8px; }
+  .job-card-head h3 { font-size: 15px; }
+  .job-employer { margin-top: 5px; }
+  .job-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin-top: 9px; }
+  .job-meta dt { font-size: 10px; }
+  .job-meta dt svg { width: 12px; height: 12px; }
+  .job-meta dd { margin-top: 1px; font-size: 12px; }
+  .job-skills { gap: 5px; margin-top: 9px; }
+  .skill-tag { padding: 3px 7px; font-size: 11px; }
+  .job-duplicate { margin-top: 6px; }
 }
 
