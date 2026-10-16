@@ -1,6 +1,34 @@
 # NZ Job Market Intelligence Dashboard
 
-Analytics dashboard for New Zealand job-market trends using live, normalized job listings. Crawling is registry-driven and covers the full NZ IT job website list with per-site strategies (public ATS APIs, Schema.org JSON-LD, and browser-rendered HTML). Authentication is not implemented; an optional OpenAI-compatible field-enrichment pass is available but disabled by default (`AI_EXTRACTION_ENABLED`).
+Analytics dashboard for New Zealand job-market trends using live, normalized job listings. Crawling is registry-driven across ~60 NZ IT job sources with per-site strategies (public ATS APIs, Schema.org JSON-LD, browser-rendered HTML, and a self-hosted Firecrawl fetch layer). The app serves two audience views — **Find jobs** (job seekers) and **Market trends** (analysts) — plus a password-protected **Crawler health** view for operations. The public API needs no authentication; an optional OpenAI-compatible field-enrichment pass is available but disabled by default (`AI_EXTRACTION_ENABLED`).
+
+## Current status (October 2026)
+
+- **~43 of 59 tracked sources actively yielding** (430+ live listings); the rest are disabled with documented reasons (robots-blocked, bot-walls, dead sites) or temporarily empty of IT roles
+- Data quality: canonical "City, Region" NZ locations, full-text technical-skill extraction (272-skill shared taxonomy, ~87% of jobs carry skills), salary parsing with provenance and questionable-parse flagging, advertiser-vs-employer separation, conservative cross-source deduplication (validated v1 engine)
+- Daily listing snapshots retained for historical trends (comparable-period analytics fill in as history accumulates)
+- Health monitoring: `/health` dashboard + Telegram alerts on state changes
+- 520+ .NET tests, 175 Python tests, 49 frontend tests; every dashboard figure contract-tested against the backend schema
+
+## Quick start (Docker, recommended)
+
+```bash
+cp .env.example .env
+# set at least: POSTGRES_PASSWORD, HEALTH_ACCESS_PASSWORD (openssl rand -hex 32)
+
+docker compose up -d --build          # postgres + backend + worker + frontend
+./scripts/verify-deployment.sh http://localhost:5050   # with HEALTH_ACCESS_PASSWORD set
+```
+
+| Service | URL | What it is |
+| --- | --- | --- |
+| Frontend | http://localhost:5173 | Dashboard (Find jobs / Market trends / Crawler health) |
+| Backend API | http://localhost:5050 | REST API (see below) |
+| Postgres | localhost:55432 | Data (volume `postgres-data` — never delete) |
+
+The worker starts crawling automatically on its 60-second poll loop. First jobs appear within minutes; full source coverage takes a day (per-source crawl frequencies).
+
+Optional: deploy the self-hosted Firecrawl fetch layer (see [Firecrawl](#self-hosted-firecrawl-optional) below) and point `FIRECRAWL_BASE_URL` at it for JS-heavy-source resilience.
 
 ## Stack
 
@@ -423,6 +451,35 @@ integration/ERP and process keywords), not just a programming-language list.
 - `GET /api/analytics/top-skills` returns the top 15 by distinct active job
   across every skill type.
 
+## Self-hosted Firecrawl (optional)
+
+A 5-service Firecrawl stack (api, playwright, redis, rabbitmq, nuq-postgres — prebuilt `ghcr.io/firecrawl/*` arm64/amd64 images) runs alongside this project and is wired in two ways: as a per-source fetch backend (`"fetcher": "firecrawl"` in `sites.json`) and as an automatic fallback when a local browser render fails or times out. The worker checks `robots.txt` **before** every Firecrawl scrape, so it can never be used to bypass it.
+
+```bash
+# separate compose stack, e.g. /var/www/html/firecrawl
+docker compose up -d        # API on :3002, auth off (LAN-only)
+```
+
+Then in this project's `.env`:
+
+```
+FIRECRAWL_BASE_URL=http://<host>:3002/v1
+FIRECRAWL_API_KEY=self-hosted-local   # any non-empty value; the stack runs with auth off
+```
+
+Setup gotchas (learned the hard way): the nuq-postgres init script requires the default `postgres` database (`pg_cron`), `REDIS_RATE_LIMIT_URL` must be set explicitly or workers fall back to localhost, and the API env names are `PLAYWRIGHT_MICROSERVICE_URL` + `NUQ_RABBITMQ_URL`. Never expose the Firecrawl port through a public tunnel.
+
+## Operations: monitoring and alerting
+
+- **Crawler health page** (`/health`): per-source states (healthy / empty / degraded / stale / disabled / retired) with last errors, password-gated (see the health password section).
+- **Telegram alerts**: `scripts/health-watcher.sh` polls `/api/admin/health` and sends a Telegram message only when source health states change (new degraded/stale sources, recoveries, or the API being down). It reads `TELEGRAM_BOT_TOKEN` + `TELEGRAM_HOME_CHANNEL` from the environment (or `~/.hermes/.env`) and `HEALTH_ACCESS_PASSWORD` from the project `.env`. Run it from cron every 30 minutes, e.g.:
+
+```cron
+*/30 * * * * /var/www/html/nz-job-market-dashboard/scripts/health-watcher.sh
+```
+
+- **Health reconciliation**: `scripts/verify-crawler-health.py` recomputes every source state from crawl-run history and compares it against the health endpoint — wired into `verify-deployment.sh` so state drift fails the smoke check.
+
 ## Current Scope
 
 Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, the Find jobs and Market trends audience views, daily listing snapshots with retained-history analytics, scheduled registry-driven crawling of 58 NZ IT job sites, and a self-hosted Firecrawl fetch layer.
@@ -478,3 +535,19 @@ Deferred: authentication. Optional AI field enrichment exists behind
 OpenAI-compatible `OPENAI_BASE_URL`, runs in bounded batches in the worker, and
 only fills fields the deterministic extractors could not — deterministic values
 always win. See Round 9 in `docs/agent-plans/2026-10-12-crawl-data-quality-report.md`.
+
+## Project history
+
+The system was built and hardened incrementally in documented rounds
+(`docs/agent-plans/` on the deployment host; round-by-round detail in the
+report file referenced above):
+
+| Rounds | What landed |
+| --- | --- |
+| 1–2 | Content-validation gate (no 404s/articles/hubs as jobs), NZ region normalization, worker argv contract, crawl failure triage |
+| 3–5 | Source coverage push (24→36 yielding), Firecrawl integration, location sanitization, canonical "City, Region" model |
+| 6–7 | Crawler health dashboard, full-text skill extraction with the shared taxonomy |
+| Brief P0–P2 | Honest metric definitions (posted vs discovered, salary provenance, coverage metadata), the Find jobs + Market trends views, daily snapshots and retained-history analytics |
+| 8 | Canonical employers + admin alias workflow, conservative auditable deduplication |
+| 9–11 | Field-coverage extraction (work mode, seniority, salary from descriptions), Adzuna removal, Firecrawl as fetch layer + fallback, mobile polish, salary misparse audit |
+| 12–14 | Source retirement/revival lifecycle, health reconciliation, health password gate, SJS revival, whole-system metric accuracy audit with contract tests |
