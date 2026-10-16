@@ -15,8 +15,16 @@ export function formatSalaryRange(min: number | null, max: number | null) {
   return formatCurrency(min ?? max)
 }
 
+/**
+ * Calendar date in the reporting timezone (Pacific/Auckland). Source dates are
+ * stored at UTC midnight, so formatting in the viewer's local zone could show
+ * the previous calendar day; the NZ zone keeps the label on the intended date
+ * for every viewer and matches the backend reporting calendar.
+ */
 export function formatDate(value: string | null | undefined) {
-  return value ? new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' }).format(new Date(value)) : 'Unknown'
+  return value
+    ? new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium', timeZone: 'Pacific/Auckland' }).format(new Date(value))
+    : 'Unknown'
 }
 
 /** Date and time in the reporting timezone (Pacific/Auckland), for freshness. */

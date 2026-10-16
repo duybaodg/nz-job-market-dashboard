@@ -353,6 +353,66 @@ PY
 fi
 rm -f "$skills_jobs" "$top_skills"
 
+printf '%-28s ' "Round 14 metric consistency"
+# Round 14: the dashboard reads these payloads from different endpoints, so the
+# figures that describe the same thing must agree (active cohort, posted-date
+# coverage, salary coverage arithmetic, the 2/7/15 windows, unique vacancies).
+metric_tmp=$(mktemp -d)
+for metric in overview freshness top-skills jobs-by-region; do
+  curl -fsS --max-time 20 "${BASE_URL}/api/analytics/${metric}" -o "${metric_tmp}/${metric}.json" 2>/dev/null || true
+done
+if python3 - "$metric_tmp" <<'PY'
+import json
+import os
+import sys
+
+base = sys.argv[1]
+for name in ("overview", "freshness", "top-skills", "jobs-by-region"):
+    path = os.path.join(base, name + ".json")
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        print("FAIL (no response from /api/analytics/" + name + ")")
+        raise SystemExit(1)
+
+overview = json.load(open(os.path.join(base, "overview.json"), encoding="utf-8"))
+freshness = json.load(open(os.path.join(base, "freshness.json"), encoding="utf-8"))
+skills = json.load(open(os.path.join(base, "top-skills.json"), encoding="utf-8"))
+regions = json.load(open(os.path.join(base, "jobs-by-region.json"), encoding="utf-8"))
+
+problems = []
+active = overview["activeListings"]
+if freshness["totalActiveJobs"] != active:
+    problems.append("freshness totalActiveJobs %s != overview activeListings %s" % (freshness["totalActiveJobs"], active))
+if overview["postedDateKnown"] + overview["postedDateMissing"] != active:
+    problems.append("postedDateKnown + postedDateMissing != activeListings")
+salary = overview["salary"]
+expected_coverage = 0 if salary["cohortCount"] == 0 else round(salary["eligibleCount"] / salary["cohortCount"] * 100, 1)
+if abs(salary["coveragePercent"] - expected_coverage) > 0.05:
+    problems.append("salary coverage %s != %s" % (salary["coveragePercent"], expected_coverage))
+if [window["days"] for window in freshness["windows"]] != [2, 7, 15]:
+    problems.append("freshness windows are not 2/7/15")
+for window in freshness["windows"]:
+    if (window["postedDateKnown"], window["postedDateMissing"]) != (overview["postedDateKnown"], overview["postedDateMissing"]):
+        problems.append("%sd window posted-date coverage != overview" % window["days"])
+if overview["uniqueVacancies"] != freshness["uniqueVacancies"]:
+    problems.append("uniqueVacancies differs between overview and freshness")
+if skills and max(skill["jobCount"] for skill in skills) > active:
+    problems.append("a skill count exceeds activeListings")
+if regions and sum(region["jobCount"] for region in regions) > active:
+    problems.append("region counts exceed activeListings")
+
+if problems:
+    print("FAIL (" + "; ".join(problems) + ")")
+    raise SystemExit(1)
+print("OK (active=%d, salary coverage=%s%%, windows=2/7/15, top skills=%d, regions=%d, unique vacancies=%s)" % (
+    active, salary["coveragePercent"], len(skills), len(regions), overview["uniqueVacancies"]))
+PY
+then
+  :
+else
+  fail=1
+fi
+rm -rf "$metric_tmp"
+
 echo
 if [[ "$fail" -ne 0 ]]; then
   echo "Some checks failed. If sources are missing, the worker may still be on its first pass."

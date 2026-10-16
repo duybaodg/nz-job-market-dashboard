@@ -1,5 +1,49 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getHealth } from './api'
+import { getHealth, getHistory, getJobs } from './api'
+
+describe('getJobs', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('passes every supported filter through the query string unmangled', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getJobs({ region: 'Auckland', skill: 'Azure', search: 'data engineer', status: 'active', days: 7 })
+
+    const [url] = fetchMock.mock.calls[0] as [string]
+    expect(url).toBe(
+      'http://localhost:5050/api/jobs?region=Auckland&skill=Azure&search=data+engineer&status=active&days=7',
+    )
+  })
+
+  it('omits empty filters rather than sending blank parameters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getJobs({ status: 'all' })
+
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe('http://localhost:5050/api/jobs?status=all')
+  })
+})
+
+describe('getHistory', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('requests the selected reporting period so the label matches the count', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getHistory(15)
+
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe('http://localhost:5050/api/analytics/history?days=15')
+  })
+})
 
 describe('getHealth', () => {
   afterEach(() => {

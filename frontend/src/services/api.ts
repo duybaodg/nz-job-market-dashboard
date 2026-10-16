@@ -58,8 +58,9 @@ export function getFreshness() {
   return getJson<Freshness>('/api/analytics/freshness')
 }
 
-export function getHistory() {
-  return getJson<History>('/api/analytics/history')
+export function getHistory(days?: number) {
+  const suffix = days ? `?days=${encodeURIComponent(String(days))}` : ''
+  return getJson<History>(`/api/analytics/history${suffix}`)
 }
 
 // --- Round 13: crawler health shared-secret gate ---------------------------

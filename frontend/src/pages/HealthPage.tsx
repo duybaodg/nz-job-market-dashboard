@@ -143,7 +143,7 @@ export function HealthPage() {
 
         {healthQuery.isError && !(healthQuery.error instanceof ApiError && healthQuery.error.status === 401) ? (
           <section className="empty-state">
-            Could not load crawler health from the backend API on <code>http://localhost:5050</code>.
+            Could not load crawler health from the backend API (<code>/api/admin/health</code>).
           </section>
         ) : null}
 

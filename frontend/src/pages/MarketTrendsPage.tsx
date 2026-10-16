@@ -12,7 +12,6 @@ import { WeeklyTrendChart } from '../components/charts/WeeklyTrendChart'
 import { navigate, useAppLocation } from '../hooks/useAppLocation'
 import {
   employerActivity,
-  postedOrFirstSeen,
   regionDemand,
   roleFamilyDemand,
   salaryByRoleFamily,
@@ -49,21 +48,24 @@ function applyTrends(jobs: Job[], filters: TrendsFilterState, exclude?: keyof Tr
   )
 }
 
-function countInWindow(jobs: Job[], now: number, startDaysAgo: number, endDaysAgo: number): number {
+function countFirstSeenInWindow(jobs: Job[], now: number, startDaysAgo: number, endDaysAgo: number): number {
   const start = now - startDaysAgo * DAY_MS
   const end = now - endDaysAgo * DAY_MS
   return jobs.filter((job) => {
-    const posted = time(postedOrFirstSeen(job))
-    return posted >= start && posted < end
+    const firstSeen = time(job.firstSeenAt)
+    return firstSeen >= start && firstSeen < end
   }).length
 }
 
 export function MarketTrendsPage() {
   const { search } = useAppLocation()
   const filters = useMemo(() => parseTrendsFilterState(search), [search])
+  const periodDays = Number(filters.period)
   const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all' }) })
   const overviewQuery = useQuery({ queryKey: ['overview'], queryFn: getOverview })
-  const historyQuery = useQuery({ queryKey: ['history'], queryFn: getHistory })
+  // The retained-history period must follow the reporting-period selector,
+  // otherwise a 15/30-day label would show the 7-day figure.
+  const historyQuery = useQuery({ queryKey: ['history', periodDays], queryFn: () => getHistory(periodDays) })
 
   const allJobs = jobsQuery.data ?? emptyJobs
   const overview = overviewQuery.data
@@ -75,20 +77,23 @@ export function MarketTrendsPage() {
   const regionCohort = useMemo(() => applyTrends(activeCohort, filters, 'region'), [activeCohort, filters])
   const skillCohort = useMemo(() => applyTrends(activeCohort, filters, 'skill'), [activeCohort, filters])
 
-  const periodDays = Number(filters.period)
+  const filteredScope = Boolean(filters.region || filters.roleFamily || filters.skill || filters.seniority)
 
-  // Preferred source: retained daily snapshots. The fallback counts today's
-  // retained rows only, and is labelled as such — it is never presented as
-  // retained history.
+  // Preferred source: retained daily snapshots. The fallback counts the current
+  // retained rows (first-seen only) and is labelled as such - it is never
+  // presented as retained history.
   const fallbackNewListings = useMemo(() => {
     const now = Date.now()
-    const current = countInWindow(cohort, now, periodDays, 0)
+    const current = countFirstSeenInWindow(cohort, now, periodDays, 0)
     const previousAvailable = periodDays * 2 <= RETENTION_DAYS
-    const previous = previousAvailable ? countInWindow(cohort, now, periodDays * 2, periodDays) : null
+    const previous = previousAvailable ? countFirstSeenInWindow(cohort, now, periodDays * 2, periodDays) : null
     return { current, previous, previousAvailable, change: computeChange(current, previous) }
   }, [cohort, periodDays])
 
-  const retainedNewListings = history?.newListings
+  // Retained snapshots cannot be filtered by region/family/skill/seniority, so a
+  // filtered view uses the current rows for the filtered cohort instead of
+  // showing an all-listings discovery count beside the filtered cards.
+  const retainedNewListings = filteredScope ? undefined : history?.newListings
   const newListings = retainedNewListings
     ? {
         current: retainedNewListings.change.current,
@@ -101,10 +106,12 @@ export function MarketTrendsPage() {
         current: fallbackNewListings.current,
         change: fallbackNewListings.change,
         comparisonAvailable: fallbackNewListings.previousAvailable,
-        dateBasis: 'Current retained rows only (daily snapshots not yet available)',
-        note: fallbackNewListings.previousAvailable
-          ? 'Fallback: counted from current retained rows because no daily snapshots exist yet.'
-          : 'Fallback: current retained rows only; the previous equal period is outside the 20-day retention window.',
+        dateBasis: 'Current retained rows only (first-seen)',
+        note: filteredScope
+          ? 'Filtered cohort counted from current retained rows; retained daily snapshots cannot be filtered.'
+          : fallbackNewListings.previousAvailable
+            ? 'Fallback: counted from current retained rows because no daily snapshots exist yet.'
+            : 'Fallback: current retained rows only; the previous equal period is outside the 20-day retention window.',
       }
 
   const salary = useMemo(() => salaryDistribution(cohort), [cohort])
@@ -114,7 +121,6 @@ export function MarketTrendsPage() {
   const regions = useMemo(() => regionDemand(regionCohort), [regionCohort])
   const skills = useMemo(() => skillDemand(skillCohort), [skillCohort])
 
-  const filteredScope = Boolean(filters.region || filters.roleFamily || filters.skill || filters.seniority)
   const activeChange = !filteredScope && history ? history.activeChange : null
   const selectedFamily = filters.roleFamily || families[0]?.label || ''
   const selectedFamilyRow = families.find((family) => family.label === selectedFamily) ?? null
@@ -212,7 +218,7 @@ export function MarketTrendsPage() {
             }
             detail={
               showUniqueVacancies
-                ? `${cohort.length.toLocaleString('en-NZ')} listings · ${deduplication!.listingsMerged} duplicate listings merged into ${deduplication!.groups} group${deduplication!.groups === 1 ? '' : 's'}`
+                ? `${cohort.length.toLocaleString('en-NZ')} listings · ${deduplication!.listingsMerged} duplicate listing${deduplication!.listingsMerged === 1 ? '' : 's'} merged into ${deduplication!.groups} group${deduplication!.groups === 1 ? '' : 's'}`
                 : activeChange
                   ? `As of now · ${describeChange(activeChange)}`
                   : filteredScope
@@ -477,13 +483,15 @@ export function MarketTrendsPage() {
                   annualised or mixed in.
                 </li>
                 <li>
-                  <strong>Hiring employers</strong> counts distinct admin-reviewed canonical employers; exact and
-                  curated-alias matches only, never fuzzy merges. Agency-only listings and unknown employers are
-                  reported separately.
+                  <strong>Hiring employers</strong> counts distinct identifiable employers — an admin-reviewed
+                  canonical where an exact or curated-alias match exists, otherwise the exact normalised advertised
+                  name — and never fuzzy-merges names. Agency-only listings and unknown employers are reported
+                  separately.
                 </li>
                 <li>
                   <strong>Geography</strong>: city, region, nationwide and work mode are independent. Remote is a work
-                  mode, not a region. Multi-location listings are counted once under their primary region.
+                  mode; a listing whose only place is remote is bucketed under “Remote” in regional demand, never as a
+                  city or region. Multi-location listings are counted once under their primary region.
                 </li>
                 <li>
                   <strong>Role family</strong> is an inferred, deterministic title classification; the original title is

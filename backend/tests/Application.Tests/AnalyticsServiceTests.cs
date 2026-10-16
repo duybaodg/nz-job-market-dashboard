@@ -170,6 +170,27 @@ public sealed class AnalyticsServiceTests
         overview.Employers.IdentifiableEmployers.Should().Be(2);
     }
 
+    [Fact]
+    public async Task Overview_treats_an_unknown_pay_period_as_non_annual_and_breaks_skill_ties_alphabetically()
+    {
+        await using var dbContext = CreateDbContext();
+        AddJob(dbContext, "A", salaryMin: 120_000m, salaryMax: 140_000m, salaryText: "$120,000 - $140,000", salaryPeriod: "Unknown");
+        var job = dbContext.Jobs.Local.Single();
+        dbContext.JobSkills.AddRange(
+            new JobSkill { Id = Guid.NewGuid(), JobId = job.Id, Job = job, SkillName = "Azure" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = job.Id, Job = job, SkillName = "API" });
+        await dbContext.SaveChangesAsync();
+
+        var analytics = new AnalyticsService(dbContext, new FixedTimeProvider(Now));
+        var overview = await analytics.GetOverviewAsync(CancellationToken.None);
+        var top = await analytics.GetTopSkillsAsync(CancellationToken.None);
+
+        overview.Salary.EligibleCount.Should().Be(0, "an unknown pay period must never be treated as annual");
+        overview.Salary.Exclusions["non-annual"].Should().Be(1);
+        overview.MostRequestedSkill.Should().Be("API", "equal skill counts are ordered alphabetically, like the top-skills endpoint");
+        top.Select(skill => skill.SkillName).Should().Equal("API", "Azure");
+    }
+
     private static void AddJob(
         ApplicationDbContext dbContext,
         string source,

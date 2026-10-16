@@ -88,12 +88,14 @@ public sealed class AnalyticsService(
                 .Where(job => !string.IsNullOrWhiteSpace(job.Region))
                 .GroupBy(job => job.Region!)
                 .OrderByDescending(group => group.Count())
+                .ThenBy(group => group.Key)
                 .Select(group => group.Key)
                 .FirstOrDefault(),
             await dbContext.JobSkills
                 .Where(skill => skill.Job != null && skill.Job.IsActive)
                 .GroupBy(skill => skill.SkillName)
                 .OrderByDescending(group => group.Count())
+                .ThenBy(group => group.Key)
                 .Select(group => group.Key)
                 .FirstOrDefaultAsync(cancellationToken),
             ToIntervalDto(interval, isPartial: false),
@@ -127,6 +129,7 @@ public sealed class AnalyticsService(
             .Where(job => job.IsActive && job.Region != null)
             .GroupBy(job => job.Region!)
             .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key)
             .Select(group => new JobsByRegionDto(group.Key, group.Count()))
             .ToListAsync(cancellationToken);
     }
@@ -359,9 +362,12 @@ public sealed class AnalyticsService(
         MetricIntervalMapper.ToDto(interval, isPartial);
 
     private static SalaryPayPeriod ParsePayPeriod(string? value) =>
+        // An unrecognised or absent pay period is NOT annual. Treating it as Year
+        // would let an unknown-period amount into the annual median while the
+        // frontend requires an explicit Year, so the two views would disagree.
         Enum.TryParse<SalaryPayPeriod>(value, ignoreCase: true, out var period)
             ? period
-            : SalaryPayPeriod.Year;
+            : SalaryPayPeriod.Unknown;
 
     private sealed record ActiveListing(
         string Source,

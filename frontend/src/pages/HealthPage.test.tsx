@@ -124,4 +124,15 @@ describe('HealthPage password gate', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/too many failed attempts/i)
   })
+
+  it('names the API path rather than a hardcoded host when health cannot load', async () => {
+    window.sessionStorage.setItem(HEALTH_PASSWORD_STORAGE_KEY, 'stored-password')
+    getHealthMock.mockRejectedValue(new ApiError(500))
+    renderPage()
+
+    await screen.findByText(/could not load crawler health from the backend api/i)
+
+    expect(screen.getByText('/api/admin/health')).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('localhost:5050')
+  })
 })
