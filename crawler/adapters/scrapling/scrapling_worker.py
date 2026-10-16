@@ -607,15 +607,57 @@ def extract_label(text: str, label: str) -> str | None:
 #: suffix or a fully written 4-6 digit number; otherwise bare number pairs in ad
 #: teasers ("100-160") get misread as a salary. Mirrors the .NET
 #: CrawlerOrchestrationService.ParseSalary anchors.
+#:
+#: The bare "NNk" alternative additionally requires a clean left/right boundary.
+#: Without it, a phone country code inside a contact string
+#: ("+64kayla@potentia.co.nz"), a document size ("198KB"), a decimal amount
+#: ("$87.62 k/yr") or a headline quantity ("500k users") is read as 64k / 198k /
+#: 62k / 500k. That produced the Potentia "Senior Software Engineer - iOS"
+#: $64,000/yr misparse (Round 11).
 SALARY_FRAGMENT_RE = re.compile(
     r"("
     r"(?:\$|NZD)\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?\s*(?:-|to|–|—)\s*(?:\$|NZD)?\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?"
-    r"|\d{2,3}\s*[kK]\s*(?:-|to|–|—)\s*\$?\s*\d{2,3}\s*[kK]"
+    r"|(?<![\w.+])\d{2,3}\s?[kK]\s*(?:-|to|–|—)\s*\$?\s*\d{2,3}\s?[kK](?![a-zA-Z0-9])"
     r"|(?:\$|NZD)\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?"
-    r"|\d{2,3}\s*[kK]"
+    r"|(?<![\w.+])\d{2,3}\s?[kK](?![a-zA-Z0-9])"
     r")",
     re.I,
 )
+
+#: Non-pay tokens a bare "NNk" scan can otherwise absorb. They are blanked
+#: (spaces, so offsets are preserved) before the salary scan. This is the
+#: contact/size/quantity half of the Round 11 misparse fix; the boundary rules
+#: on :data:`SALARY_FRAGMENT_RE` catch the decimal half.
+NON_PAY_TOKEN_RES = (
+    re.compile(r"https?://\S+", re.I),
+    re.compile(r"[\w.+-]+@[\w.-]+\.\w+", re.I),
+    re.compile(r"\btel:\S+", re.I),
+    # Document/data size: 198KB, 1.2MB, 4 GB.
+    re.compile(r"\b\d[\d,.]*\s?[kKmMgGtT]?[bB]\b", re.I),
+    # Headline quantity: 500k users, 1.2m customers, 300 downloads.
+    re.compile(
+        r"\b\d[\d,.]*\s?[kKmM]?\s*(?:users?|followers?|customers?|subscribers?|"
+        r"downloads?|installs?|records?|rows?|employees?|clients?|companies|"
+        r"businesses|students?|members?|visits?|views?|hits?|pages?|results?)\b",
+        re.I,
+    ),
+)
+
+
+def _mask_non_pay_tokens(text: str) -> str:
+    """Blank contact strings, URLs, file sizes and quantity counts in-place.
+
+    Blanking rather than deleting keeps every character offset stable, so
+    :func:`_is_salary_filter_match` windows still line up with the original text.
+    """
+    if not text:
+        return text
+    chars = list(text)
+    for pattern in NON_PAY_TOKEN_RES:
+        for match in pattern.finditer(text):
+            for index in range(match.start(), match.end()):
+                chars[index] = " "
+    return "".join(chars)
 
 
 #: Salary-filter widgets ("Salary Annual Wage $0 $300,000+") sit in page
@@ -633,6 +675,7 @@ def _is_salary_filter_match(text: str, start: int) -> bool:
 
 
 def extract_salary(text: str) -> str | None:
+    text = _mask_non_pay_tokens(text)
     labelled = extract_label(text, "Salary")
     if labelled:
         # A labelled value can run into the next field; keep only its leading
