@@ -117,6 +117,34 @@ public sealed class SalaryDescriptionScannerTests
     }
 
     [Fact]
+    public void A_decimal_thousands_rate_is_not_read_from_its_fraction()
+    {
+        // Round 11: "$87.62 k/yr" must not be read as "62 k" / NZD 62,000; the
+        // real "$87,624 ... per year" later in the text is what should win.
+        var result = SalaryDescriptionScanner.Scan(
+            "Starting at 87.62 k/yr The salary will begin at $87,624 pro-rata, per year.", "Specialist");
+
+        result.Should().NotBeNull();
+        result!.Parse.Min.Should().Be(87_624m);
+    }
+
+    [Fact]
+    public void A_file_size_is_not_a_salary()
+    {
+        SalaryDescriptionScanner.Scan(
+            "Digital Workspace Engineer.pdf (PDF, 198KB) Job Description File links:", "Engineer")
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void A_headline_quantity_is_not_a_salary()
+    {
+        SalaryDescriptionScanner.Scan(
+            "Day-to-day management of a website with over 500k users.", "Content Manager")
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void A_salary_in_the_jobs_own_header_is_still_found()
     {
         var description = "Search for: View IT Jobs Senior GIS Analyst Auckland Central "

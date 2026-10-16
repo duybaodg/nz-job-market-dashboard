@@ -28,7 +28,7 @@ public static class SalaryDescriptionScanner
     private const string Money =
         @"(?:(?:" + Currency + @")\s?\d{1,3}(?:,\d{3})+(?:\.\d+)?"
         + @"|(?:" + Currency + @")\s?\d{1,6}(?:\.\d+)?\s?[kK]?"
-        + @"|\b\d{2,3}\s?[kK]\b)";
+        + @"|(?<![\w.])\d{2,3}\s?[kK](?![a-zA-Z0-9]))";
 
     private static readonly Regex Candidates = new(
         $@"(?<range>(?<a>{Money})\s*(?:-|–|—|\bto\b)\s*(?<b>{Money}))|(?<single>{Money})",
