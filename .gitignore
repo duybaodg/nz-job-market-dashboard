@@ -15,4 +15,3 @@ crawler/.venv/
 .codegraph
 /docs/*
 !/docs/crawling-spec.md
-AGENTS.md
