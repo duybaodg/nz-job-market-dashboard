@@ -50,7 +50,7 @@ class SourceRegistryTests(unittest.TestCase):
     def test_registry_covers_the_full_nz_site_list(self) -> None:
         registry = load_registry()
 
-        self.assertGreaterEqual(len(registry), 60)
+        self.assertGreaterEqual(len(registry), 58)
         # Every entry must carry a crawl strategy so the worker can route it.
         self.assertTrue(all(site.get("strategy") for site in registry.values()))
 
@@ -88,11 +88,37 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertEqual(50, resolve_max_pages(base_args(max_pages=50), {"maxPages": 0}))
 
     def test_round3_disables_sources_with_no_crawlable_listings(self) -> None:
-        for name in ("WorkHere", "Younity", "Presto Resourcing", "H2R Technology",
-                     "Summer of Tech", "Orion Health", "MyJobSpace"):
+        for name in ("Younity", "Orion Health", "MyJobSpace"):
             site = lookup_source(name)
             self.assertFalse(site["enabled"], name)
             self.assertIn("Round 3", site.get("notes", ""), name)
+
+    def test_round12_removes_retired_sources(self) -> None:
+        # User decision: these eight are not coming back, so they are deleted
+        # from the registry entirely (the startup sync retires any live row).
+        for name in ("Presto Resourcing", "WorkHere", "Trade Me", "Vista Group",
+                     "Summer of Tech", "H2R Technology", "Health NZ Careers", "Jora NZ"):
+            self.assertIsNone(lookup_source(name), name)
+        # The duplicate company entry is gone but the real job board remains.
+        self.assertIsNotNone(lookup_source("Trade Me Jobs"))
+
+    def test_round12_revives_placeme_and_talent_international(self) -> None:
+        placeme = lookup_source("PlaceMe IT")
+        talent = lookup_source("Talent International NZ")
+
+        self.assertTrue(placeme["enabled"])
+        self.assertEqual("https://www.placeme.net.nz/jobs", placeme["jobs_url"])
+        self.assertEqual("http", placeme["fetcher"])
+        self.assertTrue(placeme["robotsAllows"])
+
+        self.assertTrue(talent["enabled"])
+        self.assertEqual(
+            "https://www.talentinternational.com/search-jobs/?search=&country=new-zealand",
+            talent["jobs_url"],
+        )
+        self.assertEqual("/job/", talent["jobUrlContains"])
+        self.assertEqual("http", talent["fetcher"])
+        self.assertTrue(talent["robotsAllows"])
 
     def test_title_from_url_produces_readable_fallback(self) -> None:
         self.assertEqual(
@@ -368,6 +394,17 @@ class JobQualityFilterTests(unittest.TestCase):
         self.assertTrue(looks_like_it_job("Salesforce Developer", ""))
         self.assertTrue(looks_like_it_job("ServiceNow Consultant", ""))
 
+    def test_round12_keeps_administrator_and_soc_titles(self) -> None:
+        # Round 12 revival yield: the taxonomy previously missed these clearly
+        # technical roles (PlaceMe "Systems Administrator", Talent "SOC Analyst").
+        for title in (
+            "Systems Administrator",
+            "System Administrator",
+            "Senior SOC Analyst - Incident Response & Threat Hunting",
+            "Deskside Support Level 2",
+        ):
+            self.assertTrue(looks_like_it_job(title, ""), title)
+
     def test_non_technology_roles_are_dropped(self) -> None:
         self.assertFalse(looks_like_it_job("Regional Marketing Manager", "Security guard"))
         self.assertFalse(looks_like_it_job("Registered Nurse", "Patient care"))
@@ -450,6 +487,46 @@ class JobQualityFilterTests(unittest.TestCase):
         postings = parse_structured_jobs(html)
 
         self.assertEqual(["Developer", "Analyst", "Engineer"], [p["title"] for p in postings])
+
+    def test_parse_structured_jobs_skips_titleless_postings(self) -> None:
+        # Talent International's WordPress theme emits an empty JobPosting; it
+        # must not shadow the page H1 that carries the real role title.
+        html = """
+        <script type="application/ld+json">
+        {"@context":"https://schema.org/","@type":"JobPosting","title":"",
+         "hiringOrganization":{"@type":"Organization","name":""}}
+        </script>
+        <script type="application/ld+json">
+        {"@type":"JobPosting","title":"Developer"}
+        </script>
+        """
+        postings = parse_structured_jobs(html)
+
+        self.assertEqual(["Developer"], [p["title"] for p in postings])
+
+    def test_job_detail_falls_back_to_h1_when_jsonld_has_no_title(self) -> None:
+        from adapters.scrapling.scrapling_worker import parse_job_detail
+
+        html = """
+        <html><head>
+        <script type="application/ld+json">
+        {"@context":"https://schema.org/","@type":"JobPosting","title":""}
+        </script>
+        </head><body><h1>Senior SOC Analyst - Incident Response</h1>
+        <p>Security operations using Splunk and Microsoft Sentinel.</p>
+        </body></html>
+        """
+        job = parse_job_detail(
+            "Talent International NZ",
+            "https://www.talentinternational.com/job/senior-soc-analyst/",
+            html,
+            "Senior SOC Analyst - Incident Response Security operations using Splunk.",
+            "find out more",
+            "generic",
+        )
+
+        self.assertEqual("Senior SOC Analyst - Incident Response", job.title)
+        self.assertIn("Splunk", job.descriptionText or "")
 
     def test_structured_location_handles_country_objects(self) -> None:
         location = structured_location(

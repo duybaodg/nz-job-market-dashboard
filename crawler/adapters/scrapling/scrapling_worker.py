@@ -113,6 +113,9 @@ IT_KEYWORDS = frozenset({
     "machine learning", "artificial intelligence", "data scientist",
     "data analyst", "data engineer", "data architect", "data platform",
     "network engineer", "system engineer", "systems engineer",
+    # Round 12: role titles a live revival surfaced that the taxonomy missed.
+    "systems administrator", "system administrator", "soc analyst",
+    "deskside support",
     "linux", "embedded", "firmware",
     "ux designer", "ui designer", "product designer",
     # Enterprise platforms and tooling that clearly mark a technology role.
@@ -1578,7 +1581,9 @@ def parse_structured_jobs(html: str) -> list[dict[str, Any]]:
             if "@graph" in item:
                 graph = item["@graph"]
                 queue.extend(graph if isinstance(graph, list) else [graph])
-            elif item.get("@type") == "JobPosting":
+            elif item.get("@type") == "JobPosting" and clean_text(str(item.get("title") or "")):
+                # A JobPosting without a title is unusable — some WordPress
+                # themes (Talent International) emit an otherwise-empty block.
                 postings.append(item)
     return postings
 
@@ -2691,7 +2696,11 @@ def parse_structured_job(html: str) -> dict[str, Any] | None:
             else:
                 graph_items.append(v)
         for item in graph_items:
-            if isinstance(item, dict) and item.get("@type") == "JobPosting":
+            if (
+                isinstance(item, dict)
+                and item.get("@type") == "JobPosting"
+                and clean_text(str(item.get("title") or ""))
+            ):
                 return item
     return None
 
