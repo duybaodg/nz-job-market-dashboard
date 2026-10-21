@@ -47,7 +47,7 @@ check "history (P2 snapshots)" "${BASE_URL}/api/analytics/history?days=7"
 
 printf '%-28s ' "job fields (P1)"
 fields_jobs=$(mktemp)
-if ! curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" -o "$fields_jobs" 2>/dev/null; then
+if ! curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all&limit=5000" -o "$fields_jobs" 2>/dev/null; then
   echo "FAIL"
   fail=1
 elif ! fields_output=$(python3 - "$fields_jobs" <<'PY'
@@ -75,7 +75,7 @@ fi
 rm -f "$fields_jobs"
 
 printf '%-28s ' "source registry"
-sources=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/sources" 2>/dev/null || true)
+sources=$(curl -fsS --max-time 20 "${HEALTH_AUTH[@]}" "${BASE_URL}/api/admin/sources" 2>/dev/null || true)
 if [[ -z "$sources" ]]; then
   echo "FAIL"
   fail=1
@@ -175,7 +175,7 @@ else
 fi
 
 printf '%-28s ' "employer identity"
-employers=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/employers" 2>/dev/null || true)
+employers=$(curl -fsS --max-time 20 "${HEALTH_AUTH[@]}" "${BASE_URL}/api/admin/employers" 2>/dev/null || true)
 if [[ -z "$employers" ]]; then
   echo "FAIL"
   fail=1
@@ -192,7 +192,7 @@ for item in data["unmatchedNames"][:5]:
 fi
 
 printf '%-28s ' "deduplication"
-duplicates=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/duplicates" 2>/dev/null || true)
+duplicates=$(curl -fsS --max-time 20 "${HEALTH_AUTH[@]}" "${BASE_URL}/api/admin/duplicates" 2>/dev/null || true)
 if [[ -z "$duplicates" ]]; then
   echo "FAIL"
   fail=1
@@ -208,7 +208,7 @@ print("OK (%d groups, %d listings merged, unique vacancies %s of %d listings, %d
 fi
 
 printf '%-28s ' "field coverage"
-coverage=$(curl -fsS --max-time 20 "${BASE_URL}/api/admin/coverage" 2>/dev/null || true)
+coverage=$(curl -fsS --max-time 20 "${HEALTH_AUTH[@]}" "${BASE_URL}/api/admin/coverage" 2>/dev/null || true)
 if [[ -z "$coverage" ]]; then
   echo "FAIL"
   fail=1
@@ -233,7 +233,7 @@ print("  hourly/daily converted: %d, open-ended: %d, questionable: %d" % (
 fi
 
 printf '%-28s ' "jobs feed"
-jobs=$(curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" 2>/dev/null || true)
+jobs=$(curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all&limit=5000" 2>/dev/null || true)
 if [[ -z "$jobs" ]]; then
   echo "FAIL"
   fail=1
@@ -249,7 +249,7 @@ for source, count in Counter(j["source"] for j in data).most_common(10):
 fi
 
 printf '%-28s ' "salary parse audit"
-salary_audit=$(curl -fsS --max-time 90 -X POST "${BASE_URL}/api/admin/salaries/audit" 2>/dev/null || true)
+salary_audit=$(curl -fsS --max-time 90 -X POST "${HEALTH_AUTH[@]}" "${BASE_URL}/api/admin/salaries/audit" 2>/dev/null || true)
 if [[ -z "$salary_audit" ]]; then
   echo "FAIL"
   fail=1
@@ -267,7 +267,7 @@ printf '%-28s ' "non-pay salary tokens"
 # file size, quantity or decimal rate). Salary text is retained as provenance,
 # so the check is on rows that still publish numeric bounds.
 if [[ -z "${jobs:-}" ]]; then
-  jobs=$(curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" 2>/dev/null || true)
+  jobs=$(curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all&limit=5000" 2>/dev/null || true)
 fi
 if [[ -z "$jobs" ]]; then
   echo "FAIL"
@@ -334,7 +334,7 @@ fi
 printf '%-28s ' "skill extraction"
 skills_jobs=$(mktemp)
 top_skills=$(mktemp)
-curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all" -o "$skills_jobs" 2>/dev/null || true
+curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all&limit=5000" -o "$skills_jobs" 2>/dev/null || true
 curl -fsS --max-time 20 "${BASE_URL}/api/analytics/top-skills" -o "$top_skills" 2>/dev/null || true
 if [[ ! -s "$skills_jobs" || ! -s "$top_skills" ]]; then
   echo "FAIL"

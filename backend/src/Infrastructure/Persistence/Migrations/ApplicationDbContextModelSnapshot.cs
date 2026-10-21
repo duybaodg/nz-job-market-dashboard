@@ -427,6 +427,7 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnName("is_active");
 
                     b.Property<bool>("IsQualityFlagged")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("is_quality_flagged");
@@ -439,10 +440,6 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("location");
 
-                    b.Property<string>("QualityFlagReason")
-                        .HasColumnType("text")
-                        .HasColumnName("quality_flag_reason");
-
                     b.Property<int>("MissingCrawlCount")
                         .HasColumnType("integer")
                         .HasColumnName("missing_crawl_count");
@@ -450,6 +447,10 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("PostedDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("posted_date");
+
+                    b.Property<string>("QualityFlagReason")
+                        .HasColumnType("text")
+                        .HasColumnName("quality_flag_reason");
 
                     b.Property<string>("Region")
                         .HasColumnType("text")
@@ -703,11 +704,6 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
-                    b.Property<bool>("IsQualityFlagged")
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_quality_flagged");
-
                     b.Property<Guid>("JobId")
                         .HasColumnType("uuid")
                         .HasColumnName("job_id");
@@ -719,10 +715,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<string>("Location")
                         .HasColumnType("text")
                         .HasColumnName("location");
-
-                    b.Property<string>("QualityFlagReason")
-                        .HasColumnType("text")
-                        .HasColumnName("quality_flag_reason");
 
                     b.Property<DateTime?>("PostedDate")
                         .HasColumnType("timestamp with time zone")

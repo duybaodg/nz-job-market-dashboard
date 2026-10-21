@@ -33,6 +33,8 @@ public sealed class AnalyticsServiceTests
         overview.NewlyPosted.Current.Should().Be(2, "B and the since-expired E have a posted date inside the window");
         overview.NewlyDiscovered.PercentChange.Should().Be(300m, "one listing was discovered in the previous window");
         overview.DiscoveryBasis.Should().Contain("since expired").And.Contain("retention window");
+        (overview.PostedDateKnown + overview.PostedDateMissing).Should().Be(overview.ActiveListings,
+            "posted-date coverage describes the active cohort; period discovery counts use the retained cohort");
         overview.NewlyPosted.NoPriorBaseline.Should().BeTrue("no comparable posted date exists in the previous window");
         overview.Interval.StartLocalDate.Should().Be("2026-10-08");
         overview.Interval.EndLocalDateExclusive.Should().Be("2026-10-15");

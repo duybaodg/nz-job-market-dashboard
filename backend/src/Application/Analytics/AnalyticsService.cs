@@ -46,14 +46,20 @@ public sealed class AnalyticsService(
         var active = await LoadActiveListingsAsync(cancellationToken);
         var categories = await LoadSourceCategoriesAsync(cancellationToken);
         // Round 15 (H-10/M-4): discovery/posted counts use the retained cohort
-        // (active + recently expired), not just today's active rows.
+        // (active + recently expired), not just today's active rows. The
+        // posted-date coverage fields still describe the active cohort so
+        // known + missing always equals ActiveListings.
         var discoveryObservations = await LoadDiscoveryObservationsAsync(now, cancellationToken);
+        var activeObservations = active
+            .Select(job => new ListingDateObservation(job.PostedDate, job.FirstSeenAt))
+            .ToList();
 
         var interval = NzReportingCalendar.LastCompleteDays(7, now);
         var previousInterval = NzReportingCalendar.PreviousPeriod(interval);
 
         var newlyDiscovered = ListingMetrics.Count(discoveryObservations, interval, DateBasis.Discovered);
         var newlyPosted = ListingMetrics.Count(discoveryObservations, interval, DateBasis.Posted);
+        var activePostedCoverage = ListingMetrics.Count(activeObservations, interval, DateBasis.Posted);
 
         var discoveredChange = BuildChange(
             newlyDiscovered.Count,
@@ -88,8 +94,8 @@ public sealed class AnalyticsService(
         return new OverviewDto(
             now,
             active.Count,
-            newlyPosted.WithPostedDate,
-            newlyPosted.MissingPostedDate,
+            activePostedCoverage.WithPostedDate,
+            activePostedCoverage.MissingPostedDate,
             discoveredChange,
             postedChange,
             ToSalaryDto(salary),
@@ -151,6 +157,9 @@ public sealed class AnalyticsService(
         var now = clock.GetUtcNow().UtcDateTime;
         var active = await LoadActiveListingsAsync(cancellationToken);
         var discoveryObservations = await LoadDiscoveryObservationsAsync(now, cancellationToken);
+        var activeObservations = active
+            .Select(job => new ListingDateObservation(job.PostedDate, job.FirstSeenAt))
+            .ToList();
         var windows = new List<FreshnessWindowDto>();
 
         foreach (var days in FreshnessWindows.All)
@@ -161,6 +170,7 @@ public sealed class AnalyticsService(
 
             var posted = ListingMetrics.Count(discoveryObservations, interval, DateBasis.Posted);
             var discovered = ListingMetrics.Count(discoveryObservations, interval, DateBasis.Discovered);
+            var activePostedCoverage = ListingMetrics.Count(activeObservations, interval, DateBasis.Posted);
             var previousPosted = comparisonAvailable
                 ? ListingMetrics.Count(discoveryObservations, previousInterval, DateBasis.Posted).Count
                 : 0;
@@ -175,8 +185,8 @@ public sealed class AnalyticsService(
                 previousPosted,
                 discovered.Count,
                 previousDiscovered,
-                posted.WithPostedDate,
-                posted.MissingPostedDate,
+                activePostedCoverage.WithPostedDate,
+                activePostedCoverage.MissingPostedDate,
                 comparisonAvailable));
         }
 
