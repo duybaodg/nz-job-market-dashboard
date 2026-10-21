@@ -27,6 +27,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IHistoryService, HistoryService>();
         services.AddScoped<IListingSnapshotService, ListingSnapshotService>();
         services.AddScoped<ICrawlerOrchestrationService, CrawlerOrchestrationService>();
+        // Round 15: SSRF guard for the admin crawl trigger (registered-origin +
+        // DNS-resolution checks before any adapter fetch).
+        services.AddSingleton<ICrawlHostResolver, DnsCrawlHostResolver>();
+        services.AddScoped<ICrawlRequestValidator, CrawlRequestValidator>();
         // Injected so analytics interval boundaries are deterministic in tests.
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<INormalisationService, NormalisationService>();

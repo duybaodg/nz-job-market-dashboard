@@ -770,7 +770,7 @@
       "jobs_url": "https://api.ashbyhq.com/posting-api/job-board/halter",
       "platform": "ashby",
       "parser": "halter-ashby",
-      "enabled": true,
+      "enabled": false,
       "frequency_minutes": 1440,
       "strategy": "custom",
       "httpStatus": 200,
@@ -795,7 +795,8 @@
       ],
       "sitemapJobUrls": 0,
       "fetcher": "http",
-      "robotsAllows": null
+      "robotsAllows": null,
+      "notes": "DISABLED 2026-10-21 (Round 15): robots endpoint returns 401; fail-closed policy. Re-enable only with a per-source documented exemption approved by the operator. Parser code retained."
     },
     {
       "name": "Rocket Lab",

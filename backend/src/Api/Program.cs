@@ -1,4 +1,6 @@
+using System.Net;
 using Api.Health;
+using Api.Security;
 using Application.Analytics;
 using Application.Crawling;
 using Application.Deduplication;
@@ -9,9 +11,33 @@ using Application.History;
 using Application.Jobs;
 using Infrastructure.DependencyInjection;
 using Infrastructure.Persistence;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Round 15: the rate limiter and log identity need the real client address.
+// Only the compose nginx network is trusted to set X-Forwarded-*; a direct
+// caller of port 5050 cannot spoof its address. The network is pinned in
+// docker-compose.yml (TRUSTED_PROXY_NETWORKS overrides it for a custom deploy).
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+    var trusted = builder.Configuration["TRUSTED_PROXY_NETWORKS"] ?? "172.30.0.0/24";
+    foreach (var entry in trusted.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        var parts = entry.Split('/', 2);
+        if (parts.Length == 2
+            && IPAddress.TryParse(parts[0], out var network)
+            && int.TryParse(parts[1], out var prefix))
+        {
+            options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(network, prefix));
+        }
+    }
+});
 
 builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
@@ -48,6 +74,9 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors("Frontend");
+// Must run before the admin gate so the health limiter keys on the real client.
+app.UseForwardedHeaders();
+app.UseAdminAccess();
 
 app.MapGet("/api/jobs", async (
         string? region,
@@ -107,8 +136,17 @@ app.MapGet("/api/analytics/history", async (
 app.MapPost("/api/admin/crawl-runs", async (
         StartCrawlRunRequest request,
         ICrawlerOrchestrationService crawlerService,
+        ICrawlRequestValidator crawlRequestValidator,
         CancellationToken cancellationToken) =>
     {
+        // Round 15: the trigger is authenticated by the admin gate and the URL
+        // is restricted to a registered source origin (SSRF guard).
+        var validation = await crawlRequestValidator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsAllowed)
+        {
+            return Results.BadRequest(new { error = validation.Reason });
+        }
+
         var result = await crawlerService.StartCrawlRunAsync(request, cancellationToken);
         return result.Started ? Results.Ok(result) : Results.BadRequest(result);
     })

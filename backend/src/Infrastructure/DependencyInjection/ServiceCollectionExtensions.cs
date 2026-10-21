@@ -18,9 +18,24 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // Round 15 (M-7): no built-in "postgres" fallback. A missing DATABASE_URL
+        // or the old default password is a deployment error, not a silent weak
+        // credential. The compose file also refuses to start without the variable.
         var connectionString = configuration["DATABASE_URL"]
-            ?? configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Port=55432;Database=nz_job_market;Username=postgres;Password=postgres";
+            ?? configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "DATABASE_URL (or ConnectionStrings:DefaultConnection) must be configured.");
+        }
+
+        var password = new Npgsql.NpgsqlConnectionStringBuilder(connectionString).Password;
+        if (string.IsNullOrWhiteSpace(password)
+            || string.Equals(password, "postgres", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The database password must be set to a non-default value (POSTGRES_PASSWORD).");
+        }
 
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseNpgsql(connectionString));

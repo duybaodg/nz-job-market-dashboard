@@ -166,27 +166,34 @@ class ScraplingWorkerParserTests(unittest.TestCase):
         payload = (FIXTURES / "halter_ashby.json").read_text()
 
         jobs = parse_halter_ashby("Halter", payload)
-        result = crawl(
-            Namespace(
-                source="Halter",
-                url="https://api.ashbyhq.com/posting-api/job-board/halter",
-                parser="halter-ashby",
-                fetcher_type="fetcher",
-                max_pages=1,
-                delay_seconds=2,
-                robots_txt_obey=True,
-                proxy_url="",
-                user_agent="test",
-            ),
-            fetch=lambda _: (payload, payload),
-        )
 
         self.assertEqual(1, len(jobs))
         self.assertEqual(("nz-tech-1", "Auckland", "Halter"), (jobs[0].sourceJobId, jobs[0].location, jobs[0].company))
         self.assertEqual("2026-08-20T00:00:00Z", jobs[0].postedDate)
         self.assertEqual("$130,000 - $160,000", jobs[0].salaryText)
-        self.assertTrue(result["isComplete"])
-        self.assertEqual(payload, result["rawPages"][0]["rawJson"])
+
+    def test_halter_ashby_crawl_refuses_when_robots_does_not_allow(self) -> None:
+        payload = (FIXTURES / "halter_ashby.json").read_text()
+        args = Namespace(
+            source="Halter",
+            url="https://api.ashbyhq.com/posting-api/job-board/halter",
+            parser="halter-ashby",
+            fetcher_type="fetcher",
+            max_pages=1,
+            delay_seconds=2,
+            robots_txt_obey=True,
+            proxy_url="",
+            user_agent="test",
+        )
+
+        with mock.patch(
+            "adapters.scrapling.scrapling_worker.obeys_robots", return_value=False
+        ) as robots_check:
+            with self.assertRaises(RuntimeError) as context:
+                crawl(args, fetch=lambda _: (payload, payload))
+
+        self.assertIn("Robots.txt", str(context.exception))
+        robots_check.assert_called_once()
 
     def test_beyond_recruitment_listing_extracts_title_location_and_urls(self) -> None:
         listing = (FIXTURES / "beyond_recruitment_listing.html").read_text()
@@ -534,13 +541,13 @@ class ScraplingHttpFetchTests(unittest.TestCase):
     def test_http_request_retries_403_when_opted_in(self) -> None:
         attempts = {"count": 0}
 
-        def fake_urlopen(request, timeout=None, context=None):
+        def fake_urlopen(request, timeout=None):
             attempts["count"] += 1
             if attempts["count"] == 1:
                 raise _status_error(403)
             return _FakeResponse()
 
-        with mock.patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        with mock.patch("urllib.request.OpenerDirector.open", side_effect=fake_urlopen):
             with mock.patch("time.sleep") as sleeper:
                 text = http_request(
                     "https://example.com/page", retries=2, retry_on_403=True
@@ -551,7 +558,7 @@ class ScraplingHttpFetchTests(unittest.TestCase):
         sleeper.assert_called_once()
 
     def test_http_request_does_not_retry_403_by_default(self) -> None:
-        with mock.patch("urllib.request.urlopen", side_effect=_status_error(403)):
+        with mock.patch("urllib.request.OpenerDirector.open", side_effect=_status_error(403)):
             with mock.patch("time.sleep") as sleeper:
                 with self.assertRaises(RuntimeError):
                     http_request("https://example.com/page", retries=3)

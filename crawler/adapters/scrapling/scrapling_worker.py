@@ -60,7 +60,13 @@ SKIP_LINK_WORDS = (
     "about",
 )
 
-ROBOTS_CACHE: dict[str, RobotsRules] = {}
+# Round 15: cache the parsed rules, or a short-lived explicit deny when the
+# robots endpoint is unavailable (timeout, 5xx, 429, TLS error, 401). An
+# unreachable robots.txt is unknown permission, not a grant. 404/410 means the
+# site has no robots file and remains an allow.
+ROBOTS_CACHE: dict[str, tuple[float, RobotsRules | None]] = {}
+ROBOTS_RULES_TTL_SECONDS = 3600
+ROBOTS_UNAVAILABLE_TTL_SECONDS = 300
 
 DEFAULT_HTTP_USER_AGENT = (
     "Mozilla/5.0 (compatible; NZJobMarketDashboardBot/0.2; +https://example.invalid/bot)"
@@ -1003,11 +1009,28 @@ def parse_jobs(source: str, url: str, html: str, text: str) -> list[RawJobInput]
     ]
 
 
-def load_robots(origin: str) -> RobotsRules:
-    """Fetch and cache robots.txt for an origin (unreachable means allow)."""
+class HttpStatusError(RuntimeError):
+    """An HTTP response the caller must be able to distinguish from a transport error."""
+
+    def __init__(self, status: int, url: str, detail: str = "") -> None:
+        super().__init__(f"HTTP {status} for {url}: {detail}")
+        self.status = status
+        self.url = url
+
+
+def load_robots(origin: str) -> RobotsRules | None:
+    """Fetch and cache robots.txt for an origin.
+
+    Returns ``None`` for an unavailable endpoint (cached as a short deny), an
+    empty rule set for a genuine 404/410, and the parsed rules otherwise.
+    """
+    now = time.monotonic()
     cached = ROBOTS_CACHE.get(origin)
     if cached is not None:
-        return cached
+        expires_at, rules = cached
+        if now < expires_at:
+            return rules
+
     try:
         text = http_request(
             urljoin(origin, "/robots.txt"),
@@ -1017,10 +1040,18 @@ def load_robots(origin: str) -> RobotsRules:
             accept="text/plain,*/*;q=0.8",
         )
         rules = parse_robots(text)
-    except Exception:  # noqa: BLE001 - no robots.txt (or unreachable) means no restriction
-        rules = RobotsRules()
-    ROBOTS_CACHE[origin] = rules
-    return rules
+        ROBOTS_CACHE[origin] = (now + ROBOTS_RULES_TTL_SECONDS, rules)
+        return rules
+    except HttpStatusError as exc:
+        if exc.status in (404, 410):
+            rules = RobotsRules()
+            ROBOTS_CACHE[origin] = (now + ROBOTS_RULES_TTL_SECONDS, rules)
+            return rules
+        ROBOTS_CACHE[origin] = (now + ROBOTS_UNAVAILABLE_TTL_SECONDS, None)
+        return None
+    except Exception:  # noqa: BLE001 - timeout/TLS/other: unknown permission, fail closed
+        ROBOTS_CACHE[origin] = (now + ROBOTS_UNAVAILABLE_TTL_SECONDS, None)
+        return None
 
 
 def obeys_robots(url: str, user_agent: str) -> bool:
@@ -1029,7 +1060,10 @@ def obeys_robots(url: str, user_agent: str) -> bool:
         return False
 
     origin = match.group(1).lower()
-    return can_fetch(load_robots(origin), user_agent, url)
+    rules = load_robots(origin)
+    if rules is None:
+        return False
+    return can_fetch(rules, user_agent, url)
 
 class _UndecodableBody(Exception):
     """Raised when the server used a content-encoding we cannot decode."""
@@ -1073,6 +1107,7 @@ def http_request(
     retries: int = 2,
     accept: str | None = None,
     retry_on_403: bool = False,
+    robots_obey: bool = False,
 ) -> str:
     """Minimal urllib client used for JSON APIs and static pages.
 
@@ -1103,11 +1138,22 @@ def http_request(
     attempt = 0
     encoding = "gzip"
     redirects = 0
+    original_url = url
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+            return None
+
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=context),
+        _NoRedirect,
+    )
+
     while True:
         headers = {**base_headers, "Accept-Encoding": encoding}
         request = urllib.request.Request(url, data=data, headers=headers, method=method.upper())
         try:
-            with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
+            with opener.open(request, timeout=timeout) as response:
                 raw = response.read()
                 content_encoding = response.headers.get("Content-Encoding") or ""
                 charset = response.headers.get_content_charset() or "utf-8"
@@ -1121,9 +1167,22 @@ def http_request(
                 raw = exc.read()
                 content_encoding = exc.headers.get("Content-Encoding") or ""
                 charset = exc.headers.get_content_charset() or "utf-8"
-            elif is_redirect and redirects < 5 and method.upper() in ("GET", "HEAD"):
-                # Follow redirects urllib refuses to (for example HTML-escaped Location).
-                url = urljoin(url, location.strip())
+            elif is_redirect and method.upper() in ("GET", "HEAD"):
+                if redirects >= 5:
+                    raise RuntimeError(f"Too many redirects for {original_url}") from exc
+                resolved = urljoin(url, location.strip())
+                parsed = urlparse(resolved)
+                if parsed.scheme not in ("http", "https"):
+                    raise RuntimeError(f"Refusing non-http(s) redirect from {url} to {resolved}") from exc
+                if not _same_site_redirect(original_url, resolved):
+                    raise RuntimeError(
+                        f"Refusing cross-site redirect from {original_url} to {resolved}"
+                    ) from exc
+                if robots_obey and not obeys_robots(
+                    resolved, user_agent or DEFAULT_HTTP_USER_AGENT
+                ):
+                    raise RuntimeError(f"Robots.txt does not allow redirect target {resolved}") from exc
+                url = resolved
                 redirects += 1
                 continue
             elif (exc.code in (429, 503) or (exc.code == 403 and retry_on_403)) and attempt < retries:
@@ -1149,7 +1208,7 @@ def http_request(
                     )
                 except Exception:  # noqa: BLE001 - best-effort error context
                     detail = ""
-                raise RuntimeError(f"HTTP {exc.code} for {url}: {detail}") from exc
+                raise HttpStatusError(exc.code, url, detail) from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"Network error for {url}: {exc.reason}") from exc
 
@@ -1186,6 +1245,7 @@ def fetch_with_http(args: argparse.Namespace, url: str) -> tuple[str, str]:
         retries=retries,
         accept=DEFAULT_HTML_ACCEPT,
         retry_on_403=bool(config.get("retryOn403")),
+        robots_obey=bool(getattr(args, "robots_txt_obey", False)),
     )
     return html, clean_text(html)
 
@@ -1287,6 +1347,15 @@ def fetch_with_firecrawl(args: argparse.Namespace, url: str) -> tuple[str, str]:
 
     timeout = getattr(args, "firecrawl_timeout", None) or FIRECRAWL_DEFAULT_TIMEOUT_SECONDS
     data = firecrawl_scrape(url, int(timeout))
+    final_url = data.get("url") or data.get("metadata", {}).get("url") if isinstance(data.get("metadata"), dict) else data.get("url")
+    if (
+        getattr(args, "robots_txt_obey", False)
+        and isinstance(final_url, str)
+        and final_url
+        and final_url != url
+        and not obeys_robots(final_url, getattr(args, "user_agent", DEFAULT_HTTP_USER_AGENT))
+    ):
+        raise RuntimeError(f"Robots.txt does not allow Firecrawl redirect target {final_url}")
     html = data.get("rawHtml") or data.get("html") or ""
     markdown = data.get("markdown") or ""
     if not isinstance(html, str):
@@ -1315,6 +1384,7 @@ def discover_sitemap_job_urls(
     fetch: Any,
     max_urls: int = 60,
     max_sitemaps: int = 8,
+    args: Any = None,
 ) -> list[str]:
     """Follow sitemap indexes and collect URLs that look like job postings.
 
@@ -1330,6 +1400,14 @@ def discover_sitemap_job_urls(
     while queue and len(seen_sitemaps) < max_sitemaps and len(job_urls) < max_urls:
         sitemap_url = queue.pop(0)
         if sitemap_url in seen_sitemaps or not same_site(base_url, sitemap_url):
+            continue
+        if (
+            args is not None
+            and getattr(args, "robots_txt_obey", False)
+            and not obeys_robots(sitemap_url, getattr(args, "user_agent", DEFAULT_HTTP_USER_AGENT))
+        ):
+            # sitemap.xml is a normal URL and is subject to robots.txt.
+            seen_sitemaps.add(sitemap_url)
             continue
         seen_sitemaps.add(sitemap_url)
         try:
@@ -2758,6 +2836,24 @@ def same_site(left: str, right: str) -> bool:
     return urlparse(left).netloc.lower() == urlparse(right).netloc.lower()
 
 
+def _same_site_redirect(original: str, redirected: str) -> bool:
+    """Allow a redirect within the original host or its parent/subdomain.
+
+    Redirects are a robots bypass if followed blindly, so a cross-registrable
+    host is refused. Subdomains (www <-> bare, apply.example.com) are tolerated
+    because they are the same site for this purpose.
+    """
+    left = (urlparse(original).hostname or "").lower()
+    right = (urlparse(redirected).hostname or "").lower()
+    if not left or not right:
+        return False
+    return (
+        right == left
+        or right.endswith("." + left)
+        or left.endswith("." + right)
+    )
+
+
 def parse_halter_ashby(source: str, payload_text: str) -> list[RawJobInput]:
     payload = json.loads(payload_text)
     values = payload.get("jobs")
@@ -3054,7 +3150,13 @@ def crawl(
         return _crawl_api_platform(args, source_config, platform, api_fetch or json_fetch)
 
     if parser == "halter-ashby":
-        # The documented public API is the access contract; its robots endpoint returns 401.
+        # Round 15: the documented public API is still fetched over HTTP, so
+        # robots.txt applies. Its robots endpoint answers 401 (unknown
+        # permission), and the fail-closed policy refuses the crawl. Halter is
+        # disabled in the registry; re-enabling requires an operator-approved
+        # documented exemption, not a silent bypass.
+        if args.robots_txt_obey and not obeys_robots(args.url, args.user_agent):
+            raise RuntimeError(f"Robots.txt does not allow crawling {args.url}")
         html, text = fetch(args.url)
         jobs = parse_halter_ashby(args.source, html)
         return {
@@ -3150,6 +3252,7 @@ def crawl(
                 args.url,
                 fetch,
                 max_urls=int(getattr(args, "sitemap_max_urls", 60) or 60),
+                args=args,
             ):
                 sitemap_candidates.setdefault(job_url, title_from_url(job_url))
         except Exception:  # noqa: BLE001 - sitemap is an optional accelerator
@@ -3309,8 +3412,16 @@ def _crawl_api_platform(
     if getattr(args, "robots_txt_obey", False) and not obeys_robots(args.url, args.user_agent):
         raise RuntimeError(f"Robots.txt does not allow crawling {args.url}")
 
+    # The registry URL (often the marketing site) is not necessarily the host the
+    # ATS client requests (e.g. BambooHR/Workday). Gate every actual request URL
+    # so a disallow on the API host is never missed.
+    def robots_guarded_fetch(url: str, method: str = "GET", payload: dict[str, Any] | None = None) -> Any:
+        if getattr(args, "robots_txt_obey", False) and not obeys_robots(url, args.user_agent):
+            raise RuntimeError(f"Robots.txt does not allow crawling {url}")
+        return api_fetch(url, method, payload)
+
     config = dict(source_config)
-    raw_jobs = crawl_platform(platform, api_fetch, source=args.source, config=config)
+    raw_jobs = crawl_platform(platform, robots_guarded_fetch, source=args.source, config=config)
     jobs = [
         job
         for job in (RawJobInput(**raw) for raw in raw_jobs)
