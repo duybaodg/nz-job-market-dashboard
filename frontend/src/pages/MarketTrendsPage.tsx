@@ -143,7 +143,11 @@ export function MarketTrendsPage() {
   const coverage = history?.coverage
   const missingSnapshotDays = coverage?.missingDates.length ?? 0
   const deduplication = overview?.deduplication
-  const showUniqueVacancies = (deduplication?.active ?? false) && overview?.uniqueVacancies != null
+  // Round 15 (M-5): a unique-vacancy count is global (dedup groups cannot be
+  // filtered by the current facets). Under an active filter, show the filtered
+  // active-listing count instead and label the scope explicitly.
+  const showUniqueVacancies =
+    !filteredScope && (deduplication?.active ?? false) && overview?.uniqueVacancies != null
 
   return (
     <div className="app-shell" id="market-trends">
@@ -208,7 +212,7 @@ export function MarketTrendsPage() {
         <section className="stats-grid" aria-busy={overviewQuery.isLoading || jobsQuery.isLoading}>
           <StatCard
             icon={Building2}
-            label={showUniqueVacancies ? 'Unique vacancies' : 'Active tracked listings'}
+            label={showUniqueVacancies ? 'Unique vacancies (all listings)' : 'Active tracked listings'}
             value={
               showUniqueVacancies
                 ? overview!.uniqueVacancies!.toLocaleString('en-NZ')

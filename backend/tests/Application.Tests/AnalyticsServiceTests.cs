@@ -29,9 +29,10 @@ public sealed class AnalyticsServiceTests
         var overview = await new AnalyticsService(dbContext, new FixedTimeProvider(Now)).GetOverviewAsync(CancellationToken.None);
 
         overview.ActiveListings.Should().Be(5, "the inactive listing is outside the active cohort");
-        overview.NewlyDiscovered.Current.Should().Be(3, "A, B and C were first seen inside the window");
-        overview.NewlyPosted.Current.Should().Be(1, "only B has a posted date inside the window");
-        overview.NewlyDiscovered.PercentChange.Should().Be(200m, "one listing was discovered in the previous window");
+        overview.NewlyDiscovered.Current.Should().Be(4, "A, B, C and the since-expired E were first seen inside the window");
+        overview.NewlyPosted.Current.Should().Be(2, "B and the since-expired E have a posted date inside the window");
+        overview.NewlyDiscovered.PercentChange.Should().Be(300m, "one listing was discovered in the previous window");
+        overview.DiscoveryBasis.Should().Contain("since expired").And.Contain("retention window");
         overview.NewlyPosted.NoPriorBaseline.Should().BeTrue("no comparable posted date exists in the previous window");
         overview.Interval.StartLocalDate.Should().Be("2026-10-08");
         overview.Interval.EndLocalDateExclusive.Should().Be("2026-10-15");
@@ -117,6 +118,71 @@ public sealed class AnalyticsServiceTests
 
         var fifteen = freshness.Windows.Single(window => window.Days == 15);
         fifteen.ComparisonAvailable.Should().BeFalse("the prior 15-day period predates the retention window");
+    }
+
+    [Fact]
+    public async Task Failed_crawls_do_not_count_as_sources_refreshed()
+    {
+        await using var dbContext = CreateDbContext();
+        AddJob(dbContext, "A");
+        dbContext.CrawlRuns.AddRange(
+            new CrawlRun
+            {
+                Id = Guid.NewGuid(),
+                Source = "Acme",
+                Status = "Completed",
+                StartedAt = Now.AddDays(-5),
+                FinishedAt = Now.AddDays(-5)
+            },
+            new CrawlRun
+            {
+                Id = Guid.NewGuid(),
+                Source = "Acme",
+                Status = "Failed",
+                StartedAt = Now.AddHours(-1),
+                FinishedAt = Now.AddHours(-1),
+                ErrorMessage = "HTTP 403"
+            },
+            new CrawlRun
+            {
+                Id = Guid.NewGuid(),
+                Source = "Beta",
+                Status = "Failed",
+                StartedAt = Now.AddHours(-2),
+                FinishedAt = Now.AddHours(-2),
+                ErrorMessage = "timeout"
+            });
+        dbContext.JobSources.AddRange(
+            new JobSource { Id = Guid.NewGuid(), Name = "Acme", Method = "scraping", Parser = "generic", Enabled = true, BaseUrl = "https://acme.example", LastCrawledAt = Now.AddHours(-1), CreatedAt = Now, UpdatedAt = Now },
+            new JobSource { Id = Guid.NewGuid(), Name = "Beta", Method = "scraping", Parser = "generic", Enabled = true, BaseUrl = "https://beta.example", LastCrawledAt = Now.AddHours(-2), CreatedAt = Now, UpdatedAt = Now });
+        await dbContext.SaveChangesAsync();
+
+        var overview = await new AnalyticsService(dbContext, new FixedTimeProvider(Now)).GetOverviewAsync(CancellationToken.None);
+
+        overview.DataStatus.EnabledSourcesWithRecentSuccess.Should().Be(0,
+            "LastCrawledAt is stamped for failed attempts and must not be used as a success timestamp");
+        overview.DataStatus.State.Should().Be(nameof(DataFreshnessState.Stale));
+    }
+
+    [Fact]
+    public async Task Comparable_history_uses_the_configured_retention_window()
+    {
+        await using var dbContext = CreateDbContext();
+        AddJob(dbContext, "A");
+
+        var defaultService = new AnalyticsService(dbContext, new FixedTimeProvider(Now));
+        var longerRetention = new AnalyticsService(
+            dbContext,
+            new FixedTimeProvider(Now),
+            lifecycleOptions: new Application.Crawling.CrawlerLifecycleOptions { RetentionDays = 35 });
+
+        var defaultFreshness = await defaultService.GetFreshnessAsync(CancellationToken.None);
+        var longerFreshness = await longerRetention.GetFreshnessAsync(CancellationToken.None);
+
+        defaultFreshness.Windows.Single(window => window.Days == 15).ComparisonAvailable.Should().BeFalse(
+            "the default 20-day window cannot cover the previous 15-day period");
+        longerFreshness.Windows.Single(window => window.Days == 15).ComparisonAvailable.Should().BeTrue(
+            "a configured 35-day retention window covers the previous 15-day period");
     }
 
     [Fact]

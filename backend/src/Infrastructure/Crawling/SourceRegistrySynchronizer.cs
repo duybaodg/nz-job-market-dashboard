@@ -54,8 +54,10 @@ public sealed class SourceRegistrySynchronizer(
             var baseUrl = site.JobsUrl ?? site.Homepage;
             var enabled = site.Enabled ?? true;
             var frequency = site.FrequencyMinutes is > 0 ? site.FrequencyMinutes.Value : 1440;
-            // robots.txt disallows crawling for some sites, so leave those unapproved.
-            var termsCheckedAt = site.RobotsAllows == false ? (DateTime?)null : now;
+            // Round 15 (M-8): only an explicit robotsAllows=true grants approval.
+            // false revokes it, and null is unapproved-pending review.
+            var robotsAllows = site.RobotsAllows == true;
+            var termsCheckedAt = robotsAllows ? (DateTime?)now : null;
 
             if (byName.TryGetValue(site.Name, out var entity))
             {
@@ -70,6 +72,8 @@ public sealed class SourceRegistrySynchronizer(
                     entity.CrawlFrequencyMinutes != frequency ||
                     wasRetired ||
                     !string.Equals(entity.Method, "Scrapling", StringComparison.Ordinal);
+                var nextTermsCheckedAt = robotsAllows ? (entity.TermsCheckedAt ?? now) : (DateTime?)null;
+                changed = changed || entity.TermsCheckedAt != nextTermsCheckedAt;
 
                 entity.BaseUrl = baseUrl;
                 entity.Parser = parser;
@@ -77,7 +81,7 @@ public sealed class SourceRegistrySynchronizer(
                 entity.Enabled = enabled;
                 entity.Method = "Scrapling";
                 entity.CrawlFrequencyMinutes = frequency;
-                entity.TermsCheckedAt ??= termsCheckedAt;
+                entity.TermsCheckedAt = nextTermsCheckedAt;
                 if (wasRetired)
                 {
                     entity.RetiredAt = null;

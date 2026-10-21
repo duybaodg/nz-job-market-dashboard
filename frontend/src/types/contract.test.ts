@@ -73,6 +73,7 @@ describe('API payload contract', () => {
       'dataStatus.state', 'dataStatus.lastSuccessfulUpdateUtc', 'dataStatus.newestListingSeenUtc',
       'dataStatus.enabledSources', 'dataStatus.enabledSourcesWithRecentSuccess', 'dataStatus.message',
       'uniqueVacancies', 'deduplication.listingsMerged', 'deduplication.groups',
+      'discoveryBasis',
     ])
   })
 
@@ -90,7 +91,7 @@ describe('API payload contract', () => {
       'coverageChanges[0].snapshotDate',
     ])
     requireFields(freshnessFixture, [
-      'totalActiveJobs', 'windows[0].days', 'windows[0].newlyPosted',
+      'totalActiveJobs', 'discoveryBasis', 'windows[0].days', 'windows[0].newlyPosted',
       'windows[0].previousNewlyPosted', 'windows[0].newlyDiscovered',
       'windows[0].previousNewlyDiscovered', 'windows[0].comparisonAvailable',
     ])

@@ -136,6 +136,7 @@ export type Overview = {
   interval: MetricInterval
   uniqueVacancies: number | null
   deduplication: DeduplicationSummary
+  discoveryBasis: string
 }
 
 export type SkillDemand = {
@@ -167,6 +168,7 @@ export type Freshness = {
   windows: FreshnessWindow[]
   uniqueVacancies: number | null
   deduplication: DeduplicationSummary
+  discoveryBasis: string
 }
 
 export type SourceHealthState =

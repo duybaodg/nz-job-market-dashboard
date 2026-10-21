@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarketTrendsPage } from './MarketTrendsPage'
+import { historyFixture, jobFixture, overviewFixture } from '../types/contract.fixtures'
 
 const { getHistoryMock, getJobsMock, getOverviewMock } = vi.hoisted(() => ({
   getHistoryMock: vi.fn(),
@@ -47,6 +48,29 @@ describe('MarketTrendsPage reporting period', () => {
   })
 
   afterEach(cleanup)
+
+  it('hides the global unique-vacancy headline when filters are active', async () => {
+    location.search = '?period=7&region=Auckland'
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockResolvedValue(historyFixture)
+
+    renderPage()
+
+    expect((await screen.findAllByText('Active tracked listings')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Unique vacancies (all listings)')).not.toBeInTheDocument()
+  })
+
+  it('shows the labelled global unique-vacancy headline without filters', async () => {
+    location.search = '?period=7'
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockResolvedValue(historyFixture)
+
+    renderPage()
+
+    expect(await screen.findByText('Unique vacancies (all listings)')).toBeInTheDocument()
+  })
 
   it('fetches retained history for the selected reporting period', async () => {
     const { rerender } = renderPage()

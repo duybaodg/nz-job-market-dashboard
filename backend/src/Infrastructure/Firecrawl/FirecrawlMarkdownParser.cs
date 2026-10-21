@@ -31,25 +31,37 @@ public sealed class FirecrawlMarkdownParser : IFirecrawlMarkdownParser
 
     private static IEnumerable<RawJobInput> ParseLinkedJobs(string source, string sourceUrl, string markdown)
     {
-        foreach (Match match in LinkRegex.Matches(markdown))
-        {
-            var title = Clean(match.Groups["title"].Value);
-            var url = match.Groups["url"].Value.Trim();
-
-            if (!LooksLikeJobTitle(title))
+        // Round 15 (M-10): page-level labels belong to one card only when the
+        // page is a single-job page. On a multi-card listing each card is parsed
+        // from its own block, so the first card's salary/location cannot leak to
+        // every later card.
+        var links = LinkRegex.Matches(markdown)
+            .Cast<Match>()
+            .Select(match => new
             {
-                continue;
-            }
+                Match = match,
+                Title = Clean(match.Groups["title"].Value),
+                Url = match.Groups["url"].Value.Trim()
+            })
+            .Where(link => LooksLikeJobTitle(link.Title))
+            .ToList();
+
+        for (var index = 0; index < links.Count; index++)
+        {
+            var link = links[index];
+            var blockEnd = index + 1 < links.Count ? links[index + 1].Match.Index : markdown.Length;
+            var block = markdown.Substring(link.Match.Index, Math.Max(0, blockEnd - link.Match.Index));
+            var singleJobPage = links.Count == 1;
 
             yield return new RawJobInput(
                 source,
                 null,
-                title,
-                null,
-                ExtractLocation(markdown),
-                ExtractSalary(markdown),
-                ExtractNearbyDescription(markdown, title),
-                url,
+                link.Title,
+                ExtractCompany(block) ?? (singleJobPage ? ExtractCompany(markdown) : null),
+                ExtractLocation(block) ?? (singleJobPage ? ExtractLocation(markdown) : null),
+                ExtractSalary(block) ?? (singleJobPage ? ExtractSalary(markdown) : null),
+                ExtractNearbyDescription(block, link.Title) ?? (singleJobPage ? ExtractNearbyDescription(markdown, link.Title) : null),
+                link.Url,
                 null,
                 null);
         }

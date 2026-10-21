@@ -44,7 +44,7 @@ public sealed class JobQualityGuardTests
 public sealed class JobQualityGuardRunTests
 {
     [Fact]
-    public async Task RunAsync_removes_junk_and_normalises_regions()
+    public async Task RunAsync_flags_junk_and_normalises_regions()
     {
         await using var dbContext = CreateDbContext();
         dbContext.JobSources.Add(new JobSource
@@ -69,10 +69,13 @@ public sealed class JobQualityGuardRunTests
         var guard = CreateGuard(dbContext);
         var result = await guard.RunAsync(CancellationToken.None);
 
-        result.JunkRemoved.Should().Be(2);
+        result.JunkFlagged.Should().Be(2);
         result.RegionsNormalised.Should().BeGreaterThan(0);
-        dbContext.Jobs.Should().ContainSingle();
-        dbContext.Jobs.Single().Region.Should().Be("Canterbury");
+        dbContext.Jobs.Should().HaveCount(3, "rejected source rows are retained for review, not hard-deleted");
+        var flagged = dbContext.Jobs.Where(job => job.IsQualityFlagged).ToList();
+        flagged.Should().HaveCount(2);
+        flagged.Should().OnlyContain(job => !job.IsActive && job.QualityFlagReason != null);
+        dbContext.Jobs.Single(job => !job.IsQualityFlagged).Region.Should().Be("Canterbury");
     }
 
     [Fact]
@@ -88,12 +91,12 @@ public sealed class JobQualityGuardRunTests
         var first = await guard.RunAsync(CancellationToken.None);
         var second = await guard.RunAsync(CancellationToken.None);
 
-        first.JunkRemoved.Should().Be(1);
+        first.JunkFlagged.Should().Be(1);
         first.RegionsNormalised.Should().Be(1);
-        second.JunkRemoved.Should().Be(0);
+        second.JunkFlagged.Should().Be(0);
         second.RegionsNormalised.Should().Be(0);
-        dbContext.Jobs.Should().ContainSingle();
-        dbContext.Jobs.Single().Region.Should().Be("Waikato");
+        dbContext.Jobs.Should().HaveCount(2);
+        dbContext.Jobs.Single(job => !job.IsQualityFlagged).Region.Should().Be("Waikato");
     }
 
     [Fact]
@@ -201,7 +204,7 @@ public sealed class JobQualityGuardRunTests
     }
 
     [Fact]
-    public async Task RunAsync_backfills_salary_provenance_and_flags_questionable_parses()
+    public async Task RunAsync_marks_legacy_salary_period_unknown_instead_of_annualising()
     {
         await using var dbContext = CreateDbContext();
         dbContext.JobSources.Add(new JobSource
@@ -215,22 +218,25 @@ public sealed class JobQualityGuardRunTests
         var normal = CreateJob("Senior Software Engineer", "https://acme.example/jobs/s1");
         normal.SalaryMin = 120_000m;
         normal.SalaryMax = 140_000m;
-        var support = CreateJob("Tier 2 IT Support Specialist", "https://acme.example/jobs/s2");
-        support.SalaryMin = 300_000m;
-        dbContext.Jobs.AddRange(normal, support);
+        var low = CreateJob("Contract Developer", "https://acme.example/jobs/s2");
+        low.SalaryMin = 45m;
+        dbContext.Jobs.AddRange(normal, low);
         await dbContext.SaveChangesAsync();
 
         var guard = CreateGuard(dbContext);
         var first = await guard.RunAsync(CancellationToken.None);
         var second = await guard.RunAsync(CancellationToken.None);
 
-        first.SalariesBackfilled.Should().Be(2);
-        second.SalariesBackfilled.Should().Be(0, "rows with provenance are skipped on the next run");
-        normal.SalaryText.Should().Be("$120000 - $140000");
-        normal.SalaryPeriod.Should().Be("Year");
-        normal.SalaryQuestionable.Should().BeFalse();
-        support.SalaryQuestionable.Should().BeTrue();
-        support.SalaryQuestionableReason.Should().Contain("support");
+        first.SalariesMarkedUnknown.Should().Be(2);
+        second.SalariesMarkedUnknown.Should().Be(0, "the marker makes the next run a no-op");
+        normal.SalaryText.Should().BeNull();
+        normal.SalaryPeriod.Should().Be("Unknown", "a legacy bound has no known pay period");
+        normal.SalaryQuestionable.Should().BeTrue();
+        normal.SalarySource.Should().Be(JobQualityGuardMarkers.LegacyUnknownSalarySource);
+        low.SalaryPeriod.Should().Be("Unknown", "45 must not be silently relabelled as an annual salary");
+        low.SalaryMin.Should().Be(45m);
+        low.SalaryQuestionable.Should().BeTrue();
+        low.SalaryQuestionableReason.Should().Contain("unknown pay period");
     }
 
     private static JobQualityGuard CreateGuard(ApplicationDbContext dbContext) => new(

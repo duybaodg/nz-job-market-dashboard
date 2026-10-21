@@ -88,6 +88,55 @@ public sealed class SourceRegistrySynchronizerTests : IDisposable
         removed.RetiredAt.Should().Be(SeedTime);
     }
 
+    [Fact]
+    public async Task SyncAsync_revokes_approval_when_the_registry_marks_robots_disallowed()
+    {
+        WriteRegistry(Site("Alpha", enabled: true, robotsAllows: false));
+        await using var dbContext = CreateDbContext();
+        var source = Source("Alpha", enabled: true);
+        source.TermsCheckedAt = SeedTime;
+        dbContext.JobSources.Add(source);
+        await dbContext.SaveChangesAsync();
+
+        var result = await Synchronizer(dbContext).SyncAsync(CancellationToken.None);
+
+        var alpha = await dbContext.JobSources.SingleAsync(item => item.Name == "Alpha");
+        alpha.TermsCheckedAt.Should().BeNull("robotsAllows=false revokes the earlier approval");
+        result.Updated.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SyncAsync_treats_unknown_robots_permission_as_unapproved()
+    {
+        WriteRegistry(Site("Alpha", enabled: true, robotsAllows: null));
+        await using var dbContext = CreateDbContext();
+        var source = Source("Alpha", enabled: true);
+        source.TermsCheckedAt = SeedTime;
+        dbContext.JobSources.Add(source);
+        await dbContext.SaveChangesAsync();
+
+        await Synchronizer(dbContext).SyncAsync(CancellationToken.None);
+
+        var alpha = await dbContext.JobSources.SingleAsync(item => item.Name == "Alpha");
+        alpha.TermsCheckedAt.Should().BeNull("unknown permission is pending review, not a grant");
+    }
+
+    [Fact]
+    public async Task SyncAsync_keeps_an_approval_when_robots_are_explicitly_allowed()
+    {
+        WriteRegistry(Site("Alpha", enabled: true, robotsAllows: true));
+        await using var dbContext = CreateDbContext();
+        var source = Source("Alpha", enabled: true);
+        source.TermsCheckedAt = SeedTime;
+        dbContext.JobSources.Add(source);
+        await dbContext.SaveChangesAsync();
+
+        await Synchronizer(dbContext).SyncAsync(CancellationToken.None);
+
+        var alpha = await dbContext.JobSources.SingleAsync(item => item.Name == "Alpha");
+        alpha.TermsCheckedAt.Should().Be(SeedTime);
+    }
+
     public void Dispose()
     {
         if (File.Exists(registryPath))
@@ -114,7 +163,7 @@ public sealed class SourceRegistrySynchronizerTests : IDisposable
         File.WriteAllText(registryPath, $"{{\"sites\":[{string.Join(",", entries)}]}}");
     }
 
-    private static object Site(string name, bool enabled) => new
+    private static object Site(string name, bool enabled, bool? robotsAllows = true) => new
     {
         name,
         homepage = $"https://{name.ToLowerInvariant()}.example/",
@@ -122,7 +171,8 @@ public sealed class SourceRegistrySynchronizerTests : IDisposable
         parser = "generic",
         category = "company",
         enabled,
-        frequency_minutes = 1440
+        frequency_minutes = 1440,
+        robotsAllows
     };
 
     private static JobSource Source(string name, bool enabled, DateTime? retiredAt = null) => new()

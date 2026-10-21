@@ -82,11 +82,11 @@ public sealed class ApiPayloadContractTests
             "generatedAtUtc", "activeListings", "postedDateKnown", "postedDateMissing",
             "newlyDiscovered", "newlyPosted",
             "salary", "employers", "dataStatus", "mostActiveRegion", "mostRequestedSkill",
-            "interval", "uniqueVacancies", "deduplication");
+            "interval", "uniqueVacancies", "deduplication", "discoveryBasis");
 
         RequireNonNull(overview,
             "generatedAtUtc", "activeListings", "postedDateKnown", "postedDateMissing",
-            "mostActiveRegion", "mostRequestedSkill");
+            "mostActiveRegion", "mostRequestedSkill", "discoveryBasis");
 
         Require(overview,
             "newlyDiscovered.current", "newlyDiscovered.previous", "newlyDiscovered.absoluteChange",
@@ -231,8 +231,8 @@ public sealed class ApiPayloadContractTests
 
         var freshness = Json(await new AnalyticsService(db, new FixedTimeProvider(Now)).GetFreshnessAsync(CancellationToken.None));
 
-        Require(freshness, "totalActiveJobs", "generatedAtUtc", "dataStatus", "windows", "uniqueVacancies", "deduplication");
-        RequireNonNull(freshness, "totalActiveJobs", "generatedAtUtc");
+        Require(freshness, "totalActiveJobs", "generatedAtUtc", "dataStatus", "windows", "uniqueVacancies", "deduplication", "discoveryBasis");
+        RequireNonNull(freshness, "totalActiveJobs", "generatedAtUtc", "discoveryBasis");
         Require(freshness,
             "dataStatus.state", "dataStatus.lastSuccessfulUpdateUtc",
             "dataStatus.newestListingSeenUtc", "dataStatus.enabledSources",

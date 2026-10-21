@@ -66,6 +66,15 @@ public sealed class CrawlDataRetentionService(
     public static Expression<Func<CrawlRun, bool>> ExpiredCrawlRun(DateTime cutoff) =>
         run => run.StartedAt < cutoff;
 
+    /// <summary>
+    /// Open or resolved duplicate-review candidates that point at any of the
+    /// jobs about to be purged (both sides of the pair, including null).
+    /// </summary>
+    public static Expression<Func<DuplicateReviewCandidate, bool>> ReviewsReferencing(
+        IReadOnlyCollection<Guid> jobIds) =>
+        candidate => jobIds.Contains(candidate.JobId)
+            || (candidate.CandidateJobId != null && jobIds.Contains(candidate.CandidateJobId.Value));
+
     /// <summary>Bound each DELETE so a large backlog is purged in short transactions.</summary>
     public const int BatchSize = 1000;
 
@@ -128,6 +137,13 @@ public sealed class CrawlDataRetentionService(
             {
                 break;
             }
+
+            // Round 15 (L-8): remove duplicate-review rows that reference a
+            // purged job in the same pass, so the admin report never shows dead
+            // references (there is no FK/cascade on this table).
+            await dbContext.DuplicateReviewCandidates
+                .Where(ReviewsReferencing(jobIds))
+                .ExecuteDeleteAsync(cancellationToken);
 
             jobsDeleted += await dbContext.Jobs
                 .Where(job => jobIds.Contains(job.Id))

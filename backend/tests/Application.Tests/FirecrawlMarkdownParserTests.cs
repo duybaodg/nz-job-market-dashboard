@@ -31,6 +31,36 @@ public sealed class FirecrawlMarkdownParserTests
     }
 
     [Fact]
+    public void Parse_uses_each_card_block_for_location_and_salary_on_a_multi_card_page()
+    {
+        const string markdown = """
+        # Search results
+
+        [Senior .NET Engineer](https://example.com/jobs/1)
+        Company: Harbour Systems
+        Location: Auckland
+        Salary: $125k - $150k
+
+        [Graduate Cloud Engineer](https://example.com/jobs/2)
+        Company: Cloud Kiwi
+        Location: Hamilton
+        Salary: $80k - $95k
+
+        [Privacy Policy](https://example.com/privacy)
+        """;
+
+        var jobs = parser.Parse("Firecrawl", "https://example.com/search", markdown);
+
+        jobs.Should().HaveCount(2);
+        jobs[0].Title.Should().Be("Senior .NET Engineer");
+        jobs[0].Location.Should().Be("Auckland");
+        jobs[0].SalaryText.Should().Be("$125k - $150k");
+        jobs[1].Title.Should().Be("Graduate Cloud Engineer");
+        jobs[1].Location.Should().Be("Hamilton");
+        jobs[1].SalaryText.Should().Be("$80k - $95k");
+    }
+
+    [Fact]
     public void Parse_falls_back_to_single_page_job_from_first_heading()
     {
         const string markdown = """

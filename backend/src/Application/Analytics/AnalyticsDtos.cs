@@ -88,7 +88,8 @@ public sealed record OverviewDto(
     string? MostRequestedSkill,
     MetricIntervalDto Interval,
     int? UniqueVacancies,
-    DeduplicationSummaryDto Deduplication);
+    DeduplicationSummaryDto Deduplication,
+    string DiscoveryBasis);
 
 public sealed record FreshnessWindowDto(
     int Days,
@@ -107,4 +108,5 @@ public sealed record FreshnessDto(
     DataStatusDto DataStatus,
     IReadOnlyList<FreshnessWindowDto> Windows,
     int? UniqueVacancies,
-    DeduplicationSummaryDto Deduplication);
+    DeduplicationSummaryDto Deduplication,
+    string DiscoveryBasis);

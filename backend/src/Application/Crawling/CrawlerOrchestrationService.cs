@@ -335,6 +335,10 @@ public sealed class CrawlerOrchestrationService(
             existingJob.IsActive = true;
             existingJob.ExpiredAt = null;
             existingJob.MissingCrawlCount = 0;
+            // Round 15 (H-11): a re-crawl that now passes validation clears the
+            // retained quality flag; the row was never deleted.
+            existingJob.IsQualityFlagged = false;
+            existingJob.QualityFlagReason = null;
             existingJob.EmployerCanonicalId = await ResolveEmployerAsync(candidate.Source, existingJob.Company, cancellationToken);
             return (0, null);
         }

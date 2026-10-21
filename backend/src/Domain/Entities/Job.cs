@@ -58,6 +58,13 @@ public sealed class Job
     public DateTime? ClosingDate { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime? ExpiredAt { get; set; }
+    /// <summary>
+    /// Round 15: the content validator rejected this retained row. It is kept
+    /// for review instead of being hard-deleted; retention remains the only
+    /// feature that removes source rows.
+    /// </summary>
+    public bool IsQualityFlagged { get; set; }
+    public string? QualityFlagReason { get; set; }
     public int MissingCrawlCount { get; set; }
     public DateTime FirstSeenAt { get; set; }
     public DateTime LastSeenAt { get; set; }

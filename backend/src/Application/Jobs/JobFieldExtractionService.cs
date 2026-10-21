@@ -342,6 +342,9 @@ public sealed class JobFieldExtractionService(
             return false;
         }
 
+        // Round 15 (M-3): the flag drives the UI "Check parse" badge and the
+        // questionable count, so a recorded conflict must set it too.
+        job.SalaryQuestionable = true;
         job.SalaryQuestionableReason = string.IsNullOrWhiteSpace(job.SalaryQuestionableReason)
             ? note
             : $"{job.SalaryQuestionableReason}; {note}";

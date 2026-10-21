@@ -134,6 +134,8 @@ export const overviewFixture: Overview = {
     groupCap: 4,
     lastRunStatus: 'Completed',
   },
+  discoveryBasis:
+    'Listings first seen or posted inside the window, including rows that have since expired while still inside the 20-day retention window. Not a census of every vacancy ever advertised.',
 }
 
 export const freshnessFixture: Freshness = {
@@ -177,6 +179,7 @@ export const freshnessFixture: Freshness = {
   ],
   uniqueVacancies: 432,
   deduplication: overviewFixture.deduplication,
+  discoveryBasis: overviewFixture.discoveryBasis,
 }
 
 export const historyFixture: History = {

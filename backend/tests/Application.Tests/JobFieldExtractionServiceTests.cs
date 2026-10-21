@@ -143,6 +143,7 @@ public sealed class JobFieldExtractionServiceTests
 
         first.SalaryConflictsNoted.Should().Be(1);
         job.SalaryMin.Should().Be(100_000m);
+        job.SalaryQuestionable.Should().BeTrue("a recorded conflict must surface the questionable badge");
         job.SalaryQuestionableReason.Should().Contain("source retained");
         second.SalaryConflictsNoted.Should().Be(0);
     }

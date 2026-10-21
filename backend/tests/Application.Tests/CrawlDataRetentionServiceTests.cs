@@ -75,6 +75,39 @@ public sealed class CrawlDataRetentionServiceTests
         predicate(new CrawlRun { StartedAt = Now.AddDays(-1) }).Should().BeFalse();
     }
 
+    [Fact]
+    public void ReviewsReferencing_matches_both_sides_of_a_purged_pair()
+    {
+        var purged = Guid.NewGuid();
+        var predicate = CrawlDataRetentionService
+            .ReviewsReferencing([purged])
+            .Compile();
+
+        predicate(new DuplicateReviewCandidate
+        {
+            JobId = purged,
+            CandidateJobId = Guid.NewGuid()
+        }).Should().BeTrue("the purged job is the review subject");
+
+        predicate(new DuplicateReviewCandidate
+        {
+            JobId = Guid.NewGuid(),
+            CandidateJobId = purged
+        }).Should().BeTrue("the purged job is the other member of the pair");
+
+        predicate(new DuplicateReviewCandidate
+        {
+            JobId = Guid.NewGuid(),
+            CandidateJobId = null
+        }).Should().BeFalse("a pair between two retained jobs must survive");
+
+        predicate(new DuplicateReviewCandidate
+        {
+            JobId = Guid.NewGuid(),
+            CandidateJobId = Guid.NewGuid()
+        }).Should().BeFalse();
+    }
+
     private static Job CreateJob(DateTime lastSeenAt, DateTime? createdAt = null) => new()
     {
         Id = Guid.NewGuid(),

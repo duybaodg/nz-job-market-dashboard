@@ -9,7 +9,17 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Jobs;
 
-public sealed record JobQualityGuardResult(int JunkRemoved, int RegionsNormalised, int LocationsRepaired, int SalariesBackfilled);
+public sealed record JobQualityGuardResult(
+    int JunkFlagged,
+    int RegionsNormalised,
+    int LocationsRepaired,
+    int SalariesMarkedUnknown);
+
+/// <summary>Marker written when a legacy numeric salary has no known pay period.</summary>
+public static class JobQualityGuardMarkers
+{
+    public const string LegacyUnknownSalarySource = "legacy-unknown";
+}
 
 /// <summary>
 /// Startup repair pass for data written by older worker versions:
@@ -89,10 +99,10 @@ public sealed class JobQualityGuard(
             StringComparer.OrdinalIgnoreCase);
 
         var now = DateTime.UtcNow;
-        var junkRemoved = 0;
+        var junkFlagged = 0;
         var regionsNormalised = 0;
         var locationsRepaired = 0;
-        var salariesBackfilled = 0;
+        var salariesMarkedUnknown = 0;
         var offset = 0;
 
         // Round 15 (H-8): page by keyset order so a Pi never materialises the
@@ -120,32 +130,39 @@ public sealed class JobQualityGuard(
 
             if (!validation.IsAccepted)
             {
-                // Hard-remove: the record is not a job at all, so it must not
-                // reappear through the status=all view either.
-                dbContext.Jobs.Remove(job);
-                junkRemoved++;
+                // Round 15 (H-11): retain the row for review instead of a hard
+                // delete. It is inactive so it never appears as a live listing,
+                // and the validator's reason is recorded. A second run is a no-op.
+                if (!job.IsQualityFlagged)
+                {
+                    job.IsQualityFlagged = true;
+                    job.QualityFlagReason = validation.RejectionReason;
+                    job.IsActive = false;
+                    job.ExpiredAt = now;
+                    job.UpdatedAt = now;
+                    junkFlagged++;
+                }
+
                 continue;
             }
 
-            // One-off provenance backfill for salary rows written before the
-            // advertised text/units existed. All legacy values were annual NZD,
-            // so synthesise a parse input from the numeric bounds and let the
-            // central parser set the period and flag questionable parses. Rows
-            // written by the current worker already carry salary_text and are
-            // skipped, which keeps this pass idempotent.
-            if (job.SalaryText is null && (job.SalaryMin is not null || job.SalaryMax is not null))
+            // Round 15 (L-6): legacy numeric bounds have no salary_text and no
+            // known pay period. Do not synthesise an annual figure; retain the
+            // bounds, mark the period Unknown/questionable, and leave the text
+            // absent. Rows written by the current worker carry provenance and
+            // are skipped, keeping the pass idempotent.
+            if (job.SalaryText is null
+                && (job.SalaryMin is not null || job.SalaryMax is not null)
+                && string.IsNullOrWhiteSpace(job.SalarySource))
             {
-                var synthetic = job.SalaryMin is not null && job.SalaryMax is not null
-                    ? $"${job.SalaryMin} - ${job.SalaryMax}"
-                    : $"${job.SalaryMin ?? job.SalaryMax}";
-                var salary = SalaryParser.Parse(synthetic, job.Title);
-                job.SalaryText = synthetic;
-                job.SalaryCurrency = salary.Currency;
-                job.SalaryPeriod = salary.PayPeriod.ToString();
-                job.SalaryQuestionable = salary.IsQuestionable;
-                job.SalaryQuestionableReason = salary.QuestionableReason;
+                job.SalaryPeriod = SalaryPayPeriod.Unknown.ToString();
+                job.SalarySource = JobQualityGuardMarkers.LegacyUnknownSalarySource;
+                job.SalaryQuestionable = true;
+                job.SalaryQuestionableReason = string.IsNullOrWhiteSpace(job.SalaryQuestionableReason)
+                    ? "legacy salary bounds have an unknown pay period; retained without annualising"
+                    : $"{job.SalaryQuestionableReason}; legacy salary bounds have an unknown pay period; retained without annualising";
                 job.UpdatedAt = now;
-                salariesBackfilled++;
+                salariesMarkedUnknown++;
             }
 
             // One-off repair for rows written before the shared location
@@ -171,19 +188,19 @@ public sealed class JobQualityGuard(
             }
         }
 
-            if (junkRemoved > 0 || regionsNormalised > 0 || locationsRepaired > 0 || salariesBackfilled > 0)
+            if (junkFlagged > 0 || regionsNormalised > 0 || locationsRepaired > 0 || salariesMarkedUnknown > 0)
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
         }
 
         logger.LogInformation(
-            "Job quality guard: removed {JunkRemoved} junk records, normalised {RegionsNormalised} regions, repaired {LocationsRepaired} locations, backfilled {SalariesBackfilled} salary rows.",
-            junkRemoved,
+            "Job quality guard: flagged {JunkFlagged} rejected rows (retained for review), normalised {RegionsNormalised} regions, repaired {LocationsRepaired} locations, marked {SalariesMarkedUnknown} legacy salary rows unknown.",
+            junkFlagged,
             regionsNormalised,
             locationsRepaired,
-            salariesBackfilled);
-        return new JobQualityGuardResult(junkRemoved, regionsNormalised, locationsRepaired, salariesBackfilled);
+            salariesMarkedUnknown);
+        return new JobQualityGuardResult(junkFlagged, regionsNormalised, locationsRepaired, salariesMarkedUnknown);
     }
 
     private static string? Summarise(string? text)

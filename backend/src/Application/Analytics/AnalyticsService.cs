@@ -25,34 +25,45 @@ public static class FreshnessWindows
 public sealed class AnalyticsService(
     IApplicationDbContext dbContext,
     TimeProvider? timeProvider = null,
-    IListingDeduplicationService? deduplicationService = null) : IAnalyticsService
+    IListingDeduplicationService? deduplicationService = null,
+    CrawlerLifecycleOptions? lifecycleOptions = null) : IAnalyticsService
 {
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
+    private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
+
+    /// <summary>
+    /// Explicit scope label for discovery/posted counts. The cohort includes
+    /// retained listings that have since expired, so churn cannot look like
+    /// growth by dropping old rows from the previous period.
+    /// </summary>
+    private string DiscoveryBasis =>
+        $"Listings first seen or posted inside the window, including rows that have since expired while still inside the "
+        + $"{lifecycle.RetentionDays}-day retention window. Not a census of every vacancy ever advertised.";
 
     public async Task<OverviewDto> GetOverviewAsync(CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var active = await LoadActiveListingsAsync(cancellationToken);
         var categories = await LoadSourceCategoriesAsync(cancellationToken);
-        var dateObservations = active
-            .Select(job => new ListingDateObservation(job.PostedDate, job.FirstSeenAt))
-            .ToList();
+        // Round 15 (H-10/M-4): discovery/posted counts use the retained cohort
+        // (active + recently expired), not just today's active rows.
+        var discoveryObservations = await LoadDiscoveryObservationsAsync(now, cancellationToken);
 
         var interval = NzReportingCalendar.LastCompleteDays(7, now);
         var previousInterval = NzReportingCalendar.PreviousPeriod(interval);
 
-        var newlyDiscovered = ListingMetrics.Count(dateObservations, interval, DateBasis.Discovered);
-        var newlyPosted = ListingMetrics.Count(dateObservations, interval, DateBasis.Posted);
+        var newlyDiscovered = ListingMetrics.Count(discoveryObservations, interval, DateBasis.Discovered);
+        var newlyPosted = ListingMetrics.Count(discoveryObservations, interval, DateBasis.Posted);
 
         var discoveredChange = BuildChange(
             newlyDiscovered.Count,
             HistoryAvailable(previousInterval, now)
-                ? ListingMetrics.Count(dateObservations, previousInterval, DateBasis.Discovered).Count
+                ? ListingMetrics.Count(discoveryObservations, previousInterval, DateBasis.Discovered).Count
                 : null);
         var postedChange = BuildChange(
             newlyPosted.Count,
             HistoryAvailable(previousInterval, now)
-                ? ListingMetrics.Count(dateObservations, previousInterval, DateBasis.Posted).Count
+                ? ListingMetrics.Count(discoveryObservations, previousInterval, DateBasis.Posted).Count
                 : null);
 
         var salary = SalaryMetrics.Compute(active.Select(job => new SalaryObservation(
@@ -100,7 +111,8 @@ public sealed class AnalyticsService(
                 .FirstOrDefaultAsync(cancellationToken),
             ToIntervalDto(interval, isPartial: false),
             deduplication.UniqueVacancies,
-            deduplication);
+            deduplication,
+            DiscoveryBasis);
     }
 
     public async Task<IReadOnlyList<SkillDemandDto>> GetTopSkillsAsync(CancellationToken cancellationToken)
@@ -138,9 +150,7 @@ public sealed class AnalyticsService(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var active = await LoadActiveListingsAsync(cancellationToken);
-        var dateObservations = active
-            .Select(job => new ListingDateObservation(job.PostedDate, job.FirstSeenAt))
-            .ToList();
+        var discoveryObservations = await LoadDiscoveryObservationsAsync(now, cancellationToken);
         var windows = new List<FreshnessWindowDto>();
 
         foreach (var days in FreshnessWindows.All)
@@ -149,13 +159,13 @@ public sealed class AnalyticsService(
             var previousInterval = NzReportingCalendar.PreviousPeriod(interval);
             var comparisonAvailable = HistoryAvailable(previousInterval, now);
 
-            var posted = ListingMetrics.Count(dateObservations, interval, DateBasis.Posted);
-            var discovered = ListingMetrics.Count(dateObservations, interval, DateBasis.Discovered);
+            var posted = ListingMetrics.Count(discoveryObservations, interval, DateBasis.Posted);
+            var discovered = ListingMetrics.Count(discoveryObservations, interval, DateBasis.Discovered);
             var previousPosted = comparisonAvailable
-                ? ListingMetrics.Count(dateObservations, previousInterval, DateBasis.Posted).Count
+                ? ListingMetrics.Count(discoveryObservations, previousInterval, DateBasis.Posted).Count
                 : 0;
             var previousDiscovered = comparisonAvailable
-                ? ListingMetrics.Count(dateObservations, previousInterval, DateBasis.Discovered).Count
+                ? ListingMetrics.Count(discoveryObservations, previousInterval, DateBasis.Discovered).Count
                 : 0;
 
             windows.Add(new FreshnessWindowDto(
@@ -177,7 +187,8 @@ public sealed class AnalyticsService(
             await BuildDataStatusAsync(now, cancellationToken),
             windows,
             deduplication.UniqueVacancies,
-            deduplication);
+            deduplication,
+            DiscoveryBasis);
     }
 
     private static ChangeDto BuildChange(int current, int? previous) =>
@@ -203,8 +214,20 @@ public sealed class AnalyticsService(
     /// falls inside the crawl retention window. Older periods are declared
     /// unavailable rather than guessed.
     /// </summary>
-    private static bool HistoryAvailable(ReportingInterval previousInterval, DateTime now) =>
-        previousInterval.StartUtc >= now.AddDays(-CrawlerLifecycleOptions.DefaultRetentionDays);
+    private bool HistoryAvailable(ReportingInterval previousInterval, DateTime now) =>
+        previousInterval.StartUtc >= now.AddDays(-Math.Max(lifecycle.RetentionDays, 1));
+
+    private async Task<List<ListingDateObservation>> LoadDiscoveryObservationsAsync(
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var cutoff = now.AddDays(-Math.Max(lifecycle.RetentionDays, 1));
+        return await dbContext.Jobs
+            .AsNoTracking()
+            .Where(job => job.IsActive || job.FirstSeenAt >= cutoff || job.LastSeenAt >= cutoff)
+            .Select(job => new ListingDateObservation(job.PostedDate, job.FirstSeenAt))
+            .ToListAsync(cancellationToken);
+    }
 
     private async Task<List<ActiveListing>> LoadActiveListingsAsync(CancellationToken cancellationToken)
     {
@@ -337,16 +360,34 @@ public sealed class AnalyticsService(
             .Select(job => (DateTime?)job.LastSeenAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+        // Round 15 (H-4): LastCrawledAt is stamped for failed attempts too, so it
+        // must never be passed as "last successful". Use the latest Completed run
+        // per source; a source whose only recent runs failed is not refreshed.
+        var lastSuccessBySource = await dbContext.CrawlRuns
+            .AsNoTracking()
+            .Where(run => run.Status == "Completed" && run.FinishedAt != null)
+            .GroupBy(run => run.Source)
+            .Select(group => new { Source = group.Key, Last = group.Max(run => run.FinishedAt) })
+            .ToDictionaryAsync(item => item.Source, item => item.Last, cancellationToken);
+
         var sources = await dbContext.JobSources
             .AsNoTracking()
-            .Select(source => new SourceRunObservation(source.Name, source.Enabled, source.LastCrawledAt, null))
+            .Select(source => new { source.Name, source.Enabled })
             .ToListAsync(cancellationToken);
+
+        var observations = sources
+            .Select(source => new SourceRunObservation(
+                source.Name,
+                source.Enabled,
+                lastSuccessBySource.GetValueOrDefault(source.Name),
+                null))
+            .ToList();
 
         var status = DataStatusEvaluator.Evaluate(
             now,
             lastSuccessful,
             newestSeen,
-            sources,
+            observations,
             DataStatusEvaluator.DefaultStaleAfter);
 
         return new DataStatusDto(

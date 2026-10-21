@@ -74,6 +74,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(job => job.ClosingDate).HasColumnName("closing_date");
             entity.Property(job => job.IsActive).HasColumnName("is_active");
             entity.Property(job => job.ExpiredAt).HasColumnName("expired_at");
+            entity.Property(job => job.IsQualityFlagged).HasColumnName("is_quality_flagged").HasDefaultValue(false);
+            entity.Property(job => job.QualityFlagReason).HasColumnName("quality_flag_reason");
             entity.Property(job => job.MissingCrawlCount).HasColumnName("missing_crawl_count");
             entity.Property(job => job.FirstSeenAt).HasColumnName("first_seen_at");
             entity.Property(job => job.LastSeenAt).HasColumnName("last_seen_at");
