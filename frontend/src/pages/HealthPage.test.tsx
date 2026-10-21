@@ -86,6 +86,8 @@ describe('HealthPage password gate', () => {
 
     expect(await screen.findByText('Acme Analytics')).toBeInTheDocument()
     expect(screen.getByText('All sources')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /^source/i })).toHaveAttribute('aria-sort', 'none')
+    expect(screen.getByRole('columnheader', { name: /^state/i })).toHaveAttribute('aria-sort', 'ascending')
     expect(getHealthMock).toHaveBeenCalledWith('letmein')
     expect(window.sessionStorage.getItem(HEALTH_PASSWORD_STORAGE_KEY)).toBe('letmein')
     expect(window.localStorage.getItem(HEALTH_PASSWORD_STORAGE_KEY)).toBeNull()
@@ -112,6 +114,17 @@ describe('HealthPage password gate', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/session expired/i)
     expect(screen.getByRole('heading', { name: /crawler health is locked/i })).toBeInTheDocument()
     expect(window.sessionStorage.getItem(HEALTH_PASSWORD_STORAGE_KEY)).toBeNull()
+  })
+
+  it('shows a distinct retry window on a 429 refresh and keeps the stored password', async () => {
+    window.sessionStorage.setItem(HEALTH_PASSWORD_STORAGE_KEY, 'valid-password')
+    getHealthMock.mockRejectedValue(new ApiError(429))
+
+    renderPage()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/rate limited/i)
+    expect(screen.getByRole('alert')).toHaveTextContent(/five minutes/i)
+    expect(window.sessionStorage.getItem(HEALTH_PASSWORD_STORAGE_KEY)).toBe('valid-password')
   })
 
   it('surfaces the rate-limit message after too many failures', async () => {

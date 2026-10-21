@@ -13,8 +13,19 @@ public interface IJobService
 
 public sealed class JobService(IApplicationDbContext dbContext) : IJobService
 {
+    /// <summary>
+    /// Round 15 (H-12): the public feed is bounded. The SPA aggregates client
+    /// side by design, so it requests the maximum retained-active window; a
+    /// larger dataset is still truncated rather than materialising the table.
+    /// </summary>
+    public const int DefaultLimit = 2000;
+
+    public const int MaxLimit = 5000;
+
     public async Task<IReadOnlyList<JobDto>> GetJobsAsync(JobListQuery query, CancellationToken cancellationToken)
     {
+        var limit = Math.Clamp(query.Limit ?? DefaultLimit, 1, MaxLimit);
+        var offset = Math.Max(query.Offset ?? 0, 0);
         var jobs = dbContext.Jobs.AsNoTracking().Include(job => job.Skills).AsQueryable();
 
         jobs = query.Status?.ToLowerInvariant() switch
@@ -52,6 +63,8 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
 
         var entities = await jobs
             .OrderByDescending(job => job.PostedDate ?? job.FirstSeenAt)
+            .Skip(offset)
+            .Take(limit)
             .ToListAsync(cancellationToken);
 
         var categories = await LoadSourceCategoriesAsync(cancellationToken);

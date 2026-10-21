@@ -87,10 +87,29 @@ app.MapGet("/api/jobs", async (
         string? search,
         string? status,
         int? days,
+        int? limit,
+        int? offset,
         IJobService jobService,
         CancellationToken cancellationToken) =>
     {
-        var jobs = await jobService.GetJobsAsync(new JobListQuery(region, skill, search, status, days), cancellationToken);
+        if (days is < 1 or > 365)
+        {
+            return Results.BadRequest(new { error = "days must be between 1 and 365" });
+        }
+
+        if (limit is < 1 or > JobService.MaxLimit)
+        {
+            return Results.BadRequest(new { error = $"limit must be between 1 and {JobService.MaxLimit}" });
+        }
+
+        if (offset is < 0)
+        {
+            return Results.BadRequest(new { error = "offset must be zero or greater" });
+        }
+
+        var jobs = await jobService.GetJobsAsync(
+            new JobListQuery(region, skill, search, status, days, limit, offset),
+            cancellationToken);
         return Results.Ok(jobs);
     })
     .WithName("GetJobs");
@@ -133,7 +152,14 @@ app.MapGet("/api/analytics/history", async (
         int? days,
         IHistoryService historyService,
         CancellationToken cancellationToken) =>
-    Results.Ok(await historyService.GetHistoryAsync(days ?? 7, cancellationToken)))
+    {
+        if (days is < 1 or > 365)
+        {
+            return Results.BadRequest(new { error = "days must be between 1 and 365" });
+        }
+
+        return Results.Ok(await historyService.GetHistoryAsync(days ?? 7, cancellationToken));
+    })
     .WithName("GetAnalyticsHistory");
 
 app.MapPost("/api/admin/crawl-runs", async (

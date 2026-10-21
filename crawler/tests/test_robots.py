@@ -86,6 +86,15 @@ class RobotsTests(unittest.TestCase):
         tie = parse_robots("User-agent: *\nDisallow: /a\nAllow: /a\n")
         self.assertTrue(can_fetch(tie, self.ua, "https://example.com/a"))
 
+    def test_user_agent_matching_uses_token_boundaries(self) -> None:
+        rules = parse_robots("User-agent: bot\nDisallow: /blocked\n")
+
+        self.assertTrue(can_fetch(rules, "Googlebot/2.1", "https://example.com/blocked"),
+                        "'bot' must not match 'Googlebot', so the group does not apply")
+        self.assertFalse(can_fetch(rules, "bot/1.0", "https://example.com/blocked"))
+        self.assertFalse(can_fetch(rules, "Example-Bot/1.0", "https://example.com/blocked"),
+                         "a hyphen is a token boundary")
+
     def test_empty_or_missing_rules_allow_everything(self) -> None:
         self.assertTrue(can_fetch(parse_robots(""), self.ua, "https://example.com/anything"))
 

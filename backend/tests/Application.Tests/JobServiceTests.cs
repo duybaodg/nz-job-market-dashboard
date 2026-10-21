@@ -50,6 +50,38 @@ public sealed class JobServiceTests
         job.RoleFamilyInferred.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task Job_list_honours_limit_and_offset_without_materialising_every_row()
+    {
+        await using var dbContext = CreateDbContext();
+        for (var index = 0; index < 5; index++)
+        {
+            var seen = DateTime.UtcNow.AddDays(-index);
+            dbContext.Jobs.Add(new Job
+            {
+                Id = Guid.NewGuid(),
+                Source = "Acme",
+                Title = $"Engineer {index}",
+                Url = $"https://acme.example/jobs/{index}",
+                ContentHash = $"hash-{index}",
+                IsActive = true,
+                FirstSeenAt = seen,
+                LastSeenAt = seen,
+                CreatedAt = seen,
+                UpdatedAt = seen,
+                PostedDate = seen
+            });
+        }
+        await dbContext.SaveChangesAsync();
+
+        var page = await new JobService(dbContext).GetJobsAsync(
+            new JobListQuery(null, null, null, "all", null, Limit: 2, Offset: 1),
+            CancellationToken.None);
+
+        page.Should().HaveCount(2);
+        page.Select(job => job.Title).Should().Equal("Engineer 1", "Engineer 2");
+    }
+
     private static ApplicationDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()

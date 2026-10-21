@@ -150,6 +150,42 @@ public sealed class HistoryServiceTests
     }
 
     [Fact]
+    public async Task History_is_bounded_to_the_requested_period_window()
+    {
+        await using var dbContext = CreateDbContext();
+        AddListing(
+            dbContext,
+            new DateOnly(2026, 1, 1),
+            "old",
+            "Alpha",
+            new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateOnly(2026, 1, 2));
+        AddListing(dbContext, new DateOnly(2026, 10, 13), "recent", "Alpha", new DateTime(2026, 10, 13, 0, 0, 0, DateTimeKind.Utc));
+        await dbContext.SaveChangesAsync();
+
+        var history = await new HistoryService(dbContext, new TestClock(Now)).GetHistoryAsync(7, CancellationToken.None);
+
+        history.Coverage.FirstDate.Should().Be("2026-10-13",
+            "the January snapshot is far outside the 7-day request and its 30-day window");
+    }
+
+    [Fact]
+    public async Task Coverage_exposes_the_configured_retention_days()
+    {
+        await using var dbContext = CreateDbContext();
+        AddListing(dbContext, new DateOnly(2026, 10, 13), "recent", "Alpha", new DateTime(2026, 10, 13, 0, 0, 0, DateTimeKind.Utc));
+        await dbContext.SaveChangesAsync();
+
+        var history = await new HistoryService(
+                dbContext,
+                new TestClock(Now),
+                new Application.Crawling.CrawlerLifecycleOptions { RetentionDays = 35 })
+            .GetHistoryAsync(7, CancellationToken.None);
+
+        history.Coverage.RetentionDays.Should().Be(35);
+    }
+
+    [Fact]
     public async Task Weekly_grouping_uses_local_dates_across_the_dst_spring_forward()
     {
         await using var dbContext = CreateDbContext();

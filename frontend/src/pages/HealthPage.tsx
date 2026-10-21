@@ -71,7 +71,7 @@ export function HealthPage() {
     return (
       <div className="app-shell" id="health">
         <AppSidebar />
-        <main>
+        <main id="main-content">
           <header className="page-header">
             <div>
               <span className="eyebrow">Crawler operations</span>
@@ -122,11 +122,12 @@ export function HealthPage() {
   const report = healthQuery.data
   const summary = report?.summary
   const sources = report?.sources ?? []
+  const rateLimited = healthQuery.error instanceof ApiError && healthQuery.error.status === 429
 
   return (
     <div className="app-shell" id="health">
       <AppSidebar />
-      <main>
+      <main id="main-content">
         <header className="page-header">
           <div>
             <span className="eyebrow">Crawler operations</span>
@@ -142,8 +143,10 @@ export function HealthPage() {
         </header>
 
         {healthQuery.isError && !(healthQuery.error instanceof ApiError && healthQuery.error.status === 401) ? (
-          <section className="empty-state">
-            Could not load crawler health from the backend API (<code>/api/admin/health</code>).
+          <section className="empty-state" role="alert">
+            {rateLimited
+              ? 'Crawler health is rate limited after too many failed attempts. Wait five minutes before retrying; your password has been kept for this tab.'
+              : <>Could not load crawler health from the backend API (<code>/api/admin/health</code>).</>}
           </section>
         ) : null}
 

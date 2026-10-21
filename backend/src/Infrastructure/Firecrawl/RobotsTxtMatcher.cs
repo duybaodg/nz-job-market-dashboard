@@ -103,7 +103,7 @@ public static class RobotsTxtMatcher
                 {
                     score = Math.Max(score ?? 0, 0);
                 }
-                else if (agent.Length > 0 && lowered.Contains(agent, StringComparison.Ordinal))
+                else if (agent.Length > 0 && ContainsToken(lowered, agent))
                 {
                     score = Math.Max(score ?? 0, agent.Length);
                 }
@@ -151,6 +151,33 @@ public static class RobotsTxtMatcher
         // Equal-length Allow beats Disallow.
         return matches.Any(match => match.Length == longest && match.Allow);
     }
+
+    /// <summary>
+    /// Token-boundary match, identical to the Python _contains_token helper:
+    /// "bot" must not match "robot". Only ASCII alphanumerics are token chars,
+    /// so both implementations apply the same rule.
+    /// </summary>
+    private static bool ContainsToken(string lowered, string agent)
+    {
+        var index = lowered.IndexOf(agent, StringComparison.Ordinal);
+        while (index >= 0)
+        {
+            var beforeOk = index == 0 || !IsAsciiAlphanumeric(lowered[index - 1]);
+            var end = index + agent.Length;
+            var afterOk = end == lowered.Length || !IsAsciiAlphanumeric(lowered[end]);
+            if (beforeOk && afterOk)
+            {
+                return true;
+            }
+
+            index = lowered.IndexOf(agent, index + 1, StringComparison.Ordinal);
+        }
+
+        return false;
+    }
+
+    private static bool IsAsciiAlphanumeric(char value) =>
+        value is >= 'a' and <= 'z' or >= '0' and <= '9';
 
     private static Regex? PatternToRegex(string pattern)
     {

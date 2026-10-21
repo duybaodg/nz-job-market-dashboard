@@ -222,6 +222,7 @@ export type SnapshotCoverage = {
   missingDates: string[]
   hasHistory: boolean
   note: string
+  retentionDays: number
 }
 
 export type WeeklyNewListingPoint = {

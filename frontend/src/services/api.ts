@@ -29,6 +29,7 @@ export function getJobs(params: {
   search?: string
   status?: string
   days?: number | string
+  limit?: number
 }) {
   const query = new URLSearchParams()
 
@@ -37,6 +38,7 @@ export function getJobs(params: {
   if (params.search) query.set('search', params.search)
   if (params.status) query.set('status', params.status)
   if (params.days) query.set('days', String(params.days))
+  if (params.limit) query.set('limit', String(params.limit))
 
   const suffix = query.toString() ? `?${query.toString()}` : ''
   return getJson<Job[]>(`/api/jobs${suffix}`)

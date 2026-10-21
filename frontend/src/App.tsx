@@ -10,9 +10,18 @@ import { MarketTrendsPage } from './pages/MarketTrendsPage'
 function App() {
   const { pathname } = useAppLocation()
 
-  if (pathname.startsWith('/health')) return <HealthPage />
-  if (pathname.startsWith('/trends')) return <MarketTrendsPage />
-  return <FindJobsPage />
+  const page = pathname.startsWith('/health')
+    ? <HealthPage />
+    : pathname.startsWith('/trends')
+      ? <MarketTrendsPage />
+      : <FindJobsPage />
+
+  return (
+    <>
+      <a className="skip-link" href="#main-content">Skip to content</a>
+      {page}
+    </>
+  )
 }
 
 export default App

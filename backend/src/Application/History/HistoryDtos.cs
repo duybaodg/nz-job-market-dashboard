@@ -10,7 +10,8 @@ public sealed record SnapshotCoverageDto(
     int ExpectedDays,
     IReadOnlyList<string> MissingDates,
     bool HasHistory,
-    string Note);
+    string Note,
+    int RetentionDays);
 
 public sealed record WeeklyNewListingDto(
     string WeekStartLocal,

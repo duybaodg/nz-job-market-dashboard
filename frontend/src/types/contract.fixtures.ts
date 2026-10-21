@@ -192,6 +192,7 @@ export const historyFixture: History = {
     missingDates: [],
     hasHistory: true,
     note: 'Daily snapshots are complete for the retained window.',
+    retentionDays: 20,
   },
   latestActiveCount: 439,
   latestSnapshotDate: '2026-10-17',

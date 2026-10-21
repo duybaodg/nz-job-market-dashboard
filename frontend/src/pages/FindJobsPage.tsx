@@ -72,7 +72,7 @@ function jobHref(state: JobViewState) {
 export function FindJobsPage() {
   const { search } = useAppLocation()
   const state = useMemo(() => parseJobViewState(search), [search])
-  const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all' }) })
+  const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all', limit: 5000 }) })
   const overviewQuery = useQuery({ queryKey: ['overview'], queryFn: getOverview })
 
   const allJobs = jobsQuery.data ?? emptyJobs
@@ -129,7 +129,7 @@ export function FindJobsPage() {
   return (
     <div className="app-shell" id="find-jobs">
       <AppSidebar currentPath="/jobs" />
-      <main>
+      <main id="main-content">
         <ViewHeader
           eyebrow="Tracked NZ tech listings"
           title="Find jobs"

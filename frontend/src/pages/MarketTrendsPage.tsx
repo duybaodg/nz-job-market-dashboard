@@ -30,7 +30,6 @@ import {
 import { getHistory, getJobs, getOverview } from '../services/api'
 import type { Job } from '../types/api'
 
-const RETENTION_DAYS = 20
 const DAY_MS = 24 * 60 * 60 * 1000
 const emptyJobs: Job[] = []
 
@@ -61,7 +60,7 @@ export function MarketTrendsPage() {
   const { search } = useAppLocation()
   const filters = useMemo(() => parseTrendsFilterState(search), [search])
   const periodDays = Number(filters.period)
-  const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all' }) })
+  const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all', limit: 5000 }) })
   const overviewQuery = useQuery({ queryKey: ['overview'], queryFn: getOverview })
   // The retained-history period must follow the reporting-period selector,
   // otherwise a 15/30-day label would show the 7-day figure.
@@ -79,16 +78,20 @@ export function MarketTrendsPage() {
 
   const filteredScope = Boolean(filters.region || filters.roleFamily || filters.skill || filters.seniority)
 
+  // Round 15 (L-4): the backend exposes the configured retention window in the
+  // history payload; never hardcode it here (CRAWLER_RETENTION_DAYS may change).
+  const retentionDays = history?.coverage.retentionDays ?? 20
+
   // Preferred source: retained daily snapshots. The fallback counts the current
   // retained rows (first-seen only) and is labelled as such - it is never
   // presented as retained history.
   const fallbackNewListings = useMemo(() => {
     const now = Date.now()
     const current = countFirstSeenInWindow(cohort, now, periodDays, 0)
-    const previousAvailable = periodDays * 2 <= RETENTION_DAYS
+    const previousAvailable = periodDays * 2 <= retentionDays
     const previous = previousAvailable ? countFirstSeenInWindow(cohort, now, periodDays * 2, periodDays) : null
     return { current, previous, previousAvailable, change: computeChange(current, previous) }
-  }, [cohort, periodDays])
+  }, [cohort, periodDays, retentionDays])
 
   // Retained snapshots cannot be filtered by region/family/skill/seniority, so a
   // filtered view uses the current rows for the filtered cohort instead of
@@ -111,7 +114,7 @@ export function MarketTrendsPage() {
           ? 'Filtered cohort counted from current retained rows; retained daily snapshots cannot be filtered.'
           : fallbackNewListings.previousAvailable
             ? 'Fallback: counted from current retained rows because no daily snapshots exist yet.'
-            : 'Fallback: current retained rows only; the previous equal period is outside the 20-day retention window.',
+            : `Fallback: current retained rows only; the previous equal period is outside the ${retentionDays}-day retention window.`,
       }
 
   const salary = useMemo(() => salaryDistribution(cohort), [cohort])
@@ -152,7 +155,7 @@ export function MarketTrendsPage() {
   return (
     <div className="app-shell" id="market-trends">
       <AppSidebar currentPath="/trends" />
-      <main>
+      <main id="main-content">
         <ViewHeader
           eyebrow="Tracked NZ tech listings"
           title="Market trends"

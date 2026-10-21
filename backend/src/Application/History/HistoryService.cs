@@ -1,4 +1,5 @@
 using Application.Analytics;
+using Application.Crawling;
 using Application.Common;
 using Application.Metrics;
 using Domain.Entities;
@@ -18,21 +19,29 @@ public interface IHistoryService
 /// </summary>
 public sealed class HistoryService(
     IApplicationDbContext dbContext,
-    TimeProvider? timeProvider = null) : IHistoryService
+    TimeProvider? timeProvider = null,
+    CrawlerLifecycleOptions? lifecycleOptions = null) : IHistoryService
 {
     public static readonly int[] SupportedPeriods = [7, 15, 30];
 
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
+    private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
 
     public async Task<HistoryDto> GetHistoryAsync(int days, CancellationToken cancellationToken)
     {
-        var period = SupportedPeriods.Contains(days) ? days : 7;
+        var period = Math.Clamp(days, 1, 365);
         var now = clock.GetUtcNow().UtcDateTime;
+        // Round 15 (H-12): bound the snapshot scan to the requested period plus
+        // its equal-length comparison window (and at least the weekly chart's
+        // 30-day floor). Never scan the whole snapshots table for a 7-day query.
+        var windowDays = Math.Clamp(Math.Max(period * 2, 30), 1, 730);
+        var windowStart = NzReportingCalendar.LocalDate(now).AddDays(-windowDays);
         var snapshots = await dbContext.ListingSnapshots
             .AsNoTracking()
+            .Where(snapshot => snapshot.SnapshotDate >= windowStart)
             .ToListAsync(cancellationToken);
 
-        var coverage = BuildCoverage(snapshots, now);
+        var coverage = BuildCoverage(snapshots, now, lifecycle.RetentionDays);
         var weekly = BuildWeekly(snapshots, coverage, now);
         var activeTrend = BuildActiveTrend(snapshots, out var coverageChanges);
         var newListings = BuildNewListings(snapshots, coverage, period, now);
@@ -70,7 +79,10 @@ public sealed class HistoryService(
                 : "No daily snapshots have been retained yet, so historical trends are unavailable.");
     }
 
-    private static SnapshotCoverageDto BuildCoverage(IReadOnlyList<ListingSnapshot> snapshots, DateTime now)
+    private static SnapshotCoverageDto BuildCoverage(
+        IReadOnlyList<ListingSnapshot> snapshots,
+        DateTime now,
+        int retentionDays)
     {
         if (snapshots.Count == 0)
         {
@@ -81,7 +93,8 @@ public sealed class HistoryService(
                 0,
                 [],
                 false,
-                "No daily snapshots retained yet. Collection begins with the next worker poll; no trend is estimated in the meantime.");
+                "No daily snapshots retained yet. Collection begins with the next worker poll; no trend is estimated in the meantime.",
+                retentionDays);
         }
 
         var dates = snapshots.Select(snapshot => snapshot.SnapshotDate).Distinct().OrderBy(date => date).ToList();
@@ -121,7 +134,8 @@ public sealed class HistoryService(
             true,
             notes.Count == 0
                 ? "Daily snapshots are complete for the retained window."
-                : char.ToUpperInvariant(notes[0][0]) + string.Join("; ", notes).Substring(1) + ".");
+                : char.ToUpperInvariant(notes[0][0]) + string.Join("; ", notes).Substring(1) + ".",
+            retentionDays);
     }
 
     private static IReadOnlyList<WeeklyNewListingDto> BuildWeekly(

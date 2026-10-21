@@ -82,14 +82,24 @@ def _pattern_to_regex(pattern: str) -> re.Pattern[str] | None:
     return re.compile("^" + escaped + ("$" if anchored_end else ""))
 
 
+def _contains_token(lowered: str, agent: str) -> bool:
+    """True when ``agent`` appears on an alphanumeric token boundary."""
+    pattern = re.compile(r"(?<![a-z0-9])" + re.escape(agent) + r"(?![a-z0-9])")
+    return pattern.search(lowered) is not None
+
+
 def _group_score(agents: tuple[str, ...], user_agent: str) -> int | None:
-    """Longest matching agent token for this group, or None if it does not apply."""
+    """Longest matching agent token for this group, or None if it does not apply.
+
+    Round 15 (L-5): match on token boundaries. Plain substring matching made a
+    group for ``bot`` apply to ``robot`` and ``job`` to unrelated names.
+    """
     lowered = user_agent.lower()
     score: int | None = None
     for agent in agents:
         if agent == "*":
             score = max(score or 0, 0)
-        elif agent and agent in lowered:
+        elif agent and _contains_token(lowered, agent):
             score = max(score or 0, len(agent))
     return score
 

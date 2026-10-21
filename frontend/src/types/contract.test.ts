@@ -36,10 +36,25 @@ function at(root: unknown, path: string): unknown {
 
 function requireFields(root: unknown, paths: string[]) {
   for (const path of paths) {
-    // Existence only: nullability is already enforced by the response types the
-    // fixtures are annotated with, which `tsc` checks during the build.
     expect(at(root, path), `missing contract path '${path}'`).not.toBeUndefined()
   }
+}
+
+/**
+ * Round 15 (L-1): a field the widget dereferences must not be present-but-null.
+ * Existence alone let a backend null a required value while this test stayed
+ * green, because the TypeScript type is often `T | null` for optional data.
+ */
+function requireNonNull(root: unknown, paths: string[]) {
+  for (const path of paths) {
+    const value = at(root, path)
+    expect(value, `null contract path '${path}'`).not.toBeNull()
+    expect(value, `missing contract path '${path}'`).not.toBeUndefined()
+  }
+}
+
+function requireType(root: unknown, path: string, type: 'string' | 'number' | 'boolean' | 'object') {
+  expect(typeof at(root, path), `wrong type for contract path '${path}'`).toBe(type)
 }
 
 describe('API payload contract', () => {
@@ -56,6 +71,19 @@ describe('API payload contract', () => {
       'duplicateCount', 'alsoOnSources', 'isCanonicalListing',
       'employerCanonicalId', 'employerCanonicalName',
     ])
+    requireNonNull(jobFixture, [
+      'id', 'source', 'title', 'url', 'salaryCurrency', 'salaryPeriod',
+      'employmentType', 'seniority', 'workMode', 'experienceBand',
+      'firstSeenAt', 'lastSeenAt', 'isActive', 'skills', 'programmingLanguages',
+      'sourceCategory', 'advertiser', 'advertiserType', 'employerDisclosure',
+      'roleFamily', 'roleFamilyInferred', 'duplicateCount', 'alsoOnSources',
+      'isCanonicalListing',
+    ])
+    requireType(jobFixture, 'id', 'string')
+    requireType(jobFixture, 'title', 'string')
+    requireType(jobFixture, 'isActive', 'boolean')
+    requireType(jobFixture, 'skills', 'object')
+    requireType(jobFixture, 'duplicateCount', 'number')
   })
 
   it('Overview stat cards and the freshness pill read their fields', () => {
@@ -75,12 +103,21 @@ describe('API payload contract', () => {
       'uniqueVacancies', 'deduplication.listingsMerged', 'deduplication.groups',
       'discoveryBasis',
     ])
+    requireNonNull(overviewFixture, [
+      'generatedAtUtc', 'interval.label', 'salary.currency', 'salary.payPeriod',
+      'salary.basis', 'dataStatus.state', 'dataStatus.message',
+      'employers.identifiableEmployers', 'uniqueVacancies', 'discoveryBasis',
+    ])
+    requireType(overviewFixture, 'activeListings', 'number')
+    requireType(overviewFixture, 'newlyDiscovered.current', 'number')
+    requireType(overviewFixture, 'salary.eligibleCount', 'number')
+    requireType(overviewFixture, 'dataStatus.enabledSources', 'number')
   })
 
   it('Trends charts read the history and freshness window fields', () => {
     requireFields(historyFixture, [
       'coverage.firstDate', 'coverage.lastDate', 'coverage.snapshotDays', 'coverage.missingDates',
-      'coverage.hasHistory', 'coverage.note',
+      'coverage.hasHistory', 'coverage.note', 'coverage.retentionDays',
       'activeChange.comparisonAvailable', 'activeChange.current',
       'newListings.days', 'newListings.dateBasis', 'newListings.note',
       'newListings.interval.label', 'newListings.change.current',
@@ -90,11 +127,23 @@ describe('API payload contract', () => {
       'activeTrend[0].coverageChanged', 'activeTrend[0].sourcesAdded', 'activeTrend[0].sourcesRemoved',
       'coverageChanges[0].snapshotDate',
     ])
+    requireNonNull(historyFixture, [
+      'coverage.firstDate', 'coverage.lastDate', 'coverage.retentionDays',
+      'newListings.days', 'newListings.dateBasis', 'newListings.change.current',
+      'weeklyNewListings[0].weekStartLocal', 'activeTrend[0].snapshotDate',
+    ])
+    requireType(historyFixture, 'coverage.retentionDays', 'number')
+    requireType(historyFixture, 'coverage.missingDates', 'object')
+    requireType(historyFixture, 'weeklyNewListings[0].count', 'number')
+    requireType(historyFixture, 'activeTrend[0].activeCount', 'number')
     requireFields(freshnessFixture, [
       'totalActiveJobs', 'discoveryBasis', 'windows[0].days', 'windows[0].newlyPosted',
       'windows[0].previousNewlyPosted', 'windows[0].newlyDiscovered',
       'windows[0].previousNewlyDiscovered', 'windows[0].comparisonAvailable',
     ])
+    requireNonNull(freshnessFixture, ['totalActiveJobs', 'discoveryBasis', 'windows[0].days'])
+    requireType(freshnessFixture, 'totalActiveJobs', 'number')
+    requireType(freshnessFixture, 'windows[0].newlyPosted', 'number')
   })
 
   it('Crawler health page reads the summary and per-source fields', () => {
@@ -106,5 +155,21 @@ describe('API payload contract', () => {
       'sources[0].jobsYielded', 'sources[0].state', 'sources[0].crawlFrequencyMinutes',
       'retiredSources[0].source', 'retiredSources[0].state',
     ])
+    requireNonNull(healthFixture, [
+      'generatedAt', 'summary.totalSources', 'sources[0].source',
+      'sources[0].enabled', 'sources[0].state', 'retiredSources[0].source',
+    ])
+    requireType(healthFixture, 'summary.totalSources', 'number')
+    requireType(healthFixture, 'sources[0].enabled', 'boolean')
+  })
+
+  it('fails when a required field is removed or nulled (negative fixture)', () => {
+    const removed = JSON.parse(JSON.stringify(jobFixture)) as Record<string, unknown>
+    delete removed.title
+    expect(() => requireFields(removed, ['title'])).toThrow()
+
+    const nulled = JSON.parse(JSON.stringify(jobFixture)) as Record<string, unknown>
+    nulled.url = null
+    expect(() => requireNonNull(nulled, ['url'])).toThrow()
   })
 })

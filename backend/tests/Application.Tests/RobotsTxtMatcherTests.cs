@@ -117,4 +117,17 @@ public sealed class RobotsTxtMatcherTests
         allowed.Should().BeFalse();
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(1));
     }
+
+    [Fact]
+    public void User_agent_matching_uses_token_boundaries()
+    {
+        var rules = RobotsTxtMatcher.Parse("User-agent: bot\nDisallow: /blocked\n");
+
+        RobotsTxtMatcher.CanFetch(rules, "Googlebot/2.1", "https://example.com/blocked")
+            .Should().BeTrue("'bot' must not match 'Googlebot'");
+        RobotsTxtMatcher.CanFetch(rules, "bot/1.0", "https://example.com/blocked")
+            .Should().BeFalse();
+        RobotsTxtMatcher.CanFetch(rules, "Example-Bot/1.0", "https://example.com/blocked")
+            .Should().BeFalse("a hyphen is a token boundary");
+    }
 }

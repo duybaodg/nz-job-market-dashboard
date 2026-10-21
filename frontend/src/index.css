@@ -26,6 +26,20 @@ button:disabled { cursor: wait; opacity: .65; }
 h1, h2, p { margin: 0; }
 :focus-visible { outline: 3px solid rgba(15, 118, 110, .28); outline-offset: 2px; }
 
+/* Round 15 (L-3): keyboard users can jump past the sidebar to the view. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #fff;
+  font-weight: 600;
+}
+.skip-link:focus { left: 12px; top: 12px; outline: 3px solid #38bdf8; }
+
 .app-shell { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100vh; }
 .sidebar { position: sticky; top: 0; display: flex; flex-direction: column; height: 100vh; padding: 26px 18px; color: #eff8f5; background: #102d29; }
 .brand { display: flex; align-items: center; gap: 12px; min-height: 44px; font-weight: 800; }

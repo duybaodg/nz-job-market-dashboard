@@ -53,6 +53,18 @@ function SortHeader({ label, sortKey, sort, onSort }: SortHeaderProps) {
   )
 }
 
+function sortFor(sort: { key: SortKey; direction: SortDirection }, key: SortKey) {
+  return sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'
+}
+
+function SortableHeaderCell({ label, sortKey, sort, onSort }: SortHeaderProps) {
+  return (
+    <th scope="col" aria-sort={sortFor(sort, sortKey)}>
+      <SortHeader label={label} sortKey={sortKey} sort={sort} onSort={onSort} />
+    </th>
+  )
+}
+
 function compare(a: SourceHealth, b: SourceHealth, key: SortKey) {
   switch (key) {
     case 'state':
@@ -120,13 +132,13 @@ export function SourceHealthTable({ sources }: SourceHealthTableProps) {
           <table className="health-table">
             <thead>
               <tr>
-                <th><SortHeader label="Source" sortKey="source" sort={sort} onSort={toggleSort} /></th>
-                <th><SortHeader label="State" sortKey="state" sort={sort} onSort={toggleSort} /></th>
-                <th><SortHeader label="Jobs" sortKey="jobs" sort={sort} onSort={toggleSort} /></th>
-                <th><SortHeader label="Last crawl" sortKey="lastCrawl" sort={sort} onSort={toggleSort} /></th>
-                <th><SortHeader label="Failures" sortKey="failures" sort={sort} onSort={toggleSort} /></th>
-                <th><SortHeader label="Zero yield" sortKey="zeroYield" sort={sort} onSort={toggleSort} /></th>
-                <th>Last error / signal</th>
+                <SortableHeaderCell label="Source" sortKey="source" sort={sort} onSort={toggleSort} />
+                <SortableHeaderCell label="State" sortKey="state" sort={sort} onSort={toggleSort} />
+                <SortableHeaderCell label="Jobs" sortKey="jobs" sort={sort} onSort={toggleSort} />
+                <SortableHeaderCell label="Last crawl" sortKey="lastCrawl" sort={sort} onSort={toggleSort} />
+                <SortableHeaderCell label="Failures" sortKey="failures" sort={sort} onSort={toggleSort} />
+                <SortableHeaderCell label="Zero yield" sortKey="zeroYield" sort={sort} onSort={toggleSort} />
+                <th scope="col">Last error / signal</th>
               </tr>
             </thead>
             <tbody>
