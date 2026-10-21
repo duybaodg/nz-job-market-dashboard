@@ -70,6 +70,30 @@ public sealed class EmployerIdentityServiceTests
     }
 
     [Fact]
+    public async Task Seed_waits_for_the_first_company_then_creates_it_on_a_later_call()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new EmployerIdentityService(dbContext);
+
+        var first = await service.SeedFromCompaniesAsync("tester", CancellationToken.None);
+
+        first.Seeded.Should().BeFalse("an empty database has no company rows to seed from");
+        (await dbContext.Employers.CountAsync()).Should().Be(0, "agencies are not seeded before the first company");
+        (await dbContext.EmployerAuditEvents.CountAsync(audit => audit.Action == "EmployerSeedFromCompanies"))
+            .Should().Be(0, "no one-shot marker is written when nothing was produced");
+
+        AddJob(dbContext, "Xero", "company", "Xero");
+        await dbContext.SaveChangesAsync();
+
+        var second = await service.SeedFromCompaniesAsync("tester", CancellationToken.None);
+
+        second.Seeded.Should().BeTrue();
+        (await dbContext.Employers.CountAsync(employer => employer.NormalizedName == "xero")).Should().Be(1);
+        (await dbContext.EmployerAuditEvents.CountAsync(audit => audit.Action == "EmployerSeedFromCompanies"))
+            .Should().Be(1);
+    }
+
+    [Fact]
     public async Task Unmatched_disclosed_names_stay_null_and_are_reported()
     {
         await using var dbContext = CreateDbContext();

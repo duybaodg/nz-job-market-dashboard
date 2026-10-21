@@ -22,9 +22,10 @@ public sealed record CrawlDataRetentionResult(int JobsDeleted, int CrawlRunsDele
 /// <c>raw_job_pages</c> that hang off those runs (the FK has no cascade, so the
 /// pages must go first).</item>
 /// </list>
-/// Each delete is a single set-based <c>DELETE</c> with a simple range
-/// predicate, so a run over an empty window removes nothing and repeating the
-/// purge is a no-op.
+/// Each delete is a bounded set-based <c>DELETE</c> (batches of 1000 ids), so a
+/// long-overdue purge cannot lock the largest table for one huge transaction.
+/// A run over an empty window removes nothing and repeating the purge is a
+/// no-op.
 /// </summary>
 public interface ICrawlDataRetentionService
 {
@@ -65,25 +66,73 @@ public sealed class CrawlDataRetentionService(
     public static Expression<Func<CrawlRun, bool>> ExpiredCrawlRun(DateTime cutoff) =>
         run => run.StartedAt < cutoff;
 
+    /// <summary>Bound each DELETE so a large backlog is purged in short transactions.</summary>
+    public const int BatchSize = 1000;
+
     public async Task<CrawlDataRetentionResult> PurgeAsync(CancellationToken cancellationToken)
     {
         var cutoff = Cutoff(DateTime.UtcNow, lifecycleOptions.RetentionDays);
 
         // raw_job_pages is a child of crawl_runs with no cascade delete, so its
         // rows must be removed before the runs they belong to. Old orphaned
-        // pages (never attached to a run) are removed by the same statement.
-        var rawPagesDeleted = await dbContext.RawJobPages
-            .Where(page => page.CrawledAt < cutoff
-                || dbContext.CrawlRuns.Any(run => run.Id == page.CrawlRunId && run.StartedAt < cutoff))
-            .ExecuteDeleteAsync(cancellationToken);
+        // pages (never attached to a run) are removed by the same predicate.
+        var rawPagesDeleted = 0;
+        while (true)
+        {
+            var pageIds = await dbContext.RawJobPages
+                .Where(page => page.CrawledAt < cutoff
+                    || dbContext.CrawlRuns.Any(run => run.Id == page.CrawlRunId && run.StartedAt < cutoff))
+                .OrderBy(page => page.Id)
+                .Select(page => page.Id)
+                .Take(BatchSize)
+                .ToListAsync(cancellationToken);
+            if (pageIds.Count == 0)
+            {
+                break;
+            }
 
-        var crawlRunsDeleted = await dbContext.CrawlRuns
-            .Where(ExpiredCrawlRun(cutoff))
-            .ExecuteDeleteAsync(cancellationToken);
+            rawPagesDeleted += await dbContext.RawJobPages
+                .Where(page => pageIds.Contains(page.Id))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
 
-        var jobsDeleted = await dbContext.Jobs
-            .Where(ExpiredJob(cutoff))
-            .ExecuteDeleteAsync(cancellationToken);
+        var crawlRunsDeleted = 0;
+        while (true)
+        {
+            var runIds = await dbContext.CrawlRuns
+                .Where(ExpiredCrawlRun(cutoff))
+                .OrderBy(run => run.Id)
+                .Select(run => run.Id)
+                .Take(BatchSize)
+                .ToListAsync(cancellationToken);
+            if (runIds.Count == 0)
+            {
+                break;
+            }
+
+            crawlRunsDeleted += await dbContext.CrawlRuns
+                .Where(run => runIds.Contains(run.Id))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
+        var jobsDeleted = 0;
+        while (true)
+        {
+            var jobIds = await dbContext.Jobs
+                .Where(ExpiredJob(cutoff))
+                .OrderBy(job => job.Id)
+                .Select(job => job.Id)
+                .Take(BatchSize)
+                .ToListAsync(cancellationToken);
+            if (jobIds.Count == 0)
+            {
+                break;
+            }
+
+            jobsDeleted += await dbContext.Jobs
+                .Where(job => jobIds.Contains(job.Id))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
 
         logger.LogInformation(
             "Retention purged {JobsDeleted} jobs, {CrawlRunsDeleted} crawl runs, {RawPagesDeleted} raw pages "

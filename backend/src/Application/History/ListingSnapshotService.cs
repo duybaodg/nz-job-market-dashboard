@@ -42,7 +42,30 @@ public sealed class ListingSnapshotService(
             return new ListingSnapshotResult(false, snapshotDate, 0, 0);
         }
 
-        var jobs = await dbContext.Jobs.AsNoTracking().ToListAsync(cancellationToken);
+        // Round 15 (H-8): project only the columns a snapshot needs. The full
+        // description text is never loaded for this pass.
+        var jobs = await dbContext.Jobs
+            .AsNoTracking()
+            .Select(job => new SnapshotJob(
+                job.Id,
+                job.Source,
+                job.ContentHash,
+                job.Title,
+                job.Company,
+                job.Location,
+                job.Region,
+                job.WorkMode,
+                job.Seniority,
+                job.EmploymentType,
+                job.SalaryMin,
+                job.SalaryMax,
+                job.SalaryCurrency,
+                job.SalaryPeriod,
+                job.PostedDate,
+                job.FirstSeenAt,
+                job.LastSeenAt,
+                job.IsActive))
+            .ToListAsync(cancellationToken);
         if (jobs.Count == 0)
         {
             return new ListingSnapshotResult(false, snapshotDate, 0, 0);
@@ -119,6 +142,26 @@ public sealed class ListingSnapshotService(
 
         return new ListingSnapshotResult(true, snapshotDate, rows.Count, activeRows.Count);
     }
+
+    private sealed record SnapshotJob(
+        Guid Id,
+        string Source,
+        string ContentHash,
+        string Title,
+        string? Company,
+        string? Location,
+        string? Region,
+        string WorkMode,
+        string Seniority,
+        string EmploymentType,
+        decimal? SalaryMin,
+        decimal? SalaryMax,
+        string SalaryCurrency,
+        string SalaryPeriod,
+        DateTime? PostedDate,
+        DateTime FirstSeenAt,
+        DateTime LastSeenAt,
+        bool IsActive);
 
     private async Task<IReadOnlyDictionary<string, string>> LoadSourceCategoriesAsync(CancellationToken cancellationToken)
     {

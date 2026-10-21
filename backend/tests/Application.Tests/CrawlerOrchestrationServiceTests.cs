@@ -38,6 +38,35 @@ public sealed class CrawlerOrchestrationServiceTests
     }
 
     [Fact]
+    public async Task StartCrawlRunAsync_refuses_a_second_running_run_for_the_same_source()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.CrawlRuns.Add(new CrawlRun
+        {
+            Id = Guid.NewGuid(),
+            Source = "Firecrawl",
+            Status = "Running",
+            StartedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+        var adapter = new FakeJobSourceAdapter();
+        var service = new CrawlerOrchestrationService(
+            dbContext,
+            [adapter],
+            new DeduplicationService(),
+            new NormalisationService());
+
+        var result = await service.StartCrawlRunAsync(
+            new StartCrawlRunRequest("Firecrawl", "https://example.com/search"),
+            CancellationToken.None);
+
+        result.Started.Should().BeFalse();
+        result.CrawlRun.Status.Should().Be("Conflict");
+        result.Message.Should().Contain("already running");
+        dbContext.Jobs.Should().BeEmpty("the adapter must not run while another run owns the source");
+    }
+
+    [Fact]
     public async Task StartCrawlRunAsync_returns_failure_without_registered_adapter()
     {
         await using var dbContext = CreateDbContext();

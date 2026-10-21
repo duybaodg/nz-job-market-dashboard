@@ -47,6 +47,21 @@ public sealed class EmployerIdentityService(
         }
 
         var now = DateTime.UtcNow;
+
+        // Round 15 (H-9): a fresh database has no companies yet. Do not seed the
+        // reviewed agencies or write the one-shot audit marker in that state, or
+        // the employer list would never be bootstrapped after the first crawl.
+        var companies = await dbContext.Jobs
+            .AsNoTracking()
+            .Where(job => job.Company != null && job.Company != "")
+            .Select(job => job.Company!)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        if (companies.Count == 0)
+        {
+            return new EmployerSeedResult(false, 0, 0);
+        }
+
         var employers = await dbContext.Employers.Include(employer => employer.Aliases).ToListAsync(cancellationToken);
         var byNormalisedName = employers
             .GroupBy(employer => employer.NormalizedName, StringComparer.Ordinal)
@@ -105,13 +120,6 @@ public sealed class EmployerIdentityService(
         }
 
         // 2. Everything else currently advertised becomes a direct employer.
-        var companies = await dbContext.Jobs
-            .AsNoTracking()
-            .Where(job => job.Company != null && job.Company != "")
-            .Select(job => job.Company!)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
         foreach (var company in companies)
         {
             var normalised = EmployerNameNormaliser.Normalise(company);

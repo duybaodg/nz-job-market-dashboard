@@ -161,7 +161,7 @@ public sealed class ListingDeduplicationServiceTests
         var service = new ListingDeduplicationService(dbContext);
         await service.RunAsync("test", CancellationToken.None);
 
-        var report = await service.GetGroupsAsync(CancellationToken.None);
+        var report = await service.GetGroupsAsync(1, 100, CancellationToken.None);
 
         report.Deduplicated.Should().BeTrue();
         report.UniqueVacancies.Should().Be(1);

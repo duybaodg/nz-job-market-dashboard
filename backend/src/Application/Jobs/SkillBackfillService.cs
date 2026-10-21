@@ -43,108 +43,134 @@ public sealed class SkillBackfillService(
 
     public async Task<SkillBackfillResult> RunAsync(CancellationToken cancellationToken)
     {
-        var jobs = await dbContext.Jobs
-            .Include(job => job.Skills)
-            .ToListAsync(cancellationToken);
-
-        var pages = await dbContext.RawJobPages
-            .AsNoTracking()
-            .Where(page => page.Markdown != null)
-            .Select(page => new { page.Url, page.Markdown, page.CrawledAt })
-            .ToListAsync(cancellationToken);
-
-        var markdownByUrl = pages
-            .Where(page => !string.IsNullOrWhiteSpace(page.Markdown))
-            .GroupBy(page => page.Url, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .OrderByDescending(page => page.CrawledAt)
-                    .Select(page => page.Markdown!)
-                    .Distinct(StringComparer.Ordinal)
-                    .Take(MaxMarkdownsPerJob)
-                    .ToList(),
-                StringComparer.OrdinalIgnoreCase);
-
+        var jobsScanned = 0;
         var jobsUpdated = 0;
         var skillsAdded = 0;
         var skillsRemoved = 0;
+        var offset = 0;
 
-        foreach (var job in jobs)
+        // Round 15 (H-8): page the jobs and load only this batch's markdown, so
+        // the full raw-page table is never resident on a Raspberry Pi.
+        while (true)
         {
-            markdownByUrl.TryGetValue(job.Url, out var markdowns);
-            var text = BuildText(job, markdowns);
-            var desired = skillExtractor.Extract(text)
-                .ToDictionary(skill => skill.Name, skill => skill.Type, StringComparer.OrdinalIgnoreCase);
-            var changed = false;
-
-            foreach (var existing in job.Skills.ToList())
+            var jobs = await dbContext.Jobs
+                .Include(job => job.Skills)
+                .OrderBy(job => job.Id)
+                .Skip(offset)
+                .Take(500)
+                .ToListAsync(cancellationToken);
+            if (jobs.Count == 0)
             {
-                if (desired.TryGetValue(existing.SkillName, out var skillType))
+                break;
+            }
+
+            jobsScanned += jobs.Count;
+            offset += jobs.Count;
+
+            var urls = jobs
+                .Select(job => job.Url)
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var pages = urls.Count == 0
+                ? []
+                : await dbContext.RawJobPages
+                    .AsNoTracking()
+                    .Where(page => urls.Contains(page.Url) && page.Markdown != null)
+                    .Select(page => new { page.Url, page.Markdown, page.CrawledAt })
+                    .ToListAsync(cancellationToken);
+
+            var markdownByUrl = pages
+                .Where(page => !string.IsNullOrWhiteSpace(page.Markdown))
+                .GroupBy(page => page.Url, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group
+                        .OrderByDescending(page => page.CrawledAt)
+                        .Select(page => page.Markdown!)
+                        .Distinct(StringComparer.Ordinal)
+                        .Take(MaxMarkdownsPerJob)
+                        .ToList(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            var batchUpdated = 0;
+            foreach (var job in jobs)
+            {
+                markdownByUrl.TryGetValue(job.Url, out var markdowns);
+                var text = BuildText(job, markdowns);
+                var desired = skillExtractor.Extract(text)
+                    .ToDictionary(skill => skill.Name, skill => skill.Type, StringComparer.OrdinalIgnoreCase);
+                var changed = false;
+
+                foreach (var existing in job.Skills.ToList())
                 {
-                    if (!string.Equals(existing.SkillType, skillType, StringComparison.Ordinal))
+                    if (desired.TryGetValue(existing.SkillName, out var skillType))
                     {
-                        existing.SkillType = skillType;
-                        changed = true;
+                        if (!string.Equals(existing.SkillType, skillType, StringComparison.Ordinal))
+                        {
+                            existing.SkillType = skillType;
+                            changed = true;
+                        }
+
+                        desired.Remove(existing.SkillName);
+                        continue;
                     }
 
-                    desired.Remove(existing.SkillName);
-                    continue;
+                    // Not re-derived from the stored text: keep it when it is still
+                    // a valid canonical skill (the stored text may simply be a
+                    // weaker signal), but drop retired vocabulary.
+                    if (!skillExtractor.Taxonomy.ByName.ContainsKey(existing.SkillName))
+                    {
+                        job.Skills.Remove(existing);
+                        dbContext.JobSkills.Remove(existing);
+                        skillsRemoved++;
+                        changed = true;
+                    }
                 }
 
-                // Not re-derived from the stored text: keep it when it is still
-                // a valid canonical skill (the stored text may simply be a
-                // weaker signal), but drop retired vocabulary.
-                if (!skillExtractor.Taxonomy.ByName.ContainsKey(existing.SkillName))
+                foreach (var (name, skillType) in desired)
                 {
-                    job.Skills.Remove(existing);
-                    dbContext.JobSkills.Remove(existing);
-                    skillsRemoved++;
+                    if (job.Skills.Count >= skillExtractor.Taxonomy.MaxSkillsPerJob)
+                    {
+                        break;
+                    }
+
+                    var jobSkill = new JobSkill
+                    {
+                        Id = Guid.NewGuid(),
+                        JobId = job.Id,
+                        SkillName = name,
+                        SkillType = skillType,
+                        Confidence = 0.7m
+                    };
+                    job.Skills.Add(jobSkill);
+                    dbContext.JobSkills.Add(jobSkill);
+                    skillsAdded++;
                     changed = true;
                 }
-            }
 
-            foreach (var (name, skillType) in desired)
-            {
-                if (job.Skills.Count >= skillExtractor.Taxonomy.MaxSkillsPerJob)
+                if (changed)
                 {
-                    break;
+                    job.UpdatedAt = DateTime.UtcNow;
+                    batchUpdated++;
                 }
-
-                var jobSkill = new JobSkill
-                {
-                    Id = Guid.NewGuid(),
-                    JobId = job.Id,
-                    SkillName = name,
-                    SkillType = skillType,
-                    Confidence = 0.7m
-                };
-                job.Skills.Add(jobSkill);
-                dbContext.JobSkills.Add(jobSkill);
-                skillsAdded++;
-                changed = true;
             }
 
-            if (changed)
+            if (batchUpdated > 0)
             {
-                job.UpdatedAt = DateTime.UtcNow;
-                jobsUpdated++;
+                jobsUpdated += batchUpdated;
+                await dbContext.SaveChangesAsync(cancellationToken);
             }
-        }
-
-        if (jobsUpdated > 0)
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         logger?.LogInformation(
             "Skill backfill: scanned {JobsScanned} jobs, updated {JobsUpdated}, added {SkillsAdded} skills, removed {SkillsRemoved}.",
-            jobs.Count,
+            jobsScanned,
             jobsUpdated,
             skillsAdded,
             skillsRemoved);
 
-        return new SkillBackfillResult(jobs.Count, jobsUpdated, skillsAdded, skillsRemoved);
+        return new SkillBackfillResult(jobsScanned, jobsUpdated, skillsAdded, skillsRemoved);
     }
 
     private static string BuildText(Job job, IReadOnlyList<string>? markdowns)

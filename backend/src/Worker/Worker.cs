@@ -13,16 +13,41 @@ public sealed class CrawlWorker(
 {
     private readonly int delaySeconds = ReadPositiveInt(configuration, "CRAWLER_DELAY_SECONDS", 30);
     private readonly int pollSeconds = ReadPositiveInt(configuration, "CRAWLER_POLL_SECONDS", 60);
+    private static readonly TimeSpan PurgeInterval = TimeSpan.FromHours(1);
+    private DateTime? lastPurgeAt;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            await PurgeExpiredDataAsync(stoppingToken);
-            await CaptureListingSnapshotAsync(stoppingToken);
-            await CrawlDueSourcesAsync(stoppingToken);
-            await RunAiEnrichmentAsync(stoppingToken);
-            await Task.Delay(TimeSpan.FromSeconds(pollSeconds), stoppingToken);
+            // Round 15 (H-2): a single transient database/network error must not
+            // escape ExecuteAsync and stop the host (BackgroundServiceException
+            // behavior is StopHost by default). OperationCanceledException on
+            // shutdown still propagates.
+            try
+            {
+                await PurgeExpiredDataAsync(stoppingToken);
+                await CaptureListingSnapshotAsync(stoppingToken);
+                await CrawlDueSourcesAsync(stoppingToken);
+                await RunAiEnrichmentAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Worker cycle failed; continuing after the poll interval.");
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(pollSeconds), stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
         }
     }
 
@@ -85,16 +110,23 @@ public sealed class CrawlWorker(
     }
 
     /// <summary>
-    /// Runs the retention purge on every poll, alongside the crawl loop, so
-    /// expired jobs and crawl history do not accumulate on a long-lived worker.
+    /// Runs the retention purge hourly (not on every poll). The purge is
+    /// idempotent, so a missed hour simply catches up on the next cycle.
     /// </summary>
     private async Task PurgeExpiredDataAsync(CancellationToken cancellationToken)
     {
+        var now = DateTime.UtcNow;
+        if (lastPurgeAt is { } last && now - last < PurgeInterval)
+        {
+            return;
+        }
+
         try
         {
             using var scope = scopeFactory.CreateScope();
             var retention = scope.ServiceProvider.GetRequiredService<ICrawlDataRetentionService>();
             await retention.PurgeAsync(cancellationToken);
+            lastPurgeAt = now;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

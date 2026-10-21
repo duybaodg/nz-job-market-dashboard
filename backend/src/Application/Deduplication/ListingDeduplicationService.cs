@@ -13,7 +13,7 @@ public interface IListingDeduplicationService
 
     Task<DeduplicationSummaryDto> GetSummaryAsync(CancellationToken cancellationToken);
 
-    Task<DuplicateGroupsReportDto> GetGroupsAsync(CancellationToken cancellationToken);
+    Task<DuplicateGroupsReportDto> GetGroupsAsync(int page, int pageSize, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -62,7 +62,11 @@ public sealed class ListingDeduplicationService(
         var now = DateTime.UtcNow;
         await BackfillDescriptionsAsync(now, cancellationToken);
 
-        var allJobs = await dbContext.Jobs.ToListAsync(cancellationToken);
+        // Round 15 (H-8): expired ungrouped history is irrelevant to grouping,
+        // so it is not materialised. Active rows and retained group members are.
+        var allJobs = await dbContext.Jobs
+            .Where(job => job.IsActive || job.DuplicateGroupId != null)
+            .ToListAsync(cancellationToken);
         var activeJobs = allJobs.Where(job => job.IsActive).ToList();
         var listings = activeJobs
             .Where(job => job.EmployerCanonicalId != null)
@@ -375,21 +379,33 @@ public sealed class ListingDeduplicationService(
             latestRun?.Status);
     }
 
-    public async Task<DuplicateGroupsReportDto> GetGroupsAsync(CancellationToken cancellationToken)
+    public async Task<DuplicateGroupsReportDto> GetGroupsAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 200);
+        var totalGroups = await dbContext.DuplicateGroups.CountAsync(cancellationToken);
         var groups = await dbContext.DuplicateGroups
             .AsNoTracking()
             .OrderByDescending(group => group.MemberCount)
             .ThenBy(group => group.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(cancellationToken);
+        var groupIds = groups.Select(group => group.Id).ToList();
         var memberships = await dbContext.Jobs
             .AsNoTracking()
-            .Where(job => job.DuplicateGroupId != null)
-            .Select(job => new
-            {
-                Job = job,
-                GroupId = job.DuplicateGroupId!.Value
-            })
+            .Where(job => job.DuplicateGroupId != null && groupIds.Contains(job.DuplicateGroupId.Value))
+            .Select(job => new DuplicateMemberRow(
+                job.DuplicateGroupId!.Value,
+                job.Id,
+                job.Source,
+                job.Title,
+                job.Company,
+                job.Url,
+                job.IsActive))
             .ToListAsync(cancellationToken);
         var categories = await LoadSourceCategoriesAsync(cancellationToken);
         var summary = await GetSummaryAsync(cancellationToken);
@@ -399,7 +415,7 @@ public sealed class ListingDeduplicationService(
             {
                 var members = memberships
                     .Where(membership => membership.GroupId == group.Id)
-                    .Select(membership => ToMemberDto(membership.Job, group, categories))
+                    .Select(membership => ToMemberDto(membership, group, categories))
                     .OrderByDescending(member => member.IsCanonical)
                     .ThenBy(member => member.Source, StringComparer.OrdinalIgnoreCase)
                     .ToList();
@@ -431,17 +447,19 @@ public sealed class ListingDeduplicationService(
 
         return new DuplicateGroupsReportDto(
             DateTime.UtcNow,
-            groupDtos.Count,
+            totalGroups,
             summary.ListingsMerged,
             summary.UniqueVacancies,
             summary.ActiveListings,
             summary.Active,
             groupDtos,
-            reviewCandidates);
+            reviewCandidates,
+            page,
+            pageSize);
     }
 
     private static DuplicateGroupMemberDto ToMemberDto(
-        Job job,
+        DuplicateMemberRow job,
         DuplicateGroup group,
         IReadOnlyDictionary<string, string> categories)
     {
@@ -458,54 +476,80 @@ public sealed class ListingDeduplicationService(
             job.Id == group.CanonicalListingId);
     }
 
+    private sealed record DuplicateMemberRow(
+        Guid GroupId,
+        Guid Id,
+        string Source,
+        string Title,
+        string? Company,
+        string Url,
+        bool IsActive);
+
     private async Task BackfillDescriptionsAsync(DateTime now, CancellationToken cancellationToken)
     {
-        var missing = await dbContext.Jobs
-            .Where(job => job.DescriptionText == null || job.DescriptionText == "")
-            .ToListAsync(cancellationToken);
-        if (missing.Count == 0)
-        {
-            return;
-        }
-
-        var urls = missing
-            .Select(job => job.Url)
-            .Where(url => !string.IsNullOrWhiteSpace(url))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (urls.Count == 0)
-        {
-            return;
-        }
-
-        var pages = await dbContext.RawJobPages
-            .AsNoTracking()
-            .Where(page => urls.Contains(page.Url) && page.Markdown != null && page.Markdown != "")
-            .Select(page => new { page.Url, page.Markdown, page.CrawledAt })
-            .ToListAsync(cancellationToken);
-        var byUrl = pages
-            .GroupBy(page => page.Url, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                group => group.Key,
-                group => group.OrderByDescending(page => page.CrawledAt).First().Markdown!,
-                StringComparer.OrdinalIgnoreCase);
-
         var updated = 0;
-        foreach (var job in missing)
+        var offset = 0;
+
+        // Round 15 (H-8): page instead of loading every description-less row and
+        // every matching markdown page at once.
+        while (true)
         {
-            if (!byUrl.TryGetValue(job.Url, out var markdown) || string.IsNullOrWhiteSpace(markdown))
+            var missing = await dbContext.Jobs
+                .Where(job => job.DescriptionText == null || job.DescriptionText == "")
+                .OrderBy(job => job.Id)
+                .Skip(offset)
+                .Take(500)
+                .ToListAsync(cancellationToken);
+            if (missing.Count == 0)
+            {
+                break;
+            }
+
+            offset += missing.Count;
+            var urls = missing
+                .Select(job => job.Url)
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (urls.Count == 0)
             {
                 continue;
             }
 
-            job.DescriptionText = markdown.Length <= 20000 ? markdown : markdown[..20000];
-            job.UpdatedAt = now;
-            updated++;
+            var pages = await dbContext.RawJobPages
+                .AsNoTracking()
+                .Where(page => urls.Contains(page.Url) && page.Markdown != null && page.Markdown != "")
+                .Select(page => new { page.Url, page.Markdown, page.CrawledAt })
+                .ToListAsync(cancellationToken);
+            var byUrl = pages
+                .GroupBy(page => page.Url, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.OrderByDescending(page => page.CrawledAt).First().Markdown!,
+                    StringComparer.OrdinalIgnoreCase);
+
+            var batchUpdated = 0;
+            foreach (var job in missing)
+            {
+                if (!byUrl.TryGetValue(job.Url, out var markdown) || string.IsNullOrWhiteSpace(markdown))
+                {
+                    continue;
+                }
+
+                job.DescriptionText = markdown.Length <= 20000 ? markdown : markdown[..20000];
+                job.UpdatedAt = now;
+                batchUpdated++;
+            }
+
+            if (batchUpdated > 0)
+            {
+                updated += batchUpdated;
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
         }
 
         if (updated > 0)
         {
-            await dbContext.SaveChangesAsync(cancellationToken);
             logger?.LogInformation("Backfilled full description text for {Count} listings.", updated);
         }
     }

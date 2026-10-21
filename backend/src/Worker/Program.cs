@@ -17,9 +17,11 @@ builder.Services.AddHostedService<CrawlWorker>();
 var host = builder.Build();
 using (var scope = host.Services.CreateScope())
 {
-    await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.MigrateAsync();
-    // Reconcile job_sources with the crawler registry before crawling starts.
-    await scope.ServiceProvider.GetRequiredService<ISourceRegistrySynchronizer>().SyncAsync(CancellationToken.None);
+    // Round 15 (M-9): serialise migration + registry sync with the API.
+    await DatabaseStartup.MigrateAndSyncAsync(
+        scope.ServiceProvider.GetRequiredService<ApplicationDbContext>(),
+        scope.ServiceProvider.GetRequiredService<ISourceRegistrySynchronizer>(),
+        CancellationToken.None);
     // One-off repair: remove junk left by older worker versions and
     // re-normalise regions with the Phase-2 mapping. Idempotent.
     await scope.ServiceProvider.GetRequiredService<IJobQualityGuard>().RunAsync(CancellationToken.None);

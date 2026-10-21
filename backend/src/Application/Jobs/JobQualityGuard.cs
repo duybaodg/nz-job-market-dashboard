@@ -88,12 +88,28 @@ public sealed class JobQualityGuard(
             source => source.BaseUrl,
             StringComparer.OrdinalIgnoreCase);
 
-        var jobs = await dbContext.Jobs.ToListAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var junkRemoved = 0;
         var regionsNormalised = 0;
         var locationsRepaired = 0;
         var salariesBackfilled = 0;
+        var offset = 0;
+
+        // Round 15 (H-8): page by keyset order so a Pi never materialises the
+        // whole full-text jobs table. Updates do not change the ordering key.
+        while (true)
+        {
+            var jobs = await dbContext.Jobs
+                .OrderBy(job => job.Id)
+                .Skip(offset)
+                .Take(500)
+                .ToListAsync(cancellationToken);
+            if (jobs.Count == 0)
+            {
+                break;
+            }
+
+            offset += jobs.Count;
 
         foreach (var job in jobs)
         {
@@ -155,9 +171,10 @@ public sealed class JobQualityGuard(
             }
         }
 
-        if (junkRemoved > 0 || regionsNormalised > 0 || locationsRepaired > 0 || salariesBackfilled > 0)
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
+            if (junkRemoved > 0 || regionsNormalised > 0 || locationsRepaired > 0 || salariesBackfilled > 0)
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
         }
 
         logger.LogInformation(

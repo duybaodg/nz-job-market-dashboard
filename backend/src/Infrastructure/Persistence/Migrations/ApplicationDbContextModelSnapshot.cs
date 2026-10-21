@@ -65,6 +65,13 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Source")
+                        .IsUnique()
+                        .HasDatabaseName("IX_crawl_runs_source_running")
+                        .HasFilter("\"status\" = 'Running'");
+
+                    b.HasIndex("StartedAt");
+
                     b.ToTable("crawl_runs", (string)null);
                 });
 
@@ -859,6 +866,8 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CrawlRunId");
+
+                    b.HasIndex("CrawledAt");
 
                     b.ToTable("raw_job_pages", (string)null);
                 });

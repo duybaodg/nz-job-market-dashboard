@@ -74,6 +74,20 @@ public sealed class CrawlerOrchestrationService(
             return new CrawlRunResultDto(CreateTransientRun(source, "Failed", message), false, message);
         }
 
+        // Round 15 (H-3): one running run per source. The pre-check gives a
+        // clear conflict in the common case; a partial unique index on
+        // crawl_runs(source) WHERE status='Running' closes the race between two
+        // concurrent callers. Both the scheduler and the admin trigger use this
+        // same service, so both respect it.
+        var alreadyRunning = await dbContext.CrawlRuns
+            .AsNoTracking()
+            .AnyAsync(run => run.Source == source && run.Status == "Running", cancellationToken);
+        if (alreadyRunning)
+        {
+            var message = $"A crawl is already running for source '{source}'.";
+            return new CrawlRunResultDto(CreateTransientRun(source, "Conflict", message), false, message);
+        }
+
         var crawlRun = new CrawlRun
         {
             Id = Guid.NewGuid(),
@@ -83,7 +97,15 @@ public sealed class CrawlerOrchestrationService(
         };
 
         dbContext.CrawlRuns.Add(crawlRun);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            var message = $"A crawl is already running for source '{source}'.";
+            return new CrawlRunResultDto(CreateTransientRun(source, "Conflict", message), false, message);
+        }
 
         try
         {
@@ -110,10 +132,45 @@ public sealed class CrawlerOrchestrationService(
                 .GroupBy(page => page.Url, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => ExtractHtmlTitle(group.First().RawHtml), StringComparer.OrdinalIgnoreCase);
 
-            foreach (var rawJob in result.Jobs)
+            // Round 15 (M-2): prepare every candidate first, then load the
+            // possible existing rows (with skills) in one query instead of one
+            // Include round-trip per job.
+            var prepared = result.Jobs
+                .Select(rawJob =>
+                {
+                    pageTitles.TryGetValue(rawJob.Url ?? string.Empty, out var pageTitle);
+                    return PrepareCandidate(rawJob, request.Url, pageTitle);
+                })
+                .ToList();
+
+            var existingJobs = await LoadExistingJobsAsync(prepared, cancellationToken);
+            var byHash = new Dictionary<string, Job>(StringComparer.Ordinal);
+            var byUrl = new Dictionary<string, Job>(StringComparer.OrdinalIgnoreCase);
+            var bySourceJobId = new Dictionary<(string Source, string SourceJobId), Job>();
+            foreach (var existing in existingJobs)
             {
-                pageTitles.TryGetValue(rawJob.Url ?? string.Empty, out var pageTitle);
-                savedCount += await SaveJobAsync(rawJob, request.Url, pageTitle, cancellationToken);
+                byHash[existing.ContentHash] = existing;
+                byUrl[existing.Url] = existing;
+                if (!string.IsNullOrWhiteSpace(existing.SourceJobId))
+                {
+                    bySourceJobId[(existing.Source, existing.SourceJobId)] = existing;
+                }
+            }
+
+            foreach (var candidate in prepared)
+            {
+                var existing = FindExisting(candidate, byHash, byUrl, bySourceJobId);
+                var (saved, created) = await SaveJobAsync(candidate, existing, cancellationToken);
+                savedCount += saved;
+                if (created is not null)
+                {
+                    byHash[created.ContentHash] = created;
+                    byUrl[created.Url] = created;
+                    if (!string.IsNullOrWhiteSpace(created.SourceJobId))
+                    {
+                        bySourceJobId[(created.Source, created.SourceJobId)] = created;
+                    }
+                }
             }
 
             await ReconcileJobsAsync(source, result, cancellationToken);
@@ -224,39 +281,15 @@ public sealed class CrawlerOrchestrationService(
             .ToListAsync(cancellationToken);
     }
 
-    private async Task<int> SaveJobAsync(
-        RawJobInput rawJob,
-        string crawlUrl,
-        string? pageTitle,
+    private async Task<(int Saved, Job? Created)> SaveJobAsync(
+        PreparedCandidate prepared,
+        Job? existingJob,
         CancellationToken cancellationToken)
     {
-        // A location field can absorb the whole detail block (Comspek) or a
-        // trailing ad sentence (SEEK). Clean it for every parser and preserve
-        // the removed text in the description instead of discarding it.
-        var sanitisedLocation = LocationSanitiser.Sanitise(rawJob.Location);
-        var regionHint = sanitisedLocation.RegionHint;
-        var candidate = rawJob with
-        {
-            Location = sanitisedLocation.Location,
-            DescriptionText = LocationSanitiser.PrependRemainder(
-                sanitisedLocation.RemovedRemainder,
-                rawJob.DescriptionText)
-        };
+        var candidate = prepared.Candidate;
+        var regionHint = prepared.RegionHint;
 
-        var validation = contentValidator.Validate(
-            candidate,
-            new JobValidationContext(CrawlUrl: crawlUrl, PageTitle: pageTitle));
-
-        var contentHash = deduplicationService.GenerateContentHash(candidate);
-        var existingJob = await dbContext.Jobs
-            .Include(existing => existing.Skills)
-            .FirstOrDefaultAsync(existing =>
-                existing.ContentHash == contentHash ||
-                (candidate.SourceJobId != null && existing.Source == candidate.Source && existing.SourceJobId == candidate.SourceJobId) ||
-                existing.Url == candidate.Url,
-                cancellationToken);
-
-        if (!validation.IsAccepted)
+        if (!prepared.Validation.IsAccepted)
         {
             // A rejected candidate must never be (re)activated, including when a
             // previous worker version already saved it.
@@ -266,7 +299,7 @@ public sealed class CrawlerOrchestrationService(
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            return 0;
+            return (0, null);
         }
 
         if (existingJob is not null)
@@ -303,7 +336,7 @@ public sealed class CrawlerOrchestrationService(
             existingJob.ExpiredAt = null;
             existingJob.MissingCrawlCount = 0;
             existingJob.EmployerCanonicalId = await ResolveEmployerAsync(candidate.Source, existingJob.Company, cancellationToken);
-            return 0;
+            return (0, null);
         }
 
         var salary = SalaryParser.Parse(candidate.SalaryText, candidate.Title);
@@ -332,7 +365,7 @@ public sealed class CrawlerOrchestrationService(
             DescriptionSummary = Summarise(candidate.DescriptionText),
             DescriptionText = CleanDescription(candidate.DescriptionText),
             Url = candidate.Url,
-            ContentHash = contentHash,
+            ContentHash = prepared.ContentHash,
             PostedDate = candidate.PostedDate,
             ClosingDate = candidate.ClosingDate,
             IsActive = true,
@@ -347,8 +380,90 @@ public sealed class CrawlerOrchestrationService(
         fieldExtraction.ApplyDeterministic(job);
 
         dbContext.Jobs.Add(job);
-        return 1;
+        return (1, job);
     }
+
+    private PreparedCandidate PrepareCandidate(
+        RawJobInput rawJob,
+        string crawlUrl,
+        string? pageTitle)
+    {
+        // A location field can absorb the whole detail block (Comspek) or a
+        // trailing ad sentence (SEEK). Clean it for every parser and preserve
+        // the removed text in the description instead of discarding it.
+        var sanitisedLocation = LocationSanitiser.Sanitise(rawJob.Location);
+        var candidate = rawJob with
+        {
+            Location = sanitisedLocation.Location,
+            DescriptionText = LocationSanitiser.PrependRemainder(
+                sanitisedLocation.RemovedRemainder,
+                rawJob.DescriptionText)
+        };
+
+        var validation = contentValidator.Validate(
+            candidate,
+            new JobValidationContext(CrawlUrl: crawlUrl, PageTitle: pageTitle));
+        return new PreparedCandidate(
+            rawJob,
+            candidate,
+            validation,
+            deduplicationService.GenerateContentHash(candidate),
+            pageTitle,
+            sanitisedLocation.RegionHint);
+    }
+
+    private async Task<List<Job>> LoadExistingJobsAsync(
+        IReadOnlyList<PreparedCandidate> prepared,
+        CancellationToken cancellationToken)
+    {
+        var hashes = prepared.Select(candidate => candidate.ContentHash).ToHashSet(StringComparer.Ordinal);
+        var urls = prepared.Select(candidate => candidate.Candidate.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sourceJobIds = prepared
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Candidate.SourceJobId))
+            .Select(candidate => candidate.Candidate.SourceJobId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (hashes.Count == 0 && urls.Count == 0 && sourceJobIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await dbContext.Jobs
+            .Include(existing => existing.Skills)
+            .Where(existing =>
+                hashes.Contains(existing.ContentHash)
+                || urls.Contains(existing.Url)
+                || (existing.SourceJobId != null && sourceJobIds.Contains(existing.SourceJobId)))
+            .ToListAsync(cancellationToken);
+    }
+
+    private static Job? FindExisting(
+        PreparedCandidate candidate,
+        IReadOnlyDictionary<string, Job> byHash,
+        IReadOnlyDictionary<string, Job> byUrl,
+        IReadOnlyDictionary<(string Source, string SourceJobId), Job> bySourceJobId)
+    {
+        if (byHash.TryGetValue(candidate.ContentHash, out var byContentHash))
+        {
+            return byContentHash;
+        }
+
+        if (!string.IsNullOrWhiteSpace(candidate.Candidate.SourceJobId)
+            && bySourceJobId.TryGetValue((candidate.Candidate.Source, candidate.Candidate.SourceJobId), out var byId))
+        {
+            return byId;
+        }
+
+        return byUrl.TryGetValue(candidate.Candidate.Url, out var byAddress) ? byAddress : null;
+    }
+
+    private sealed record PreparedCandidate(
+        RawJobInput Raw,
+        RawJobInput Candidate,
+        JobValidationResult Validation,
+        string ContentHash,
+        string? PageTitle,
+        string? RegionHint);
 
     private async Task ReconcileJobsAsync(
         string source,

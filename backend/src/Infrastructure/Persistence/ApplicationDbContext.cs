@@ -122,6 +122,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(page => page.RawJson).HasColumnName("raw_json").HasColumnType("jsonb");
             entity.Property(page => page.CrawledAt).HasColumnName("crawled_at");
             entity.Property(page => page.CrawlRunId).HasColumnName("crawl_run_id");
+            entity.HasIndex(page => page.CrawledAt);
         });
     }
 
@@ -140,6 +141,13 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(run => run.TotalJobsFound).HasColumnName("total_jobs_found");
             entity.Property(run => run.TotalJobsSaved).HasColumnName("total_jobs_saved");
             entity.Property(run => run.ErrorMessage).HasColumnName("error_message");
+            entity.HasIndex(run => run.StartedAt);
+            // Round 15 (H-3): at most one running run per source. The partial
+            // index is the race-safe half of the per-source lock.
+            entity.HasIndex(run => run.Source)
+                .HasDatabaseName("IX_crawl_runs_source_running")
+                .HasFilter("\"status\" = 'Running'")
+                .IsUnique();
         });
     }
 

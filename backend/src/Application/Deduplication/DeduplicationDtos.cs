@@ -54,4 +54,6 @@ public sealed record DuplicateGroupsReportDto(
     int ActiveListings,
     bool Deduplicated,
     IReadOnlyList<DuplicateGroupDto> Groups,
-    IReadOnlyList<DuplicateReviewCandidateDto> ReviewCandidates);
+    IReadOnlyList<DuplicateReviewCandidateDto> ReviewCandidates,
+    int Page,
+    int PageSize);

@@ -68,9 +68,12 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await dbContext.Database.MigrateAsync();
-    // Keep job_sources in step with crawler/sources/sites.json.
-    await scope.ServiceProvider.GetRequiredService<ISourceRegistrySynchronizer>().SyncAsync(CancellationToken.None);
+    // Round 15 (M-9): the API and worker can start together on a fresh deploy;
+    // an advisory lock serialises the migration + registry sync.
+    await DatabaseStartup.MigrateAndSyncAsync(
+        dbContext,
+        scope.ServiceProvider.GetRequiredService<ISourceRegistrySynchronizer>(),
+        CancellationToken.None);
 }
 
 app.UseCors("Frontend");
@@ -266,9 +269,11 @@ app.MapPost("/api/admin/employers/match", async (
 // --- Round 8: listing deduplication provenance -----------------------------
 
 app.MapGet("/api/admin/duplicates", async (
+        int? page,
+        int? pageSize,
         IListingDeduplicationService dedupService,
         CancellationToken cancellationToken) =>
-    Results.Ok(await dedupService.GetGroupsAsync(cancellationToken)))
+    Results.Ok(await dedupService.GetGroupsAsync(page ?? 1, pageSize ?? 100, cancellationToken)))
     .WithName("GetDuplicateGroups");
 
 app.MapPost("/api/admin/dedup/run", async (

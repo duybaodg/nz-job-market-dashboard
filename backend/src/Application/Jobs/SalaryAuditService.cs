@@ -55,116 +55,139 @@ public sealed class SalaryAuditService(
 
     public async Task<SalaryAuditResult> RunAsync(CancellationToken cancellationToken)
     {
-        var jobs = await dbContext.Jobs
-            .Where(job => job.SalaryMin != null || job.SalaryMax != null || job.SalaryText != null)
-            .ToListAsync(cancellationToken);
-
-        var urls = jobs.Select(job => job.Url).Distinct().ToList();
-        var rawPages = urls.Count == 0
-            ? []
-            : await dbContext.RawJobPages
-                .Where(page => urls.Contains(page.Url))
-                .Select(page => new { page.Url, page.Markdown, page.RawHtml, page.CrawledAt })
-                .ToListAsync(cancellationToken);
-        var pageByUrl = rawPages
-            .GroupBy(page => page.Url)
-            .ToDictionary(group => group.Key, group => group.OrderByDescending(page => page.CrawledAt).First());
-
+        var jobsScanned = 0;
         var nonPayIgnored = 0;
         var seniorLowPayFlagged = 0;
         var outOfRangeCleared = 0;
-        var changed = false;
+        var offset = 0;
 
-        foreach (var job in jobs)
+        // Round 15 (H-8): page the salary rows and load only this batch's page
+        // text (markdown first, raw HTML only as a fallback), keeping memory
+        // bounded on the Pi.
+        while (true)
         {
-            // Upgrade rows an earlier audit cleared before the "ignored" marker
-            // existed, so the deterministic extractor no longer re-parses them.
-            if (job.SalaryMin is null && job.SalaryMax is null
-                && (AlreadyNoted(job.SalaryQuestionableReason, "non-pay token")
-                    || AlreadyNoted(job.SalaryQuestionableReason, "below the annual floor"))
-                && !string.Equals(job.SalarySource, "ignored", StringComparison.OrdinalIgnoreCase))
+            var jobs = await dbContext.Jobs
+                .Where(job => job.SalaryMin != null || job.SalaryMax != null || job.SalaryText != null)
+                .OrderBy(job => job.Id)
+                .Skip(offset)
+                .Take(500)
+                .ToListAsync(cancellationToken);
+            if (jobs.Count == 0)
             {
-                job.SalarySource = "ignored";
-                job.UpdatedAt = DateTime.UtcNow;
-                changed = true;
+                break;
             }
 
-            pageByUrl.TryGetValue(job.Url, out var page);
-            var context = string.Join(
-                "\n",
-                new[] { job.DescriptionText, page?.Markdown, page?.RawHtml }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            jobsScanned += jobs.Count;
+            offset += jobs.Count;
 
-            // 1. A bare "NNk"/"NN000" salary text that is really page chrome.
-            //    The parser has already dropped an implausible bound, so read the
-            //    value straight from the text when no bound survives.
-            var salaryAmount = job.SalaryMin ?? job.SalaryMax ?? BareAmountValue(job.SalaryText);
-            if (LooksLikeBareAmount(job.SalaryText)
-                && salaryAmount is { } amount
-                && NonPaySalaryEvidence.Matches(context, job.SalaryText, amount))
+            var urls = jobs.Select(job => job.Url).Distinct().ToList();
+            var rawPages = urls.Count == 0
+                ? []
+                : await dbContext.RawJobPages
+                    .Where(page => urls.Contains(page.Url))
+                    .Select(page => new
+                    {
+                        page.Url,
+                        Text = page.Markdown ?? page.RawHtml,
+                        page.CrawledAt
+                    })
+                    .ToListAsync(cancellationToken);
+            var pageByUrl = rawPages
+                .GroupBy(page => page.Url)
+                .ToDictionary(group => group.Key, group => group.OrderByDescending(page => page.CrawledAt).First());
+
+            var changed = false;
+            foreach (var job in jobs)
             {
-                if (!AlreadyNoted(job.SalaryQuestionableReason, "non-pay token"))
+                // Upgrade rows an earlier audit cleared before the "ignored" marker
+                // existed, so the deterministic extractor no longer re-parses them.
+                if (job.SalaryMin is null && job.SalaryMax is null
+                    && (AlreadyNoted(job.SalaryQuestionableReason, "non-pay token")
+                        || AlreadyNoted(job.SalaryQuestionableReason, "below the annual floor"))
+                    && !string.Equals(job.SalarySource, "ignored", StringComparison.OrdinalIgnoreCase))
                 {
-                    ClearSalary(
-                        job,
-                        $"advertised salary '{job.SalaryText}' ignored: it is a non-pay token (contact string, file size or quantity)");
-                    nonPayIgnored++;
+                    job.SalarySource = "ignored";
+                    job.UpdatedAt = DateTime.UtcNow;
                     changed = true;
                 }
 
-                continue;
+                pageByUrl.TryGetValue(job.Url, out var page);
+                var context = string.Join(
+                    "\n",
+                    new[] { job.DescriptionText, page?.Text }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
+                // 1. A bare "NNk"/"NN000" salary text that is really page chrome.
+                //    The parser has already dropped an implausible bound, so read the
+                //    value straight from the text when no bound survives.
+                var salaryAmount = job.SalaryMin ?? job.SalaryMax ?? BareAmountValue(job.SalaryText);
+                if (LooksLikeBareAmount(job.SalaryText)
+                    && salaryAmount is { } amount
+                    && NonPaySalaryEvidence.Matches(context, job.SalaryText, amount))
+                {
+                    if (!AlreadyNoted(job.SalaryQuestionableReason, "non-pay token"))
+                    {
+                        ClearSalary(
+                            job,
+                            $"advertised salary '{job.SalaryText}' ignored: it is a non-pay token (contact string, file size or quantity)");
+                        nonPayIgnored++;
+                        changed = true;
+                    }
+
+                    continue;
+                }
+
+                var hasBounds = job.SalaryMin is not null || job.SalaryMax is not null;
+                if (!hasBounds)
+                {
+                    continue;
+                }
+
+                var midpoint = Midpoint(job);
+
+                // 2. A low annual figure against a Senior/Lead title is a misparse risk.
+                if (string.Equals(job.SalaryPeriod, "Year", StringComparison.OrdinalIgnoreCase)
+                    && midpoint is >= SeniorAnnualFloor and <= SeniorAnnualCeiling
+                    && IsSeniorOrLead(job.Seniority)
+                    && !AlreadyNoted(job.SalaryQuestionableReason, "Senior/Lead"))
+                {
+                    job.SalaryQuestionable = true;
+                    job.SalaryQuestionableReason = Join(
+                        job.SalaryQuestionableReason,
+                        "annual salary looks low for a Senior/Lead role");
+                    job.UpdatedAt = DateTime.UtcNow;
+                    seniorLowPayFlagged++;
+                    changed = true;
+                    continue;
+                }
+
+                // 3. An annual figure below the annual floor can only be an hourly or
+                //    day rate that was mislabelled as a year figure.
+                if (string.Equals(job.SalaryPeriod, "Year", StringComparison.OrdinalIgnoreCase)
+                    && midpoint is < MinimumAnnual
+                    && !AlreadyNoted(job.SalaryQuestionableReason, "below the annual floor"))
+                {
+                    ClearSalary(
+                        job,
+                        $"advertised salary '{job.SalaryText}' cleared: it is below the annual floor and looks like an hourly/day rate");
+                    outOfRangeCleared++;
+                    changed = true;
+                }
             }
 
-            var hasBounds = job.SalaryMin is not null || job.SalaryMax is not null;
-            if (!hasBounds)
+            if (changed)
             {
-                continue;
+                await dbContext.SaveChangesAsync(cancellationToken);
             }
-
-            var midpoint = Midpoint(job);
-
-            // 2. A low annual figure against a Senior/Lead title is a misparse risk.
-            if (string.Equals(job.SalaryPeriod, "Year", StringComparison.OrdinalIgnoreCase)
-                && midpoint is >= SeniorAnnualFloor and <= SeniorAnnualCeiling
-                && IsSeniorOrLead(job.Seniority)
-                && !AlreadyNoted(job.SalaryQuestionableReason, "Senior/Lead"))
-            {
-                job.SalaryQuestionable = true;
-                job.SalaryQuestionableReason = Join(
-                    job.SalaryQuestionableReason,
-                    "annual salary looks low for a Senior/Lead role");
-                job.UpdatedAt = DateTime.UtcNow;
-                seniorLowPayFlagged++;
-                changed = true;
-                continue;
-            }
-
-            // 3. An annual figure below the annual floor can only be an hourly or
-            //    day rate that was mislabelled as a year figure.
-            if (string.Equals(job.SalaryPeriod, "Year", StringComparison.OrdinalIgnoreCase)
-                && midpoint is < MinimumAnnual
-                && !AlreadyNoted(job.SalaryQuestionableReason, "below the annual floor"))
-            {
-                ClearSalary(
-                    job,
-                    $"advertised salary '{job.SalaryText}' cleared: it is below the annual floor and looks like an hourly/day rate");
-                outOfRangeCleared++;
-                changed = true;
-            }
-        }
-
-        if (changed)
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         logger?.LogInformation(
             "Salary audit: scanned {JobsScanned} salary rows, ignored {NonPayIgnored} non-pay tokens, flagged {SeniorLowPayFlagged} low Senior/Lead annual figures, cleared {OutOfRangeCleared} below-floor rows.",
-            jobs.Count,
+            jobsScanned,
             nonPayIgnored,
             seniorLowPayFlagged,
             outOfRangeCleared);
 
-        return new SalaryAuditResult(jobs.Count, nonPayIgnored, seniorLowPayFlagged, outOfRangeCleared);
+        return new SalaryAuditResult(jobsScanned, nonPayIgnored, seniorLowPayFlagged, outOfRangeCleared);
     }
 
     private static void ClearSalary(Domain.Entities.Job job, string reason)
