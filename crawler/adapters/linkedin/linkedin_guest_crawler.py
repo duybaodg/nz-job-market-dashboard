@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""MANUAL-ONLY LinkedIn public guest-endpoint crawler.
+"""Scheduled LinkedIn public guest-endpoint crawler (operator exemption).
 
 ROBOTS VERDICT (checked 2026-10-23): ``www.linkedin.com/robots.txt`` declares
 ``User-agent: * / Disallow: /`` (and disallows ``/jobs-guest/`` even for
-Googlebot). This tool is therefore PERSONAL USE ONLY, MANUAL ONLY, and is
-never imported, scheduled or invoked by ``scrapling_worker.py``, the worker, or
-``sites.json``. It uses the logged-out guest endpoints only: no login, no
-cookies, no credentials, no browser impersonation, honest User-Agent, low
-volume. If you cannot accept those constraints, do not run it.
+Googlebot). The operator (Bao Duy) explicitly authorised this guest-endpoint
+crawl on 2026-10-23 as a knowing, personal-use exception to the repository's
+robots rule. The exception is scoped to LinkedIn guest crawling ONLY; every
+other source keeps full robots discipline.
+
+It uses the logged-out guest endpoints only: no login, no cookies, no
+credentials, no browser impersonation, honest User-Agent, low volume. Request
+budget: one search page plus at most ``--detail-limit`` detail fetches per run
+(hard cap 10), each separated by at least 1.5 seconds. A block (429 after
+bounded retries, 999, a challenge page, 403) fails the run with code
+``BLOCKED``; never escalate, rotate UAs, retry harder or solve a challenge.
 
 Output is the same RawJobInput envelope the MCP crawler emits, so a manual run
 can be fed to the pipeline. ``RawJobInput`` has no ``isActive`` field, so ghost
@@ -34,6 +40,7 @@ import random
 import re
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import unescape
 from typing import Any, Callable
@@ -47,14 +54,31 @@ SEARCH_ENDPOINT = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostin
 DETAIL_ENDPOINT = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
 JOB_VIEW_URL = "https://www.linkedin.com/jobs/view/{job_id}/"
 PAGE_SIZE = 10
-MAX_RETRIES = 6
+#: A block is back-off-and-report, never retry-harder. Three attempts at most
+#: (initial + two bounded backoffs) keep a throttled run cheap.
+MAX_RETRIES = 2
 BACKOFF_BASE_SECONDS = 0.5
-BACKOFF_MAX_SECONDS = 8.0
-JITTER_MAX_SECONDS = 0.5
+BACKOFF_MAX_SECONDS = 2.0
+JITTER_MAX_SECONDS = 0.25
 MIN_DELAY_SECONDS = 1.5
 DEFAULT_DELAY_SECONDS = 1.5
 DEFAULT_MAX_JOBS = 20
+MAX_JOBS_PER_RUN = 40
+DEFAULT_DETAIL_LIMIT = 10
+MAX_DETAIL_LIMIT = 10
+#: At most one search page + ten detail fetches per run. The CLI enforces this
+#: logical-request budget itself, so the worker cannot accidentally widen it.
+MAX_SEARCH_PAGES_PER_RUN = 1
+MAX_REQUESTS_PER_RUN = MAX_SEARCH_PAGES_PER_RUN + MAX_DETAIL_LIMIT
 FETCH_TIMEOUT_SECONDS = 15
+
+#: Strong challenge/interstitial markers. Kept narrow so ordinary advert copy
+#: ("a challenging role") is never mistaken for a block page.
+CHALLENGE_MARKERS = re.compile(
+    r"authwall|captcha|challenge-form|security[-_ ]check|"
+    r"verify (?:you are|that you are) (?:a )?human|unusual activity",
+    re.I,
+)
 
 
 class CliError(Exception):
@@ -68,6 +92,16 @@ class CliError(Exception):
 
 class FetchError(Exception):
     """A non-recoverable HTTP/transport failure."""
+
+
+class BlockedError(FetchError):
+    """LinkedIn returned a block signature (429/999/403/challenge)."""
+
+    code = "BLOCKED"
+
+
+class BudgetExceeded(FetchError):
+    """The per-run request budget would be exceeded."""
 
 
 class _ContractParser(argparse.ArgumentParser):
@@ -86,6 +120,24 @@ def _parse_whole_positive(value: str) -> int:
     return number
 
 
+def _parse_max_jobs(value: str) -> int:
+    number = _parse_whole_positive(value)
+    if number > MAX_JOBS_PER_RUN:
+        raise argparse.ArgumentTypeError(
+            f"must be <= {MAX_JOBS_PER_RUN} per run: {value!r}"
+        )
+    return number
+
+
+def _parse_detail_limit(value: str) -> int:
+    number = _parse_whole_positive(value)
+    if number > MAX_DETAIL_LIMIT:
+        raise argparse.ArgumentTypeError(
+            f"must be <= {MAX_DETAIL_LIMIT} detail fetches per run: {value!r}"
+        )
+    return number
+
+
 def _parse_delay(value: str) -> float:
     try:
         delay = float(value)
@@ -96,6 +148,26 @@ def _parse_delay(value: str) -> float:
             f"must be >= {MIN_DELAY_SECONDS} seconds (politeness floor): {value!r}"
         )
     return delay
+
+
+def is_block_page(html: str) -> bool:
+    """True when the fragment is LinkedIn's challenge/interstitial page."""
+    return bool(html and CHALLENGE_MARKERS.search(html[:50_000]))
+
+
+@dataclass
+class RequestBudget:
+    """Hard cap on logical HTTP requests (search pages + detail fetches)."""
+
+    limit: int = MAX_REQUESTS_PER_RUN
+    used: int = 0
+
+    def spend(self, url: str) -> None:
+        if self.used >= self.limit:
+            raise BudgetExceeded(
+                f"Request budget of {self.limit} exhausted before fetching {url}"
+            )
+        self.used += 1
 
 
 def build_search_url(keywords: str | None, location: str, jobage: int | None, page: int) -> str:
@@ -126,8 +198,8 @@ def html_fetch(
     """Fetch a guest fragment: honest UA, 15s timeout, bounded backoff+jitter.
 
     429/5xx retry up to ``max_retries``; 404 returns "" (a missing posting is
-    empty, not a crash); every other error raises. Never rotates UAs, never
-    sends cookies, never tries to solve a challenge.
+    empty, not a crash); 403/999/challenge pages raise :class:`BlockedError`.
+    Never rotates UAs, never sends cookies, never tries to solve a challenge.
     """
     jitter_fn = jitter or (lambda: random.uniform(0, JITTER_MAX_SECONDS))
     delay = BACKOFF_BASE_SECONDS
@@ -147,21 +219,43 @@ def html_fetch(
         except HTTPError as exc:
             if exc.code == 404:
                 return ""
+            if exc.code in (403, 999):
+                raise BlockedError(
+                    f"LinkedIn blocked the guest crawl (HTTP {exc.code}) for {url}"
+                ) from exc
             if (exc.code == 429 or 500 <= exc.code < 600) and attempt < max_retries:
                 delay = _sleep_with_jitter(delay, sleeper, jitter_fn)
                 continue
+            if exc.code == 429:
+                raise BlockedError(
+                    f"LinkedIn rate-limited the guest crawl (HTTP 429) after "
+                    f"{max_retries + 1} bounded attempts for {url}"
+                ) from exc
             raise FetchError(f"HTTP {exc.code} for {url}") from exc
         except URLError as exc:
             raise FetchError(f"Network error for {url}: {exc.reason}") from exc
 
         if status == 404:
             return ""
+        if status in (403, 999):
+            raise BlockedError(
+                f"LinkedIn blocked the guest crawl (HTTP {status}) for {url}"
+            )
         if (status == 429 or 500 <= status < 600) and attempt < max_retries:
             delay = _sleep_with_jitter(delay, sleeper, jitter_fn)
             continue
+        if status == 429:
+            raise BlockedError(
+                f"LinkedIn rate-limited the guest crawl (HTTP 429) after "
+                f"{max_retries + 1} bounded attempts for {url}"
+            )
         if status >= 400:
             raise FetchError(f"HTTP {status} for {url}")
-        return body.decode("utf-8", errors="replace")
+
+        text = body.decode("utf-8", errors="replace")
+        if is_block_page(text):
+            raise BlockedError(f"LinkedIn returned a challenge page for {url}")
+        return text
 
     raise FetchError(f"HTTP retries exhausted for {url}")
 
@@ -524,7 +618,9 @@ def _emit(payload: dict[str, Any], output_format: str, detail_mode: bool) -> Non
 
 
 def run_search(args: argparse.Namespace, fetch: Callable[[str], str] = html_fetch) -> dict[str, Any]:
+    budget = RequestBudget()
     search_url = build_search_url(args.keywords, args.location, args.jobage, args.page)
+    budget.spend(search_url)
     fragment = fetch(search_url)
     cards = parse_search_cards(fragment) if fragment else []
 
@@ -536,16 +632,23 @@ def run_search(args: argparse.Namespace, fetch: Callable[[str], str] = html_fetc
         seen.add(card["id"])
         deduped.append(card)
     selected = deduped[: args.max_jobs]
+    detail_limit = min(
+        getattr(args, "detail_limit", DEFAULT_DETAIL_LIMIT) or DEFAULT_DETAIL_LIMIT,
+        MAX_DETAIL_LIMIT,
+    )
 
     jobs: list[dict[str, Any]] = []
     active_by_id: dict[str, bool] = {}
     criteria_by_id: dict[str, dict[str, str]] = {}
+    detail_fetches = 0
     for index, card in enumerate(selected):
-        if args.dry_run:
+        if args.dry_run or index >= detail_limit:
             jobs.append(_raw_job_from_card(card))
             continue
         detail_url = DETAIL_ENDPOINT.format(job_id=card["id"])
+        budget.spend(detail_url)
         detail_html = fetch(detail_url)
+        detail_fetches += 1
         if detail_html:
             detail_job, is_active, criteria = parse_detail(detail_html, card["id"])
             jobs.append(detail_job)
@@ -555,7 +658,7 @@ def run_search(args: argparse.Namespace, fetch: Callable[[str], str] = html_fetc
         else:
             # 404 detail: keep the search card, but do not invent ghost status.
             jobs.append(_raw_job_from_card(card))
-        if index < len(selected) - 1:
+        if index < len(selected) - 1 and index + 1 < detail_limit:
             time.sleep(args.delay)
 
     meta = {
@@ -565,6 +668,10 @@ def run_search(args: argparse.Namespace, fetch: Callable[[str], str] = html_fetc
         "location": args.location,
         "jobage": args.jobage,
         "maxJobs": args.max_jobs,
+        "detailLimit": detail_limit,
+        "detailFetches": detail_fetches,
+        "requestBudget": budget.limit,
+        "requestsUsed": budget.used,
         "dryRun": bool(args.dry_run),
         "delay": args.delay,
         "isComplete": args.dry_run or len(jobs) >= args.max_jobs,
@@ -605,16 +712,28 @@ def run_detail(args: argparse.Namespace, fetch: Callable[[str], str] = html_fetc
 def _build_parser() -> argparse.ArgumentParser:
     parser = _ContractParser(
         description=(
-            "MANUAL-ONLY personal-use LinkedIn guest-endpoint crawler. "
-            "www.linkedin.com robots.txt disallows all automated agents; "
-            "never schedule or wire this into the worker."
+            "Scheduled personal-use LinkedIn guest-endpoint crawler under the "
+            "operator's 2026-10-23 exemption. linkedin.com robots.txt disallows "
+            "all automated agents; this scoped allowlist-of-one exception is for "
+            "LinkedIn guest crawling only. Honest UA, no login, low volume."
         )
     )
     parser.add_argument("--keywords", type=str, default=None, help="Search keywords")
     parser.add_argument("--location", type=str, default=None, help="Location (required for search)")
     parser.add_argument("--jobage", type=_parse_whole_positive, default=None, help="Posted within N days")
-    parser.add_argument("--max-jobs", type=_parse_whole_positive, default=DEFAULT_MAX_JOBS, help="Max results")
+    parser.add_argument(
+        "--max-jobs",
+        type=_parse_max_jobs,
+        default=DEFAULT_MAX_JOBS,
+        help=f"Max results (hard cap {MAX_JOBS_PER_RUN})",
+    )
     parser.add_argument("--page", type=_parse_whole_positive, default=1, help="1-indexed results page")
+    parser.add_argument(
+        "--detail-limit",
+        type=_parse_detail_limit,
+        default=DEFAULT_DETAIL_LIMIT,
+        help=f"Max detail fetches per run (hard cap {MAX_DETAIL_LIMIT})",
+    )
     parser.add_argument("--detail", type=str, default=None, help="Fetch one posting: id, URL, or URN")
     parser.add_argument("--format", choices=("json", "table"), default="json", help="Output format")
     parser.add_argument("--dry-run", action="store_true", help="Search only; do not fetch details")
@@ -644,6 +763,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except CliError as exc:
         print(json.dumps({"error": exc.message, "code": exc.code}), file=sys.stderr)
+        return 1
+    except BlockedError as exc:
+        print(json.dumps({"error": str(exc), "code": "BLOCKED"}), file=sys.stderr)
         return 1
     except FetchError as exc:
         print(json.dumps({"error": str(exc), "code": "FETCH_FAILED"}), file=sys.stderr)

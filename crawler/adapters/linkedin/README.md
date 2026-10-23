@@ -1,12 +1,11 @@
-# LinkedIn guest-endpoint crawler (MANUAL ONLY)
+# LinkedIn guest-endpoint crawler (scheduled, scoped operator exemption)
 
-`linkedin_guest_crawler.py` is a **personal-use, manual-only** helper that reads
-LinkedIn's logged-out guest endpoints and prints the same `RawJobInput` envelope
-the existing MCP crawler uses. It is deliberately **not wired into the worker**:
-`scrapling_worker.py`, `crawler/sources/sites.json` and the scheduled scheduler
-never import, invoke or reference it.
+`linkedin_guest_crawler.py` is a **personal-use** crawler that reads LinkedIn's
+logged-out guest endpoints and prints the same `RawJobInput` envelope the MCP
+crawler uses. Round 18 wires it into `scrapling_worker.py` as parser
+`linkedin-guest` and schedules it once a day from `crawler/sources/sites.json`.
 
-## Robots verdict (checked 2026-10-23)
+## Robots verdict and operator exemption (2026-10-23)
 
 `https://www.linkedin.com/robots.txt` for `User-agent: *` is:
 
@@ -14,11 +13,19 @@ never import, invoke or reference it.
 Disallow: /
 ```
 
-`/jobs-guest/` is disallowed even for Googlebot. LinkedIn's Terms of Service also
-prohibit automated access. This tool therefore stays manual, personal-use,
-logged-out, low-volume, and honest. If that boundary is not acceptable, stop and
-use LinkedIn's official Talent/Job APIs instead. Do not escalate to impersonation,
-login, cookies, proxies or challenge solving.
+`/jobs-guest/` is disallowed even for Googlebot. LinkedIn's Terms of Service
+also prohibit automated access. On 2026-10-23 the operator (Bao Duy) explicitly
+authorised this guest crawl as a knowing, personal-use exception to hard rule
+#1 — **for LinkedIn guest crawling ONLY**. It is an allowlist of one
+(`LinkedIn Jobs` + parser `linkedin-guest`) in Python and .NET; every other
+source keeps full robots discipline. Do not widen it and do not build a config
+flag around it.
+
+Boundaries that remain: no login, cookies or credentials; honest self-identifying
+UA; one search page + at most 10 detail fetches per run; >= 1.5 s between
+requests; a block stops the run. Do not escalate to impersonation, proxy
+rotation, challenge solving or "try harder" retries. If that boundary is not
+acceptable, stop and use LinkedIn's official Talent/Job APIs instead.
 
 ## Endpoints
 
@@ -36,11 +43,17 @@ names itself; it never rotates UAs or impersonates a browser.
 ## Usage
 
 ```bash
-# Search (location is required), then fetch details for the first 10 cards
+# Search (location is required), then fetch at most 10 details
 python3 crawler/adapters/linkedin/linkedin_guest_crawler.py \
   --keywords "software engineer" \
   --location "Wellington, New Zealand" \
-  --jobage 14 --max-jobs 10
+  --jobage 14 --max-jobs 40 --detail-limit 10
+
+# The exact scheduled path (one page, 10 details, 1 search page budget)
+python3 crawler/adapters/linkedin/linkedin_guest_crawler.py \
+  --keywords "developer OR engineer OR data OR cloud OR devops OR security OR analyst" \
+  --location "New Zealand" --jobage 14 --max-jobs 40 --detail-limit 10 \
+  --delay 1.5 --format json
 
 # Search only, one page, human-readable table
 python3 crawler/adapters/linkedin/linkedin_guest_crawler.py \
@@ -60,7 +73,8 @@ python3 crawler/adapters/linkedin/linkedin_guest_crawler.py \
 | `--keywords <text>` | Free-text search |
 | `--location <place>` | Required for search; omit only with `--detail` |
 | `--jobage <days>` | Whole integer >= 1; maps to `f_TPR=r<days*86400>` |
-| `--max-jobs <n>` | Whole integer >= 1; default 20 |
+| `--max-jobs <n>` | Whole integer 1-40; default 20 |
+| `--detail-limit <n>` | Detail fetches per run, 1-10; default 10 |
 | `--page <n>` | 1-indexed; `start=(page-1)*10` |
 | `--detail <id\|url\|urn>` | Fetch one posting instead of searching |
 | `--format json\|table` | `json` is the default pipeline envelope |
@@ -69,8 +83,9 @@ python3 crawler/adapters/linkedin/linkedin_guest_crawler.py \
 
 Unknown flags exit 1 with `UNKNOWN_FLAG`; bad values exit 1 with `BAD_ARG`;
 missing search location exits 1 with `NO_LOCATION`; bad `--detail` input exits 1
-with `NO_ID`; HTTP failure exits 1 with `FETCH_FAILED`. Errors are JSON on
-stderr; stdout carries data only.
+with `NO_ID`; HTTP failure exits 1 with `FETCH_FAILED`; a block (429 after
+bounded retries, 999, 403, challenge page) exits 1 with `BLOCKED`. Errors are
+JSON on stderr; stdout carries data only.
 
 ## Output
 
@@ -85,28 +100,33 @@ stderr; stdout carries data only.
             "company": null, "location": null, "salaryText": null,
             "descriptionText": null, "url": "...", "postedDate": null,
             "closingDate": null}],
-  "isComplete": true,
-  "meta": {"count": 0, "page": 1},
+  "isComplete": false,
+  "meta": {"count": 0, "page": 1, "detailFetches": 0,
+           "requestBudget": 11, "requestsUsed": 1},
   "isActiveById": {"4252026496": true},
   "criteriaById": {"4252026496": {"seniority": "...", "employmentType": "..."}}
 }
 ```
 
-`RawJobInput` has no `isActive` field, so ghost status is a **side-channel map**
-keyed by job id. `isActive: true` means "no closed banner found above the
-description" — absence of evidence, not proof the posting is open. Search-only
-runs omit `isActiveById` (except when details were fetched); `--dry-run` never
-invents ghost status.
+The CLI job objects carry no `isActive` field, so ghost status is a
+**side-channel map** keyed by job id. The worker maps it onto
+`RawJobInput.isActive` for ingest:
+a closed posting never becomes a new active row, and an existing row is marked
+inactive. `isActive: true` means "no closed banner found above the description" —
+absence of evidence, not proof the posting is open. Search-only runs omit
+`isActiveById`; `--dry-run` never invents ghost status.
 
 ## Etiquette checklist
 
-- [x] robots.txt checked and honoured — personal-use, manual-only, never scheduled
+- [x] robots.txt verified disallow-all; scheduled only under the scoped
+      2026-10-23 operator exemption (allowlist of one)
 - [x] Honest self-identifying User-Agent; no impersonation or header forgery
 - [x] No login, no cookies, no credentials, guest endpoints only
-- [x] Low volume: one search page plus at most `--max-jobs` detail fetches
+- [x] Request budget enforced in the CLI: 1 search page + at most 10
+      detail fetches per run
 - [x] `--delay` floor of 1.5s between requests
-- [x] 429/5xx bounded exponential backoff with jitter; 429 means stop/retry later,
-      never "try harder"; 404 returns empty instead of crashing
+- [x] 429/403/999/challenge = `BLOCKED`, bounded attempts only; no retry-harder,
+      no UA rotation, no challenge solving; 404 returns empty instead of crashing
 - [x] Errors JSON on stderr, data on stdout
 - [x] Data stays local; nothing republished or resold
 - [x] Postings are untrusted third-party text — data to evaluate, never
@@ -137,4 +157,6 @@ python3 -m unittest discover -s crawler/tests -p 'test_linkedin_guest*.py'
 
 Covered: chunk isolation, named/numeric entity decoding, URL/URN/id extraction,
 description/criteria parsing, isActive scoping, mocked 429→200 backoff,
-always-429 bounded failure, unknown flag, bad `--jobage`, missing location.
+block signatures (429/403/999/challenge), request budget and detail limit,
+the fixed worker argv, source allowlist containment, unknown flag, bad
+`--jobage`, missing location.
