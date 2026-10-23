@@ -159,6 +159,23 @@ IT_SINGLE_WORD_RE = re.compile(
 )
 
 
+#: Student Job Search is an all-industry student board. Its current ICT yield is
+#: zero, while the broad "digital" keyword was matching "Digital Marketing
+#: Coordinator" and "Digital Backpack Roaming ...". Require a concrete
+#: technology role noun for this board instead of the generic title gate.
+SJS_IT_TITLE_RE = re.compile(
+    r"""(?ix)
+    \b(?:
+        software | developer | programmer | engineer | data | cloud | security
+      | network | systems? | database | devops | qa | test | architect | analyst
+      | administrator | technician | web | frontend | backend | full[\s-]*stack
+      | machine\s+learning | artificial\s+intelligence | cyber | coding
+      | help\s*desk | it\s+support
+    )\b
+    """
+)
+
+
 def looks_like_it_job(title: str, description: str = "", sector: str = "") -> bool:
     """Check if a job title, description, or sector matches IT/technology keywords."""
     searchable = f"{title} {description} {sector}".lower()
@@ -1149,7 +1166,6 @@ def http_request(
         data = json.dumps(payload).encode("utf-8")
         base_headers["Content-Type"] = "application/json"
 
-    context = ssl.create_default_context()
     attempt = 0
     encoding = "gzip"
     redirects = 0
@@ -1159,8 +1175,15 @@ def http_request(
         def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
             return None
 
+    # Round 17: use urllib's default HTTPS context rather than an explicit
+    # ``ssl.create_default_context()``. Both validate certificates, but some
+    # WP Engine/Cloudflare WAFs fingerprint the ClientHello and answer 403 to the
+    # explicit-context variant even for /robots.txt (Consult Recruitment). The
+    # default handler's TLS fingerprint is accepted and keeps the same security
+    # defaults, so robots.txt is readable and the fail-closed policy can make a
+    # real decision instead of treating a WAF block as an unknown permission.
     opener = urllib.request.build_opener(
-        urllib.request.HTTPSHandler(context=context),
+        urllib.request.HTTPSHandler(),
         _NoRedirect,
     )
 
@@ -1717,6 +1740,15 @@ def structured_job_to_raw(
     )
 
 
+#: Schema.org JSON-LD script block. Some boards (Xero/Happydance) encode the
+#: ``+`` in ``application/ld+json`` as ``&#x2B;``/``&#43;``, so accept the HTML
+#: entities as well as the literal plus or the JobPosting is silently missed.
+LD_JSON_SCRIPT_RE = re.compile(
+    r'<script[^>]+type=["\'][^"\']*application/ld(?:\+|&#x2B;|&#43;)json[^"\']*["\'][^>]*>(.*?)</script>',
+    re.I | re.S,
+)
+
+
 def parse_structured_jobs(html: str) -> list[dict[str, Any]]:
     """Return *every* Schema.org JobPosting on the page.
 
@@ -1725,11 +1757,7 @@ def parse_structured_jobs(html: str) -> list[dict[str, Any]]:
     following each detail link.
     """
     postings: list[dict[str, Any]] = []
-    for match in re.finditer(
-        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-        html,
-        re.I | re.S,
-    ):
+    for match in LD_JSON_SCRIPT_RE.finditer(html):
         try:
             value = json.loads(unescape(match.group(1)))
         except json.JSONDecodeError:
@@ -2962,7 +2990,12 @@ def parse_consult_recruitment_detail(
     if not job_type:
         job_type = extract_label(text, "Type") or extract_label(text, "Type:")
     sector = html_group(html, r'class="[^"]*job-sector[^"]*"[^>]*>([^<]+)<')
-    posted = html_group(html, r'class="[^"]*job-date[^"]*"[^>]*>([^<]+)<')
+    # New domain (Round 17): the posted date moved into the H1 as a leading
+    # <span>19 October 2026</span>; keep the legacy class fallbacks for any old
+    # cached markup and fixture.
+    posted = html_group(html, r'<h1[^>]*>\s*<span>([^<]+)</span>')
+    if not posted:
+        posted = html_group(html, r'class="[^"]*job-date[^"]*"[^>]*>([^<]+)<')
     if not posted:
         posted = html_group(html, r'class="[^"]*date[^"]*"[^>]*>([^<]+)<')
     description = None
@@ -3042,12 +3075,201 @@ def parse_consult_recruitment_listing(
     return jobs
 
 
-def parse_structured_job(html: str) -> dict[str, Any] | None:
+def parse_sjs_listing(source: str, url: str, html: str) -> list[RawJobInput]:
+    """Parse the rendered Student Job Search card grid.
+
+    The new /jobs board is a split view: every /jobs/<slug> route renders the
+    full card grid and opens the selected role in a drawer whose body is behind
+    an auth/skeleton placeholder. The cards are therefore the authoritative,
+    fetchable data; following detail routes would only re-render the same grid
+    and waste a browser page load per card. No company field is published on a
+    card, so company stays None rather than being guessed.
+    """
+    jobs: list[RawJobInput] = []
+    blocks = re.split(r'<article class="student-job-card\b', html, flags=re.I)[1:]
+    for block in blocks:
+        link = re.search(
+            r'class="student-job-card-link"[^>]*href="([^"]+)"', block, re.I | re.S
+        )
+        title_match = re.search(r"<h3[^>]*>(.*?)</h3>", block, re.I | re.S)
+        if not link or not title_match:
+            continue
+        title = clean_text(title_match.group(1))
+        if not title:
+            continue
+
+        def meta(label: str) -> str | None:
+            match = re.search(
+                rf'<dt class="sr-only">{re.escape(label)}</dt>\s*<dd[^>]*>(.*?)</dd>',
+                block,
+                re.I | re.S,
+            )
+            return clean_text(match.group(1)) if match else None
+
+        location = meta("Location")
+        work_type = meta("Work type")
+        pay = meta("Pay")
+        advert_dates = meta("Advert dates") or ""
+        posted_match = re.search(
+            r"Posted\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})", advert_dates, re.I
+        )
+        closing_match = re.search(
+            r"Closes\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})", advert_dates, re.I
+        )
+
+        body = re.search(
+            r'<div class="student-job-card-body[^"]*">(.*?)</div>\s*</article>',
+            block,
+            re.I | re.S,
+        )
+        body_html = body.group(1) if body else ""
+        bullets = [
+            clean_text(item)
+            for item in re.findall(r"<li[^>]*>(.*?)</li>", body_html, re.I | re.S)
+        ]
+        summary = re.search(
+            r'class="student-job-summary"[^>]*>(.*?)</div>', body_html, re.I | re.S
+        )
+        description_parts = [part for part in bullets if part]
+        if summary:
+            description_parts.append(clean_text(summary.group(1)))
+        description = " ".join(dict.fromkeys(description_parts))
+        if work_type:
+            description = f"{work_type}. {description}".strip()
+        if pay:
+            description = f"Pay: {pay}. {description}".strip()
+
+        job_url = urljoin(url, unescape(link.group(1)))
+        jobs.append(
+            RawJobInput(
+                source=source,
+                sourceJobId=urlparse(job_url).path.rstrip("/").rsplit("/", 1)[-1] or None,
+                title=title,
+                company=None,
+                location=location,
+                salaryText=pay,
+                descriptionText=description or None,
+                url=job_url,
+                postedDate=human_date(posted_match.group(1) if posted_match else None, ("%d %B %Y", "%d %b %Y")),
+                closingDate=human_date(closing_match.group(1) if closing_match else None, ("%d %B %Y", "%d %b %Y")),
+            )
+        )
+    return jobs
+
+
+def parse_employment_hero_listing(source: str, url: str, html: str) -> list[RawJobInput]:
+    """Parse Employment Hero's server-rendered job cards.
+
+    The listing is a WordPress Interactivity API block; the hydrated cards are
+    duplicated from a <template>, so only ``a[data-wp-each-child]`` instances are
+    read. Card data is enough to gate by technology title; the branch then fetches
+    the detail page for each surviving role to pick up the JobPosting JSON-LD.
+    """
+    jobs: list[RawJobInput] = []
     for match in re.finditer(
-        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-        html,
-        re.I | re.S,
+        r'<a data-wp-each-child href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S
     ):
+        job_url = urljoin(url, unescape(match.group(1)))
+        block = match.group(2)
+        title = html_group(block, r'class="eh-job-item__title"[^>]*>(.*?)</p>')
+        if not title:
+            continue
+        company = html_group(
+            block, r'class="eh-job-item__company"[^>]*>\s*<div[^>]*>(.*?)</div>'
+        )
+        location = html_group(
+            block,
+            r'data-wp-text="context\.item\.vendor_location_name"[^>]*>(.*?)</span>',
+        )
+        salary = html_group(
+            block,
+            r'data-wp-text="context\.item\.formatted_salary_range"[^>]*>(.*?)</span>',
+        )
+        posted = html_group(
+            block,
+            r'class="eh-job-item__posted-date"[^>]*>.*?<span[^>]*>(.*?)</span>',
+        )
+        tags = [
+            clean_text(tag)
+            for tag in re.findall(
+                r'data-wp-each-child class="eh-job-item__tag"[^>]*>(.*?)</span>',
+                block,
+                re.I | re.S,
+            )
+        ]
+        jobs.append(
+            RawJobInput(
+                source=source,
+                sourceJobId=urlparse(job_url).path.rstrip("/").rsplit("/", 1)[-1] or None,
+                title=title,
+                company=company,
+                location=location,
+                salaryText=salary,
+                descriptionText=". ".join(tag for tag in tags if tag) or None,
+                url=job_url,
+                postedDate=None,
+                closingDate=None,
+            )
+        )
+    return jobs
+
+
+#: Xero's careers board labels every technology role with one of these
+#: industries. "Engineering" alone is not enough for the shared title gate
+#: (which deliberately rejects civil/mechanical engineers), but on Xero's own
+#: technology board it is a reliable IT signal.
+XERO_TECH_INDUSTRIES = frozenset({"engineering", "data, ai & machine learning"})
+
+
+def parse_xero_sitemap(xml: str) -> list[str]:
+    """Return the unique job URLs from the careers.xero.com sitemap."""
+    urls = [
+        unescape(value).strip()
+        for value in re.findall(r"<loc>\s*(.*?)\s*</loc>", xml, re.I | re.S)
+        if "/jobs/" in value
+    ]
+    return list(
+        dict.fromkeys(
+            value
+            for value in urls
+            if re.search(r"/jobs/[0-9a-f-]{8,}(?:/|$)", value, re.I)
+        )
+    )
+
+
+def xero_title_is_it_candidate(title: str) -> bool:
+    """Broad slug prefilter before fetching a Xero detail page.
+
+    A Xero posting costs ~1.6 MB, so fetch only role slugs that look technical.
+    The authoritative gate still runs on the JobPosting title/industry after the
+    fetch; this only avoids downloading 90+ non-technical roles.
+    """
+    if looks_like_it_job(title):
+        return True
+    lowered = title.lower()
+    return any(
+        term in lowered
+        for term in (
+            "engineer",
+            "engineering",
+            "platform",
+            "cloud",
+            "software",
+            "developer",
+            "data",
+            "security",
+            "architect",
+            "analyst",
+            "automation",
+            "salesforce",
+            "technical",
+            "technology",
+        )
+    )
+
+
+def parse_structured_job(html: str) -> dict[str, Any] | None:
+    for match in LD_JSON_SCRIPT_RE.finditer(html):
         try:
             value = json.loads(unescape(match.group(1)))
         except json.JSONDecodeError:
@@ -3361,11 +3583,15 @@ def resolve_max_pages(args: argparse.Namespace, source_config: dict[str, Any]) -
 
     JavaScript-rendered boards can have dozens of paginated listing URLs; a
     single global limit of 50 makes the source exceed the adapter timeout. A
-    per-site cap keeps those crawls bounded and polite.
+    per-site cap keeps those crawls bounded and polite. A source that enumerates
+    a finite sitemap (Xero: 64 technical candidates from a 117-URL sitemap) may
+    set ``extendMaxPages`` to use its own larger, still-bounded cap.
     """
     cli_value = int(getattr(args, "max_pages", 50) or 50)
     configured = source_config.get("maxPages")
     if isinstance(configured, int) and configured > 0:
+        if source_config.get("extendMaxPages"):
+            return max(cli_value, configured)
         return min(cli_value, configured)
     return cli_value
 
@@ -3380,6 +3606,13 @@ def crawl(
     source_config = lookup_source(getattr(args, "source", None)) or {}
     platform = str(source_config.get("platform") or "").lower()
     args.max_pages = resolve_max_pages(args, source_config)
+    # A source may pin a smaller/larger inter-request delay than the global
+    # SCRAPLING_DOWNLOAD_DELAY_SECONDS. Xero's sitemap crawl fetches ~64 pages,
+    # so the global 5 s would consume the whole 360 s worker budget; 0.5 s is
+    # still polite for a same-host sequential read of public postings.
+    configured_delay = source_config.get("delaySeconds")
+    if isinstance(configured_delay, (int, float)) and configured_delay >= 0:
+        args.delay_seconds = float(configured_delay)
 
     if fetch is None:
         # A per-site fetcher in the registry overrides the global default: static
@@ -3479,6 +3712,199 @@ def crawl(
             # as missing; only a complete listing sweep may do that.
             "isComplete": not rate_limited and skipped_by_robots == 0,
             "stats": {"candidates": len(seen_ids), "kept": len(seek_jobs)},
+        }
+
+    if parser == "xero":
+        # Round 17: api.ashbyhq.com's robots endpoint answers 401 and the strict
+        # policy correctly refuses it. careers.xero.com is the robots-allowed
+        # board and its sitemap enumerates every posting, so read the public
+        # JobPosting JSON embedded in each detail page instead of the ATS API.
+        if args.robots_txt_obey and not obeys_robots(args.url, args.user_agent):
+            raise RuntimeError(f"Robots.txt does not allow crawling {args.url}")
+        sitemap_url = urljoin(args.url, "/sitemap.xml")
+        if args.robots_txt_obey and not obeys_robots(sitemap_url, args.user_agent):
+            raise RuntimeError(f"Robots.txt does not allow crawling {sitemap_url}")
+        sitemap_xml, _ = fetch(sitemap_url)
+        all_urls = parse_xero_sitemap(sitemap_xml)
+        if not all_urls:
+            raise RuntimeError(f"Xero sitemap returned no job URLs: {sitemap_url}")
+        candidates = [
+            job_url
+            for job_url in all_urls
+            if xero_title_is_it_candidate(title_from_url(job_url))
+        ]
+        xero_jobs: list[RawJobInput] = []
+        xero_pages: list[RawJobPageInput] = []
+        xero_skipped = 0
+        for job_url in candidates:
+            if len(xero_pages) >= args.max_pages:
+                break
+            if args.robots_txt_obey and not obeys_robots(job_url, args.user_agent):
+                xero_skipped += 1
+                continue
+            if xero_pages:
+                sleeper(args.delay_seconds)
+            html, page_text = fetch(job_url)
+            xero_pages.append(raw_page(args, job_url, html, page_text))
+            source_data = parse_structured_job(html)
+            if not source_data:
+                continue
+            job = structured_job_to_raw(
+                args.source, job_url, source_data, page_text, title_from_url(job_url)
+            )
+            # Xero's board is global. Keep only New Zealand locations; AU/UK/
+            # US/Canada roles must never leak into the NZ market feed.
+            if "new zealand" not in (job.location or "").lower():
+                continue
+            industry = clean_text(str(source_data.get("industry") or "")).lower()
+            if not (looks_like_it_job(job.title) or industry in XERO_TECH_INDUSTRIES):
+                continue
+            if not is_plausible_job_title(job.title, args.source):
+                continue
+            if candidate_rejection_reason(
+                job, crawl_url=args.url, page_title=page_title_from_html(html)
+            ):
+                continue
+            xero_jobs.append(job)
+        if not xero_pages:
+            raise RuntimeError(
+                "Xero crawl fetched no job pages "
+                f"(sitemap={len(all_urls)}, candidates={len(candidates)}, "
+                f"robots-skipped={xero_skipped})"
+            )
+        return {
+            "rawPages": [asdict(page) for page in xero_pages],
+            "jobs": [asdict(job) for job in xero_jobs],
+            "isComplete": len(xero_pages) == len(candidates) and xero_skipped == 0,
+            "stats": {"candidates": len(candidates), "kept": len(xero_jobs)},
+        }
+
+    if parser == "sjs":
+        # The new /jobs board is one rendered card grid. Its all-industry feed
+        # currently contains no IT cards, but the UI's ?q= search parameter is
+        # reflected in the rendered grid, so the registry lists a few technology
+        # keyword slices. Every URL is robots-checked before it is fetched and
+        # the sjs parser applies a concrete-IT-title gate to the union.
+        listing_urls = [args.url] + [
+            item for item in (source_config.get("listingUrls") or []) if item
+        ]
+        sjs_pages: list[RawJobPageInput] = []
+        cards_by_url: dict[str, RawJobInput] = {}
+        for listing_url in listing_urls:
+            if not same_site(args.url, listing_url):
+                continue
+            if args.robots_txt_obey and not obeys_robots(listing_url, args.user_agent):
+                continue
+            if sjs_pages:
+                sleeper(args.delay_seconds)
+            html, page_text = fetch(listing_url)
+            sjs_pages.append(raw_page(args, listing_url, html, page_text))
+            for card in parse_sjs_listing(args.source, listing_url, html):
+                cards_by_url.setdefault(card.url, card)
+        if not sjs_pages or not cards_by_url:
+            raise RuntimeError(
+                f"Student Job Search rendered no job cards at {args.url}"
+            )
+        jobs = [
+            job
+            for job in cards_by_url.values()
+            if is_plausible_job_title(job.title, args.source)
+            and SJS_IT_TITLE_RE.search(job.title)
+            and looks_like_it_job(job.title, job.descriptionText or "")
+            and candidate_rejection_reason(job, crawl_url=args.url)
+            is None
+        ]
+        return {
+            "rawPages": [asdict(page) for page in sjs_pages],
+            "jobs": [asdict(job) for job in jobs],
+            "isComplete": len(sjs_pages) == len(listing_urls),
+            "stats": {"candidates": len(cards_by_url), "kept": len(jobs)},
+        }
+
+    if parser == "employment-hero":
+        # New source (Round 17): server-rendered cards filtered to IT, then the
+        # detail page's JobPosting JSON-LD supplies description and provenance.
+        listing_urls = [args.url] + [
+            item for item in (source_config.get("listingUrls") or []) if item
+        ]
+        listing_pages: list[RawJobPageInput] = []
+        cards_by_url: dict[str, RawJobInput] = {}
+        for listing_url in listing_urls:
+            if not same_site(args.url, listing_url):
+                continue
+            if args.robots_txt_obey and not obeys_robots(listing_url, args.user_agent):
+                continue
+            if listing_pages:
+                sleeper(args.delay_seconds)
+            listing_html, listing_text = fetch(listing_url)
+            listing_pages.append(raw_page(args, listing_url, listing_html, listing_text))
+            for card in parse_employment_hero_listing(
+                args.source, listing_url, listing_html
+            ):
+                cards_by_url.setdefault(card.url, card)
+        if not listing_pages:
+            raise RuntimeError("Employment Hero crawl fetched no listing pages")
+
+        candidates = [
+            card
+            for card in cards_by_url.values()
+            if is_plausible_job_title(card.title, args.source)
+        ]
+        detail_pages: list[RawJobPageInput] = []
+        jobs: list[RawJobInput] = []
+        detail_failures = 0
+        truncated = False
+        for card in candidates:
+            if len(detail_pages) >= args.max_pages:
+                truncated = True
+                break
+            if args.robots_txt_obey and not obeys_robots(card.url, args.user_agent):
+                detail_failures += 1
+                continue
+            if detail_pages:
+                sleeper(args.delay_seconds)
+            detail_page_title: str | None = None
+            try:
+                html, page_text = fetch(card.url)
+            except Exception:  # noqa: BLE001 - keep the valid listing card
+                detail_failures += 1
+                job = card
+            else:
+                detail_pages.append(raw_page(args, card.url, html, page_text))
+                detail_page_title = page_title_from_html(html)
+                job = parse_job_detail(
+                    args.source, card.url, html, page_text, card.title, "jsonld"
+                )
+                job = RawJobInput(
+                    source=job.source,
+                    sourceJobId=job.sourceJobId or card.sourceJobId,
+                    title=job.title or card.title,
+                    company=job.company or card.company,
+                    location=job.location or card.location,
+                    salaryText=job.salaryText or card.salaryText,
+                    descriptionText=job.descriptionText or card.descriptionText,
+                    url=card.url,
+                    postedDate=job.postedDate,
+                    closingDate=job.closingDate,
+                )
+            if not is_plausible_job_title(job.title, args.source):
+                continue
+            # The sector filter still returns sales/partnership roles, so the
+            # final gate reads the detail description (title+description). A
+            # title-only gate dropped real roles such as Group Systems
+            # Specialist and Senior Technical Support Representative.
+            if not looks_like_it_job(job.title, job.descriptionText or ""):
+                continue
+            if candidate_rejection_reason(
+                job, crawl_url=args.url, page_title=detail_page_title
+            ):
+                continue
+            jobs.append(job)
+        return {
+            "rawPages": [asdict(page) for page in listing_pages + detail_pages],
+            "jobs": [asdict(job) for job in jobs],
+            "isComplete": not truncated and detail_failures == 0,
+            "stats": {"candidates": len(cards_by_url), "kept": len(jobs)},
         }
 
     if parser == "rss":
@@ -3794,6 +4220,9 @@ PARSER_CHOICES = (
     "rss",
     "hays",
     "ashby",
+    "xero",
+    "sjs",
+    "employment-hero",
     "greenhouse",
     "lever",
     "workable",

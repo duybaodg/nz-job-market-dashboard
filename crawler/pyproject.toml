@@ -4,10 +4,16 @@ version = "0.1.0"
 description = "Scrapling crawler worker for the NZ Job Market Intelligence Dashboard"
 requires-python = ">=3.11"
 dependencies = [
-  "scrapling>=0.3.0",
-  "curl_cffi>=0.7.0",
-  "playwright>=1.49.0",
-  "browserforge>=1.2.0",
+  # Round 17: pin the browser stack. Scrapling 0.5 removed DynamicFetcher and
+  # unpinned rebuilds produced a patchright that expected chromium-1243 while
+  # the image only shipped chromium-1248. 0.4.15 keeps both fetchers and the
+  # exact playwright/patchright versions below both resolve to chromium-1248.
+  "scrapling[fetchers]==0.4.15",
+  "curl_cffi==0.16.3",
+  "playwright==1.64.1",
+  "patchright==1.64.2",
+  "msgspec==0.22.0",
+  "browserforge==1.2.4",
 ]
 
 [project.optional-dependencies]

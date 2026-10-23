@@ -17,9 +17,10 @@ RUN apt-get update \
 COPY --from=build /app/publish .
 COPY crawler ./crawler
 RUN python3 -m pip install --break-system-packages --no-cache-dir -e ./crawler \
-    && python3 -m pip install --break-system-packages --no-cache-dir msgspec patchright \
     && python3 -m playwright install chromium \
     && patchright install chromium \
-    && python3 -m playwright install-deps chromium
+    && python3 -m playwright install-deps chromium \
+    && python3 -c "import os; from playwright.sync_api import sync_playwright; p=sync_playwright().start(); x=p.chromium.executable_path; p.stop(); assert os.path.exists(x), x" \
+    && python3 -c "import os; from patchright.sync_api import sync_playwright; p=sync_playwright().start(); x=p.chromium.executable_path; p.stop(); assert os.path.exists(x), x"
 ENV SCRAPLING_FETCHER_TYPE=dynamic
 ENTRYPOINT ["dotnet", "Api.dll"]
