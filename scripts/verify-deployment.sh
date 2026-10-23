@@ -212,20 +212,32 @@ else
   fail=1
 fi
 
-printf '%-28s ' "LinkedIn manual-only"
-# Round 16: robots.txt disallows LinkedIn for generic agents. The source must
-# stay disabled; the guest CLI is manual-only and never scheduled.
+printf '%-28s ' "Round 18 LinkedIn guest"
+# Round 18: the operator (2026-10-23) exempted LinkedIn GUEST crawling only.
+# The scheduled source must use the dedicated parser and guest endpoint; the
+# truthful robotsAllows=false stays in sites.json, so this API check verifies
+# scheduling wiring, not a robots grant. A live crawl failure is acceptable
+# (block handling), but the source must be scheduled.
 if echo "${sources:-[]}" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
 linkedin = next((s for s in data if s["name"] == "LinkedIn Jobs"), None)
+problems = []
 if linkedin is None:
-    print("FAIL (missing from the registry)")
+    problems.append("missing from the registry")
+else:
+    if not linkedin.get("enabled"):
+        problems.append("not enabled")
+    if linkedin.get("parser") != "linkedin-guest":
+        problems.append("parser is not linkedin-guest")
+    if linkedin.get("baseUrl") != "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search":
+        problems.append("baseUrl is not the guest search endpoint")
+    if linkedin.get("crawlFrequencyMinutes") != 1440:
+        problems.append("frequency is not daily")
+if problems:
+    print("FAIL (" + "; ".join(problems) + ")")
     raise SystemExit(1)
-if linkedin.get("enabled"):
-    print("FAIL (LinkedIn Jobs must stay enabled:false)")
-    raise SystemExit(1)
-print("OK (LinkedIn Jobs present but disabled; guest CLI stays manual-only)")
+print("OK (LinkedIn Jobs scheduled daily via linkedin-guest under the scoped exemption)")
 '; then
   :
 else
