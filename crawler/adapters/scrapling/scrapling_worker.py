@@ -1113,6 +1113,7 @@ def http_request(
     backoff_max_ms: int = 60000,
     jitter_ms: int = 0,
     robots_obey: bool = False,
+    robots_strip_disallowed_query: bool = False,
 ) -> str:
     """Minimal urllib client used for JSON APIs and static pages.
 
@@ -1126,6 +1127,13 @@ def http_request(
     answers with brotli and no brotli decoder is installed, the request is
     retried once asking for an identity encoding so we never parse compressed
     bytes as text.
+
+    ``robots_strip_disallowed_query`` handles a real SEEK quirk: its SEO 301
+    drops ``?keywords`` from the target, leaving a query-only URL that
+    ``Disallow: *?`` forbids. When enabled, the redirect is followed only at
+    the same canonical path with the disallowed query removed (which robots
+    allows); the disallowed URL itself is never fetched. The caller's own
+    client-side recency filter replaces the lost ``daterange`` hint.
     """
     import ssl
     import urllib.error
@@ -1188,7 +1196,23 @@ def http_request(
                 if robots_obey and not obeys_robots(
                     resolved, user_agent or DEFAULT_HTTP_USER_AGENT
                 ):
-                    raise RuntimeError(f"Robots.txt does not allow redirect target {resolved}") from exc
+                    stripped = None
+                    if robots_strip_disallowed_query and parsed.query:
+                        candidate = parsed._replace(query="", fragment="").geturl()
+                        if obeys_robots(
+                            candidate, user_agent or DEFAULT_HTTP_USER_AGENT
+                        ):
+                            stripped = candidate
+                    if stripped is None:
+                        raise RuntimeError(
+                            f"Robots.txt does not allow redirect target {resolved}"
+                        ) from exc
+                    print(
+                        "Redirect target disallowed by robots; following the "
+                        f"robots-allowed canonical path instead: {stripped}",
+                        file=sys.stderr,
+                    )
+                    resolved = stripped
                 url = resolved
                 redirects += 1
                 continue
@@ -1266,6 +1290,9 @@ def fetch_with_http(args: argparse.Namespace, url: str) -> tuple[str, str]:
             backoff_max_ms=int(config.get("httpBackoffMaxMs", 60000) or 60000),
             jitter_ms=int(config.get("httpJitterMs", 0) or 0),
             robots_obey=bool(getattr(args, "robots_txt_obey", False)),
+            robots_strip_disallowed_query=bool(
+                config.get("robotsStripDisallowedQuery")
+            ),
         )
     except HttpStatusError as exc:
         # A missing page is an empty page for a source that opts in (SEEK's

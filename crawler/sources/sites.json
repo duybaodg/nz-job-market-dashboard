@@ -23,7 +23,8 @@
       "httpJitterMs": 500,
       "retryOn5xx": true,
       "notFoundEmpty": true,
-      "notes": "robots.txt disallows */job/ detail pages: listing pages (incl. a leading ?keywords=) are parsed from window.SEEK_REDUX_DATA instead | deprioritised: crawled last, weekly | Round 16: &daterange=31 + client-side recency filter; 429/5xx backoff",
+      "robotsStripDisallowedQuery": true,
+      "notes": "robots.txt disallows */job/ detail pages: listing pages (incl. a leading ?keywords=) are parsed from window.SEEK_REDUX_DATA instead | deprioritised: crawled last, weekly | Round 16: &daterange=31 + client-side 31-day filter; 429/5xx backoff. SEEK's SEO 301 drops ?keywords, so the crawler follows only the same canonical path with the now-disallowed query removed (never the disallowed URL).",
       "listingUrls": [
         "https://nz.seek.com/information-technology-jobs?keywords=developer&daterange=31",
         "https://nz.seek.com/information-technology-jobs?keywords=engineer&daterange=31",

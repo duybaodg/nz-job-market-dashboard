@@ -103,6 +103,61 @@ class RobotsEnforcementTests(unittest.TestCase):
 
         self.assertIn("redirect target", str(raised.exception))
 
+    def test_seek_style_redirect_follows_only_the_robots_allowed_queryless_path(self) -> None:
+        headers = Message()
+        headers["Location"] = "/information-technology-developer-jobs?daterange=31"
+        redirect = urllib.error.HTTPError(
+            "https://example.com/information-technology-jobs?keywords=developer&daterange=31",
+            301,
+            "Moved",
+            headers,
+            None,
+        )
+
+        class _Response:
+            headers = Message()
+
+            def read(self) -> bytes:
+                return b"<html>ok</html>"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args: object) -> bool:
+                return False
+
+        opened: list[str] = []
+        checked: list[str] = []
+
+        def fake_open(request, timeout=None):
+            opened.append(request.full_url)
+            if len(opened) == 1:
+                raise redirect
+            return _Response()
+
+        def obeys(url: str, user_agent: str) -> bool:
+            checked.append(url)
+            return "?" not in url
+
+        with mock.patch("urllib.request.OpenerDirector.open", side_effect=fake_open):
+            with mock.patch.object(worker, "obeys_robots", side_effect=obeys):
+                body = worker.http_request(
+                    "https://example.com/information-technology-jobs?keywords=developer&daterange=31",
+                    robots_obey=True,
+                    robots_strip_disallowed_query=True,
+                    user_agent="test",
+                )
+
+        self.assertIn("ok", body)
+        self.assertTrue(any("?daterange=31" in url for url in checked))
+        self.assertEqual(
+            "https://example.com/information-technology-developer-jobs", opened[1]
+        )
+        self.assertFalse(
+            any("?daterange=31" in url for url in opened),
+            "the disallowed redirect target must never be fetched",
+        )
+
     def test_cross_site_redirect_is_refused(self) -> None:
         headers = Message()
         headers["Location"] = "https://evil.example/job"
