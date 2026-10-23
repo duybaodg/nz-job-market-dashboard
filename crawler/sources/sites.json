@@ -355,6 +355,26 @@
       "notes": "Round 17: the board moved from www.consult.co.nz (HTTP 403) to www.consultrecruitment.co.nz. robots.txt is 'User-agent: * / Disallow:' (empty = fully allowed); the WP Engine WAF intermittently answers 403, which Round 15's fail-closed robots reader treated as deny. The HTTP client now uses urllib's default TLS context (the explicit-context ClientHello was the trigger) and the existing retryOn403 handles page fetches. New WordPress markup keeps the /job/<slug>/ detail pattern; the parser reads the H1 date span, Location/Category/Type text-editor fields, and the text-editor description."
     },
     {
+      "name": "Employment Hero",
+      "tier": 2,
+      "category": "job-board",
+      "homepage": "https://employmenthero.com/nz/jobs/",
+      "jobs_url": "https://employmenthero.com/nz/jobs/?country_code=NZ&radius=25&vendor_location_id=-1&job_sector_ids=18&page=1",
+      "platform": null,
+      "parser": "employment-hero",
+      "enabled": true,
+      "frequency_minutes": 1440,
+      "strategy": "custom",
+      "httpStatus": 200,
+      "sitemapJobUrls": 0,
+      "fetcher": "http",
+      "robotsAllows": true,
+      "skipSitemap": true,
+      "maxPages": 24,
+      "delaySeconds": 1,
+      "notes": "NEW 2026-10-23 (Round 17): operator-supplied NZ job board, server-rendered WordPress Interactivity API. robots.txt disallows /wp-admin/, /wp-json/ and /nz/wp-json/ only; the RobotsTxtMatcher verified the exact filtered URL and ?page=2 are allowed. job_sector_ids=18 is the IT/technology sector, so the query is kept and a title-only IT gate rejects non-technical roles that still appear in that sector (sales/account/partnerships). Listing cards provide title/company/location/pay/tags; detail pages carry JobPosting JSON-LD. Pagination is page=1 only because the filtered board fits on one page."
+    },
+    {
       "name": "Comspek International",
       "tier": 2,
       "category": "recruiter",
