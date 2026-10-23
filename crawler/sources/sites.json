@@ -337,8 +337,8 @@
       "name": "Consult Recruitment",
       "tier": 2,
       "category": "recruiter",
-      "homepage": "https://www.consult.co.nz/",
-      "jobs_url": "https://www.consult.co.nz/jobs/",
+      "homepage": "https://www.consultrecruitment.co.nz/",
+      "jobs_url": "https://www.consultrecruitment.co.nz/jobs/",
       "platform": "custom",
       "parser": "consult-recruitment",
       "enabled": true,
@@ -348,10 +348,11 @@
       "sitemapJobUrls": 40,
       "fetcher": "http",
       "robotsAllows": true,
-      "maxPages": 12,
+      "maxPages": 30,
+      "delaySeconds": 1,
       "httpRetries": 5,
       "retryOn403": true,
-      "notes": "Round 4: WP Engine/Cloudflare WAF answers a fraction of plain requests with 403 (not UA/Accept deterministic; IP-rate based). Worker now sends a document Accept header and retries 403 with backoff for this source. 29 live JobAdder roles on the board."
+      "notes": "Round 17: the board moved from www.consult.co.nz (HTTP 403) to www.consultrecruitment.co.nz. robots.txt is 'User-agent: * / Disallow:' (empty = fully allowed); the WP Engine WAF intermittently answers 403, which Round 15's fail-closed robots reader treated as deny. The HTTP client now uses urllib's default TLS context (the explicit-context ClientHello was the trigger) and the existing retryOn403 handles page fetches. New WordPress markup keeps the /job/<slug>/ detail pattern; the parser reads the H1 date span, Location/Category/Type text-editor fields, and the text-editor description."
     },
     {
       "name": "Comspek International",
