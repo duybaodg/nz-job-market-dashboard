@@ -174,6 +174,26 @@ else
   fail=1
 fi
 
+printf '%-28s ' "LinkedIn manual-only"
+# Round 16: robots.txt disallows LinkedIn for generic agents. The source must
+# stay disabled; the guest CLI is manual-only and never scheduled.
+if echo "${sources:-[]}" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+linkedin = next((s for s in data if s["name"] == "LinkedIn Jobs"), None)
+if linkedin is None:
+    print("FAIL (missing from the registry)")
+    raise SystemExit(1)
+if linkedin.get("enabled"):
+    print("FAIL (LinkedIn Jobs must stay enabled:false)")
+    raise SystemExit(1)
+print("OK (LinkedIn Jobs present but disabled; guest CLI stays manual-only)")
+'; then
+  :
+else
+  fail=1
+fi
+
 printf '%-28s ' "employer identity"
 employers=$(curl -fsS --max-time 20 "${HEALTH_AUTH[@]}" "${BASE_URL}/api/admin/employers" 2>/dev/null || true)
 if [[ -z "$employers" ]]; then
@@ -248,6 +268,39 @@ for source, count in Counter(j["source"] for j in data).most_common(10):
 '
 fi
 
+printf '%-28s ' "SEEK SSR fields"
+# Round 16: the SSR-JSON parser must populate company and ISO posted dates, and
+# every newly parsed row must link to the canonical www.seek.co.nz/job/<id> URL.
+if [[ -z "${jobs:-}" ]]; then
+  echo "FAIL (jobs feed unavailable)"
+  fail=1
+else
+  echo "$jobs" | python3 -c '
+import json, re, sys
+data = json.load(sys.stdin)
+seek = [job for job in data if job.get("source") == "SEEK NZ"]
+company = sum(1 for job in seek if job.get("company"))
+posted = sum(1 for job in seek if job.get("postedDate"))
+problems = []
+if not seek:
+    problems.append("no SEEK NZ rows")
+if company == 0:
+    problems.append("no SEEK NZ row has a company")
+if posted == 0:
+    problems.append("no SEEK NZ row has a posted date")
+canonical = [job for job in seek if job.get("company") and job.get("postedDate")]
+bad_urls = [job.get("url") for job in canonical
+            if not re.match(r"^https://www\.seek\.co\.nz/job/\d+$", job.get("url") or "")]
+if bad_urls:
+    problems.append("non-canonical SEEK URL(s): " + ", ".join(bad_urls[:3]))
+if problems:
+    print("FAIL (" + "; ".join(problems) + ")")
+    raise SystemExit(1)
+print("OK (%d SEEK rows: %d company, %d posted, %d canonical URL)" % (
+    len(seek), company, posted, len(canonical)))
+'
+fi
+
 printf '%-28s ' "salary parse audit"
 salary_audit=$(curl -fsS --max-time 90 -X POST "${HEALTH_AUTH[@]}" "${BASE_URL}/api/admin/salaries/audit" 2>/dev/null || true)
 if [[ -z "$salary_audit" ]]; then
@@ -265,7 +318,9 @@ fi
 printf '%-28s ' "non-pay salary tokens"
 # Round 11: no stored salary may come from a bare-k page token (contact string,
 # file size, quantity or decimal rate). Salary text is retained as provenance,
-# so the check is on rows that still publish numeric bounds.
+# so the check is on rows that still publish numeric bounds. Round 16: a bare-k
+# token is legitimate when the posting text itself shows a currency prefix
+# (SEEK teaser "$150K + 2% equity" stores salaryText "150K").
 if [[ -z "${jobs:-}" ]]; then
   jobs=$(curl -fsS --max-time 30 "${BASE_URL}/api/jobs?status=all&limit=5000" 2>/dev/null || true)
 fi
@@ -277,11 +332,18 @@ else
 import json, sys, re
 jobs = json.load(sys.stdin)
 bare_k = re.compile(r"^\d{2,3}\s?[kK]$")
+def has_currency_context(job):
+    token = (job.get("salaryText") or "").strip()
+    if not token:
+        return False
+    text = (job.get("descriptionSummary") or "") + " " + (job.get("descriptionText") or "")
+    return re.search(r"(?:\$|NZD)\s*" + re.escape(token), text, re.I) is not None
 targets = [j for j in jobs if j.get("source") == "Potentia" and j.get("title") == "Senior Software Engineer - iOS"]
 offenders = [
     j for j in jobs
     if (j.get("salaryMin") is not None or j.get("salaryMax") is not None)
     and bare_k.match((j.get("salaryText") or "").strip())
+    and not has_currency_context(j)
 ]
 problems = []
 if offenders:
