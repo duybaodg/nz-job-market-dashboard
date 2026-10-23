@@ -387,6 +387,21 @@ public sealed class CrawlerOrchestrationService(
         return (1, job);
     }
 
+    private static DateTime? AsUtc(DateTime? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return value.Value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.Value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
+        };
+    }
+
     private PreparedCandidate PrepareCandidate(
         RawJobInput rawJob,
         string crawlUrl,
@@ -401,7 +416,14 @@ public sealed class CrawlerOrchestrationService(
             Location = sanitisedLocation.Location,
             DescriptionText = LocationSanitiser.PrependRemainder(
                 sanitisedLocation.RemovedRemainder,
-                rawJob.DescriptionText)
+                rawJob.DescriptionText),
+            // Source payloads mix "2026-10-22T00:00:00Z" with date-only
+            // "2026-10-22" (SEEK's listingDate[:10]). System.Text.Json parses the
+            // latter with Kind=Unspecified, and Npgsql refuses to write that to a
+            // timestamptz column. Source dates are UTC calendar dates, so treat
+            // an unspecified Kind as UTC rather than guessing a local offset.
+            PostedDate = AsUtc(rawJob.PostedDate),
+            ClosingDate = AsUtc(rawJob.ClosingDate)
         };
 
         var validation = contentValidator.Validate(

@@ -38,6 +38,28 @@ public sealed class CrawlerOrchestrationServiceTests
     }
 
     [Fact]
+    public async Task StartCrawlRunAsync_normalises_date_only_source_dates_to_utc()
+    {
+        await using var dbContext = CreateDbContext();
+        var posted = new DateTime(2026, 10, 22, 0, 0, 0, DateTimeKind.Unspecified);
+        var closing = new DateTime(2026, 11, 5, 0, 0, 0, DateTimeKind.Unspecified);
+        var job = new RawJobInput(
+            "SEEK NZ", "95430077", "Software Developer", "Acme", "Auckland", null,
+            "Build services.", "https://www.seek.co.nz/job/95430077", posted, closing);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([job])], new DeduplicationService(), new NormalisationService());
+
+        await service.StartCrawlRunAsync(new("Firecrawl", "https://nz.seek.com/jobs"), CancellationToken.None);
+
+        var saved = dbContext.Jobs.Single();
+        saved.PostedDate.Should().NotBeNull();
+        saved.PostedDate!.Value.Kind.Should().Be(DateTimeKind.Utc);
+        saved.PostedDate.Value.Date.Should().Be(new DateTime(2026, 10, 22));
+        saved.ClosingDate.Should().NotBeNull();
+        saved.ClosingDate!.Value.Kind.Should().Be(DateTimeKind.Utc);
+    }
+
+    [Fact]
     public async Task StartCrawlRunAsync_refuses_a_second_running_run_for_the_same_source()
     {
         await using var dbContext = CreateDbContext();
