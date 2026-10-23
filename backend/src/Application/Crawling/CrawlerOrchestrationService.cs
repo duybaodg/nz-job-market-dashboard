@@ -289,6 +289,20 @@ public sealed class CrawlerOrchestrationService(
         var candidate = prepared.Candidate;
         var regionHint = prepared.RegionHint;
 
+        if (!candidate.IsActive)
+        {
+            // The source says this posting is closed. A new row must never be
+            // saved as active; an existing row is deactivated immediately
+            // rather than waiting for the missing-crawl threshold.
+            if (existingJob is not null && existingJob.IsActive)
+            {
+                Expire(existingJob, DateTime.UtcNow);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            return (0, null);
+        }
+
         if (!prepared.Validation.IsAccepted)
         {
             // A rejected candidate must never be (re)activated, including when a

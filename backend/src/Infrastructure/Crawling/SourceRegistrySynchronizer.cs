@@ -56,8 +56,11 @@ public sealed class SourceRegistrySynchronizer(
             var frequency = site.FrequencyMinutes is > 0 ? site.FrequencyMinutes.Value : 1440;
             // Round 15 (M-8): only an explicit robotsAllows=true grants approval.
             // false revokes it, and null is unapproved-pending review.
-            var robotsAllows = site.RobotsAllows == true;
-            var termsCheckedAt = robotsAllows ? (DateTime?)now : null;
+            // Round 18: the single-source, operator-authorised LinkedIn guest
+            // exemption is the only other way to be approved, and it does NOT
+            // flip the registry's truthful robotsAllows=false.
+            var robotsApproved = site.RobotsAllows == true || RobotsExemptionPolicy.IsExempt(site.Name);
+            var termsCheckedAt = robotsApproved ? (DateTime?)now : null;
 
             if (byName.TryGetValue(site.Name, out var entity))
             {
@@ -72,7 +75,7 @@ public sealed class SourceRegistrySynchronizer(
                     entity.CrawlFrequencyMinutes != frequency ||
                     wasRetired ||
                     !string.Equals(entity.Method, "Scrapling", StringComparison.Ordinal);
-                var nextTermsCheckedAt = robotsAllows ? (entity.TermsCheckedAt ?? now) : (DateTime?)null;
+                var nextTermsCheckedAt = robotsApproved ? (entity.TermsCheckedAt ?? now) : (DateTime?)null;
                 changed = changed || entity.TermsCheckedAt != nextTermsCheckedAt;
 
                 entity.BaseUrl = baseUrl;

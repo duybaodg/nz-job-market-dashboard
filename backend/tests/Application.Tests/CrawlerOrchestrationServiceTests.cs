@@ -127,6 +127,52 @@ public sealed class CrawlerOrchestrationServiceTests
     }
 
     [Fact]
+    public async Task StartCrawlRunAsync_never_saves_a_new_inactive_posting()
+    {
+        await using var dbContext = CreateDbContext();
+        var closed = new RawJobInput(
+            "LinkedIn Jobs", "4000000001", "Senior Developer", "Acme", "Auckland, New Zealand", null,
+            "Build things.", "https://www.linkedin.com/jobs/view/4000000001/", null, null,
+            IsActive: false);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([closed])], new DeduplicationService(), new NormalisationService());
+
+        var result = await service.StartCrawlRunAsync(
+            new("Firecrawl", "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"),
+            CancellationToken.None);
+
+        result.CrawlRun.Status.Should().Be("Completed");
+        result.CrawlRun.TotalJobsSaved.Should().Be(0);
+        dbContext.Jobs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task StartCrawlRunAsync_deactivates_an_existing_posting_the_source_closed()
+    {
+        await using var dbContext = CreateDbContext();
+        var existing = CreateJob("https://www.linkedin.com/jobs/view/4000000001/");
+        existing.Source = "LinkedIn Jobs";
+        existing.SourceJobId = "4000000001";
+        existing.Location = "Auckland, New Zealand";
+        dbContext.Jobs.Add(existing);
+        await dbContext.SaveChangesAsync();
+        var closed = new RawJobInput(
+            "LinkedIn Jobs", "4000000001", "Senior Developer", "Acme", "Auckland, New Zealand", null,
+            "Build things.", existing.Url, null, null,
+            IsActive: false);
+        var service = new CrawlerOrchestrationService(
+            dbContext, [new FakeJobSourceAdapter([closed])], new DeduplicationService(), new NormalisationService());
+
+        await service.StartCrawlRunAsync(
+            new("Firecrawl", "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"),
+            CancellationToken.None);
+
+        var job = dbContext.Jobs.Single();
+        job.IsActive.Should().BeFalse();
+        job.ExpiredAt.Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task StartCrawlRunAsync_refreshes_existing_job_insights()
     {
         await using var dbContext = CreateDbContext();

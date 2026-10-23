@@ -17,7 +17,11 @@ public sealed record RawJobInput(
     string Url,
     DateTime? PostedDate,
     DateTime? ClosingDate,
-    IReadOnlyList<RawJobSkill>? Skills = null);
+    IReadOnlyList<RawJobSkill>? Skills = null,
+    //: False only when the source itself says the posting is closed. The
+    //: crawler still emits it so an existing row can be deactivated honestly;
+    //: a new row is never saved as active.
+    bool IsActive = true);
 
 public interface IDeduplicationService
 {

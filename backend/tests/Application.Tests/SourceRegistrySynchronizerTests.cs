@@ -106,6 +106,25 @@ public sealed class SourceRegistrySynchronizerTests : IDisposable
     }
 
     [Fact]
+    public async Task SyncAsync_grants_scheduling_only_to_the_single_exempt_source()
+    {
+        // The registry keeps robotsAllows=false (truthful), but the scoped
+        // allowlist-of-one lets LinkedIn Jobs be scheduled. Any other source
+        // with robotsAllows=false must stay unapproved.
+        WriteRegistry(
+            Site("LinkedIn Jobs", enabled: true, robotsAllows: false),
+            Site("Alpha", enabled: true, robotsAllows: false));
+        await using var dbContext = CreateDbContext();
+
+        await Synchronizer(dbContext).SyncAsync(CancellationToken.None);
+
+        var linkedin = await dbContext.JobSources.SingleAsync(source => source.Name == "LinkedIn Jobs");
+        linkedin.TermsCheckedAt.Should().NotBeNull("the operator's scoped exemption approves scheduling");
+        var alpha = await dbContext.JobSources.SingleAsync(source => source.Name == "Alpha");
+        alpha.TermsCheckedAt.Should().BeNull("the exemption is an allowlist of one");
+    }
+
+    [Fact]
     public async Task SyncAsync_treats_unknown_robots_permission_as_unapproved()
     {
         WriteRegistry(Site("Alpha", enabled: true, robotsAllows: null));

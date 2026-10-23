@@ -69,6 +69,7 @@ public sealed class ScraplingCliContractTests
     [InlineData("xero", "xero")]
     [InlineData("sjs", "sjs")]
     [InlineData("employment-hero", "employment-hero")]
+    [InlineData("linkedin-guest", "linkedin-guest")]
     public void NormaliseParser_keeps_round17_registry_values(string input, string expected)
     {
         ScraplingCliContract.NormaliseParser(input).Should().Be(expected);
@@ -101,6 +102,42 @@ public sealed class ScraplingCliContractTests
     public void NormaliseFetcher_maps_registry_values_to_cli_choices(string? input, string expected)
     {
         ScraplingCliContract.NormaliseFetcher(input).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Robots_exemption_is_an_allowlist_of_one()
+    {
+        RobotsExemptionPolicy.ExemptSources.Should().BeEquivalentTo(["LinkedIn Jobs"]);
+        RobotsExemptionPolicy.IsExempt("LinkedIn Jobs").Should().BeTrue();
+        RobotsExemptionPolicy.IsExempt("linkedin jobs").Should().BeTrue();
+        RobotsExemptionPolicy.IsExempt("SEEK NZ").Should().BeFalse();
+        RobotsExemptionPolicy.IsExempt("LinkedIn").Should().BeFalse();
+        RobotsExemptionPolicy.IsExempt(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Every_other_enabled_source_stays_outside_the_robots_exemption()
+    {
+        var sites = LoadRegistry().Where(site => site.Enabled).ToList();
+
+        sites.Should().NotBeEmpty();
+        sites.Should().Contain(site => site.Name == "LinkedIn Jobs");
+        foreach (var site in sites.Where(site => site.Name != "LinkedIn Jobs"))
+        {
+            RobotsExemptionPolicy.IsExempt(site.Name)
+                .Should().BeFalse($"'{site.Name}' must keep the full robots discipline");
+        }
+    }
+
+    [Fact]
+    public void LinkedIn_registry_entry_stays_truthful_and_uses_the_guest_parser()
+    {
+        var sites = LoadRegistry();
+        var linkedin = sites.Single(site => site.Name == "LinkedIn Jobs");
+
+        linkedin.Parser.Should().Be("linkedin-guest");
+        linkedin.Enabled.Should().BeTrue();
+        ScraplingCliContract.NormaliseParser(linkedin.Parser).Should().Be("linkedin-guest");
     }
 
     private static IReadOnlySet<string> PythonChoices(string name)

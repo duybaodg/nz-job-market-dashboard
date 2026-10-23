@@ -35,6 +35,7 @@ public static class ScraplingCliContract
         "jobseek",
         "airnz",
         "linkedin",
+        "linkedin-guest",
         "seek",
         "trade-me",
         "pageup",
