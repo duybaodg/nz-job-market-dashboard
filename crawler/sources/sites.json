@@ -1182,7 +1182,7 @@
       "sitemapJobUrls": 0,
       "fetcher": "http",
       "robotsAllows": false,
-      "notes": "robots.txt disallows crawling and the helper needs an authenticated linkedin-mcp-server session (`uvx mcp-server-linkedin --login`); enable only with a provisioned session and reviewed terms"
+      "notes": "MANUAL-ONLY, stays enabled:false. robots.txt User-agent:* Disallow:/ (and /jobs-guest/ disallowed even for Googlebot). Two manual options: (1) authenticated linkedin-mcp-server session (`uvx mcp-server-linkedin --login`) via crawler/adapters/linkedin/linkedin_crawler.py; (2) personal-use guest-endpoint CLI crawler/adapters/linkedin/linkedin_guest_crawler.py. Neither is scheduled by the worker."
     }
   ]
 }
