@@ -334,7 +334,7 @@ class SeekAndTradeMeTests(unittest.TestCase):
         self.assertEqual("Acme Ltd", job.company)
         self.assertEqual("Auckland", job.location)
         self.assertEqual("95156028", job.sourceJobId)
-        self.assertEqual("https://nz.seek.com/job/95156028", job.url)
+        self.assertEqual("https://www.seek.co.nz/job/95156028", job.url)
         self.assertIn("Engineering - Software", job.descriptionText or "")
         self.assertIsNotNone(job.postedDate)
 
