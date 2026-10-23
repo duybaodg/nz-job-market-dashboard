@@ -20,6 +20,26 @@ services (postgres/backend/worker/frontend) on a Raspberry Pi 5.
    pinned. Robots-denial crawl failures are EXPECTED, not bugs. Any new
    fetch path (including Firecrawl) must check robots before fetching —
    the existing `RobotsTxtMatcher`/`obeys_robots()` are the pattern.
+
+   **Scoped, dated exception (2026-10-23, operator Bao Duy):** the operator
+   explicitly instructed that the LinkedIn guest-endpoint CLI becomes a
+   SCHEDULED source and hard rule #1 is waived FOR LINKEDIN GUEST CRAWLING
+   ONLY. `linkedin.com` robots.txt is `User-agent: *` → `Disallow: /`;
+   crawling it is a knowing, operator-authorized exception — personal use,
+   no login, honest UA, low volume. This exception applies to NOTHING else:
+   every other source keeps the full robots discipline (SEEK `*/job/`,
+   Robert Walters query facets, ATS hosts, everything). It is implemented
+   as an ALLOWLIST OF ONE (`LinkedIn Jobs` / parser `linkedin-guest`) in
+   `crawler/adapters/scrapling/scrapling_worker.py` +
+   `backend/src/Application/Crawling/RobotsExemptionPolicy.cs`; never add a
+   second name and never turn it into a config flag. LinkedIn hard limits
+   that remain: honest UA only
+   (`Mozilla/5.0 (compatible; nzjobs-linkedin-guest/1.0)`), no browser
+   impersonation, no fingerprint forging, no challenge solving, no cookies,
+   no credentials, no login; one search page + at most ten detail fetches
+   per run at >= 1.5 s spacing. A block (429/999/challenge/repeated 403)
+   means back off and report/disable — never escalate, rotate UAs or retry
+   harder.
 2. **Never delete or recreate the `postgres-data` Docker volume.** Reversible
    EF migrations only. Source rows are never hard-deleted by features
    (retention purge and dedup have their own audited rules).
@@ -79,9 +99,10 @@ services (postgres/backend/worker/frontend) on a Raspberry Pi 5.
   `RETENTION_DAYS=20` is hardcoded in the SPA (no endpoint exposes it);
   `/api/analytics/top-skills`, `/jobs-by-region`, `/freshness` are
   contract-tested but not consumed by the SPA (it aggregates the jobs feed
-  client-side by design); LinkedIn crawler exists
-  (`crawler/adapters/linkedin/`) but needs a manual authenticated
-  `mcp-server-linkedin` session and stays manual-only per operator decision.
+  client-side by design). Round 18: the LinkedIn guest-endpoint CLI is now a
+  scheduled daily source under the scoped operator robots exemption above
+  (`parser: linkedin-guest`, one search page + <=10 bounded details);
+  the authenticated `mcp-server-linkedin` MCP path remains manual-only.
 
 ## Where things live
 

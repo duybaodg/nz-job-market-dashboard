@@ -6,6 +6,7 @@ import json
 import os
 import random
 import re
+import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -479,6 +480,9 @@ class RawJobInput:
     url: str
     postedDate: str | None
     closingDate: str | None
+    #: False only when the source itself says the posting is closed. The .NET
+    #: ingest deactivates an existing row instead of saving a new active job.
+    isActive: bool = True
 
 
 @dataclass(frozen=True)
@@ -1082,6 +1086,33 @@ def obeys_robots(url: str, user_agent: str) -> bool:
     if rules is None:
         return False
     return can_fetch(rules, user_agent, url)
+
+
+#: Operator decision, 2026-10-23 (Bao Duy): the LinkedIn guest-endpoint crawl is
+#: a scheduled source and hard rule #1 is waived FOR LINKEDIN GUEST CRAWLING
+#: ONLY. linkedin.com robots.txt is ``User-agent: *`` -> ``Disallow: /``; this
+#: is a knowing, operator-authorised exception (personal use, no login, honest
+#: UA, low volume). It applies to NOTHING else. This is an ALLOWLIST OF ONE:
+#: never add a second name, and never turn it into a config flag. Test
+#: ``RobotsExemptionTests`` asserts the set is exactly {"LinkedIn Jobs"} and
+#: that every other source still goes through :func:`obeys_robots`.
+ROBOTS_EXEMPT_SOURCES = frozenset({"LinkedIn Jobs"})
+LINKEDIN_GUEST_PARSER = "linkedin-guest"
+
+
+def robots_allows_crawl(
+    url: str, user_agent: str, *, parser: str, source: str | None
+) -> bool:
+    """Robots gate for a parser branch, with the single scoped exemption.
+
+    The exemption is reachable only when BOTH the ``linkedin-guest`` parser and
+    the allowlisted source name match. Every other parser/source combination
+    (including the manual MCP ``linkedin`` parser) calls :func:`obeys_robots`.
+    """
+    if parser == LINKEDIN_GUEST_PARSER and source in ROBOTS_EXEMPT_SOURCES:
+        return True
+    return obeys_robots(url, user_agent)
+
 
 class _UndecodableBody(Exception):
     """Raised when the server used a content-encoding we cannot decode."""
@@ -2397,6 +2428,139 @@ def run_linkedin_crawl(source: str, output_path: str, max_jobs: int = 80) -> lis
         )
         for j in jobs_data if j.get("title") != "Unknown" and j.get("company")
     ]
+
+
+LINKEDIN_GUEST_KEYWORDS = (
+    "developer",
+    "engineer",
+    "data",
+    "cloud",
+    "devops",
+    "security",
+    "analyst",
+)
+#: One boolean search page covering the small IT keyword set. Request budget is
+#: enforced inside the CLI: one search page + at most ten detail fetches.
+LINKEDIN_GUEST_KEYWORDS_QUERY = " OR ".join(LINKEDIN_GUEST_KEYWORDS)
+LINKEDIN_GUEST_MAX_JOBS = 40
+LINKEDIN_GUEST_DETAIL_LIMIT = 10
+LINKEDIN_GUEST_DELAY_SECONDS = 1.5
+LINKEDIN_GUEST_JOB_AGE_DAYS = 14
+LINKEDIN_GUEST_TIMEOUT_SECONDS = 240
+LINKEDIN_COUNTRY_SUFFIX = re.compile(r"\s*,?\s*(?:new zealand|aotearoa|nz)\s*$", re.I)
+LINKEDIN_REMOTE = re.compile(r"^(?:remote|work from home|wfh)(?:\s*\(nz\))?$", re.I)
+
+
+def linkedin_guest_worker_paths() -> tuple[str, str]:
+    """Resolve the guest CLI interpreter and script path (stdlib only)."""
+    crawler_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    venv_python = os.path.join(crawler_dir, ".venv", "bin", "python")
+    if not os.path.exists(venv_python):
+        venv_python = "python3"
+    script = os.path.join(crawler_dir, "adapters", "linkedin", "linkedin_guest_crawler.py")
+    return venv_python, script
+
+
+def linkedin_guest_argv(python: str, script: str) -> list[str]:
+    """The fixed, bounded argv the worker is allowed to use."""
+    return [
+        python,
+        script,
+        "--keywords",
+        LINKEDIN_GUEST_KEYWORDS_QUERY,
+        "--location",
+        "New Zealand",
+        "--jobage",
+        str(LINKEDIN_GUEST_JOB_AGE_DAYS),
+        "--max-jobs",
+        str(LINKEDIN_GUEST_MAX_JOBS),
+        "--detail-limit",
+        str(LINKEDIN_GUEST_DETAIL_LIMIT),
+        "--delay",
+        str(LINKEDIN_GUEST_DELAY_SECONDS),
+        "--format",
+        "json",
+    ]
+
+
+def normalise_linkedin_location(value: str | None) -> str | None:
+    """Strip the country suffix and canonicalise remote work for LinkedIn.
+
+    "Auckland, New Zealand" -> "Auckland"; "Remote"/"Work from home" ->
+    "Remote (NZ)"; the .NET LocationSanitiser still runs on ingest.
+    """
+    cleaned = sanitise_location(value)
+    if not cleaned:
+        return None
+    if LINKEDIN_REMOTE.match(cleaned):
+        return "Remote (NZ)"
+    stripped = LINKEDIN_COUNTRY_SUFFIX.sub("", cleaned).strip(" ,;|-")
+    return stripped or "New Zealand"
+
+
+def run_linkedin_guest_crawl(
+    source: str, runner: Any = None
+) -> tuple[list[RawJobInput], dict[str, Any]]:
+    """Run the guest CLI and map its RawJobInput envelope for normal ingest.
+
+    A non-zero exit is a FAILED run. A block signature (``BLOCKED`` on stderr)
+    becomes a clear exception message so /api/admin/health surfaces it. No
+    retries here and no UA rotation: the CLI already backs off and gives up.
+    """
+    python, script = linkedin_guest_worker_paths()
+    if not os.path.exists(script):
+        raise RuntimeError(f"LinkedIn guest crawler script not found: {script}")
+
+    argv = linkedin_guest_argv(python, script)
+    run = runner or subprocess.run
+    result = run(
+        argv,
+        capture_output=True,
+        text=True,
+        timeout=LINKEDIN_GUEST_TIMEOUT_SECONDS,
+    )
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        code = ""
+        try:
+            code = json.loads(stderr).get("code", "")
+        except (ValueError, AttributeError):
+            pass
+        if code == "BLOCKED" or "BLOCKED" in stderr:
+            raise RuntimeError(f"LinkedIn guest crawl was blocked: {stderr[:500]}")
+        raise RuntimeError(f"LinkedIn guest crawler failed: {stderr[:500]}")
+
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except ValueError as exc:
+        raise RuntimeError(f"LinkedIn guest crawler returned invalid JSON: {exc}") from exc
+
+    active_by_id = payload.get("isActiveById") or {}
+    jobs: list[RawJobInput] = []
+    for item in payload.get("jobs") or []:
+        job_id = str(item.get("sourceJobId") or "")
+        jobs.append(
+            RawJobInput(
+                source=source,
+                sourceJobId=item.get("sourceJobId"),
+                title=item.get("title") or "Unknown",
+                company=item.get("company"),
+                location=normalise_linkedin_location(item.get("location")),
+                salaryText=item.get("salaryText"),
+                descriptionText=(item.get("descriptionText") or "")[:12000] or None,
+                url=item.get("url") or "",
+                postedDate=item.get("postedDate"),
+                closingDate=item.get("closingDate"),
+                isActive=active_by_id.get(job_id, True),
+            )
+        )
+
+    meta = {
+        "count": len(jobs),
+        "inactive": sum(1 for job in jobs if not job.isActive),
+        "cliMeta": payload.get("meta") or {},
+    }
+    return jobs, meta
 
 
 def parse_airnz_detail(
@@ -3925,8 +4089,46 @@ def crawl(
             "stats": {"candidates": len(parsed_rss), "kept": len(rss_jobs)},
         }
 
+    if parser == "linkedin-guest":
+        # Operator-authorised scoped exemption (2026-10-23): LinkedIn guest
+        # crawling ONLY. The robot gate is still consulted so a future source
+        # name change cannot silently inherit the exemption.
+        if args.robots_txt_obey and not robots_allows_crawl(
+            args.url, args.user_agent, parser=parser, source=args.source
+        ):
+            raise RuntimeError(f"Robots.txt does not allow crawling {args.url}")
+        guest_jobs, guest_meta = run_linkedin_guest_crawl(args.source)
+        return {
+            "rawPages": [
+                asdict(
+                    RawJobPageInput(
+                        source=args.source,
+                        url=args.url,
+                        rawHtml=None,
+                        markdown=None,
+                        rawJson=json.dumps(
+                            {
+                                "linkedinGuest": True,
+                                "operatorExemption": "2026-10-23",
+                                **guest_meta,
+                            }
+                        ),
+                        crawledAt=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    )
+                )
+            ],
+            "jobs": [asdict(job) for job in guest_jobs],
+            # A bounded single-page subset is not a full listing sweep, so
+            # reconciliation must never mark unfetched postings missing.
+            "isComplete": False,
+            "stats": {
+                "candidates": guest_meta["count"],
+                "kept": len(guest_jobs),
+            },
+        }
+
     if parser == "linkedin":
-        # LinkedIn uses a separate MCP-based crawler — run it and return its output
+        # LinkedIn MCP crawler (manual, authenticated) — unchanged.
         output_path = args.url or "/tmp/li_dashboard_output.json"
         jobs = run_linkedin_crawl(args.source, output_path)
         return {
@@ -4214,6 +4416,7 @@ PARSER_CHOICES = (
     "jobseek",
     "airnz",
     "linkedin",
+    "linkedin-guest",
     "seek",
     "trade-me",
     "pageup",
