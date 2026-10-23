@@ -389,7 +389,8 @@ class SeekAndTradeMeTests(unittest.TestCase):
 
         self.assertEqual(1, len(result["jobs"]))
         self.assertTrue(all("/job/" not in url or url == fetched[0] for url in fetched))
-        self.assertTrue(all("information-technology-jobs" in url for url in fetched))
+        self.assertTrue(all("information-technology" in url for url in fetched))
+        self.assertTrue(all("?" not in url for url in fetched))
 
 class JobQualityFilterTests(unittest.TestCase):
     def test_hub_page_titles_are_rejected(self) -> None:

@@ -3415,9 +3415,18 @@ def crawl(
     if parser == "seek":
         # SEEK disallows */job/ detail pages, so we only ever read listing pages,
         # which robots.txt allows (including ?keywords= slices).
-        listing_urls = [args.url] + [
-            item for item in (source_config.get("listingUrls") or []) if item
-        ]
+        # SEEK's SEO 301 drops ?keywords from these keyword URLs, leaving a
+        # query-only target that robots.txt forbids. The registry therefore pins
+        # the verified 200 canonical paths to fetch directly; one request per
+        # keyword also avoids the redirect double-fetch that triggered 429s.
+        configured_urls = (
+            source_config.get("canonicalListingUrls")
+            or source_config.get("listingUrls")
+            or []
+        )
+        listing_urls = [item for item in configured_urls if item]
+        if not listing_urls:
+            listing_urls = [args.url]
         seek_jobs: list[RawJobInput] = []
         seek_pages: list[RawJobPageInput] = []
         seen_ids: set[str] = set()

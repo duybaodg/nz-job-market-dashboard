@@ -217,6 +217,16 @@ class SeekRobotsUrlTests(unittest.TestCase):
             self.assertTrue(parsed.query.startswith("keywords="), url)
             self.assertIn("daterange=31", url)
 
+        # SEEK's redirect drops ?keywords, so the crawl fetches these pinned
+        # 200 canonical paths directly. No query means robots' Disallow: *?
+        # does not apply, and no disallowed redirect target is ever fetched.
+        canonical_urls = seek["canonicalListingUrls"]
+        self.assertEqual(len(listing_urls), len(canonical_urls))
+        for url in canonical_urls:
+            parsed = urlsplit(url)
+            self.assertEqual("", parsed.query, url)
+            self.assertTrue(url.startswith("https://nz.seek.com/information-technology-"), url)
+
 
 class SeekBackoffTests(unittest.TestCase):
     def test_429_then_200_retries_and_succeeds(self) -> None:

@@ -24,7 +24,7 @@
       "retryOn5xx": true,
       "notFoundEmpty": true,
       "robotsStripDisallowedQuery": true,
-      "notes": "robots.txt disallows */job/ detail pages: listing pages (incl. a leading ?keywords=) are parsed from window.SEEK_REDUX_DATA instead | deprioritised: crawled last, weekly | Round 16: &daterange=31 + client-side 31-day filter; 429/5xx backoff. SEEK's SEO 301 drops ?keywords, so the crawler follows only the same canonical path with the now-disallowed query removed (never the disallowed URL).",
+      "notes": "robots.txt disallows */job/ detail pages: listing pages are parsed from window.SEEK_REDUX_DATA instead | deprioritised: crawled last, weekly | Round 16: keyword listingUrls carry a leading ?keywords= and &daterange=31; the crawl fetches the verified 200 canonicalListingUrls directly because SEEK's SEO 301 drops ?keywords and makes the target query robots-disallowed (never fetch the disallowed URL). 31-day recency is enforced client-side; 429/5xx backoff.",
       "listingUrls": [
         "https://nz.seek.com/information-technology-jobs?keywords=developer&daterange=31",
         "https://nz.seek.com/information-technology-jobs?keywords=engineer&daterange=31",
@@ -38,6 +38,20 @@
         "https://nz.seek.com/information-technology-jobs?keywords=support&daterange=31",
         "https://nz.seek.com/information-technology-jobs?keywords=tester&daterange=31",
         "https://nz.seek.com/information-technology-jobs?keywords=network&daterange=31"
+      ],
+      "canonicalListingUrls": [
+        "https://nz.seek.com/information-technology-developer-jobs",
+        "https://nz.seek.com/information-technology-engineer-jobs",
+        "https://nz.seek.com/information-technology-data-jobs",
+        "https://nz.seek.com/information-technology-cloud-jobs",
+        "https://nz.seek.com/information-technology-security-jobs",
+        "https://nz.seek.com/information-technology-devops-jobs",
+        "https://nz.seek.com/information-technology-analyst-jobs",
+        "https://nz.seek.com/information-technology-architect-jobs",
+        "https://nz.seek.com/information-technology-administrator-jobs",
+        "https://nz.seek.com/information-technology-support-jobs",
+        "https://nz.seek.com/information-technology-tester-jobs",
+        "https://nz.seek.com/information-technology-network-jobs"
       ],
       "priority": "last"
     },
