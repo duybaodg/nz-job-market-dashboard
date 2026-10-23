@@ -2,11 +2,14 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Application.Crawling;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Infrastructure.Scrapling;
 
-public sealed class ScraplingJobAdapter(IOptions<ScraplingOptions> options) : IJobSourceAdapter
+public sealed class ScraplingJobAdapter(
+    IOptions<ScraplingOptions> options,
+    ILogger<ScraplingJobAdapter>? logger = null) : IJobSourceAdapter
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -125,8 +128,34 @@ public sealed class ScraplingJobAdapter(IOptions<ScraplingOptions> options) : IJ
         }
 
         var result = JsonSerializer.Deserialize<SourceFetchResult>(json, JsonOptions);
+        if (result is null)
+        {
+            throw new InvalidOperationException("Scrapling worker returned empty or invalid JSON.");
+        }
 
-        return result ?? throw new InvalidOperationException("Scrapling worker returned empty or invalid JSON.");
+        // Parser provenance and robots-redirect decisions are written to the
+        // child's stderr. Surface those lines on success too (the full stderr is
+        // only used in the failure path), so a deployed crawl can be audited.
+        if (logger is not null)
+        {
+            foreach (var rawLine in stderr.ToString().Split('\n'))
+            {
+                var line = rawLine.Trim();
+                if (line.Length == 0)
+                {
+                    continue;
+                }
+
+                if (line.Contains("parser path=", StringComparison.OrdinalIgnoreCase)
+                    || line.Contains("Redirect target disallowed", StringComparison.OrdinalIgnoreCase)
+                    || line.Contains("rate-limited after backoff", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogInformation("Scrapling {Source}: {Provenance}", request.Source, line);
+                }
+            }
+        }
+
+        return result;
     }
 
     private string ResolveScriptPath()
