@@ -148,10 +148,10 @@ else
   fail=1
 fi
 
-printf '%-28s ' "Round 13 SJS revival"
-# Round 13 addendum: Student Job Search is back on the filtered Next.js board.
-# The ?class=information-communication-technology query IS the ICT filter and
-# robots.txt allows it for generic agents, so the query must be kept verbatim.
+printf '%-28s ' "Round 17 SJS board"
+# Round 17: SJS moved to student.sjs.co.nz/jobs. The old ?class= ICT filter is
+# gone; the source renders the plain board plus technology ?q= slices and gates
+# titles client-side. The registry must never keep the retired query.
 if echo "${sources:-[]}" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
@@ -162,12 +162,50 @@ if sjs is None:
 else:
     if not sjs.get("enabled"):
         problems.append("not enabled")
-    if "class=information-communication-technology" not in (sjs.get("baseUrl") or ""):
-        problems.append("ICT class filter missing from baseUrl")
+    if sjs.get("baseUrl") != "https://student.sjs.co.nz/jobs":
+        problems.append("baseUrl is not https://student.sjs.co.nz/jobs")
+    if sjs.get("parser") != "sjs":
+        problems.append("parser is not sjs")
 if problems:
     print("FAIL (" + "; ".join(problems) + ")")
     raise SystemExit(1)
-print("OK (Student Job Search enabled with the ICT class filter)")
+print("OK (Student Job Search on student.sjs.co.nz with the sjs parser)")
+'; then
+  :
+else
+  fail=1
+fi
+
+printf '%-28s ' "Round 17 URL refresh"
+# Round 17: verify the operator-supplied sources are on robots-allowed URLs and
+# that Employment Hero is present. The Robert Walters ?industry=it facet query
+# is robots-disallowed and must never become a base URL.
+if echo "${sources:-[]}" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+by_name = {s["name"]: s for s in data}
+problems = []
+xero = by_name.get("Xero")
+if not xero or xero.get("baseUrl") != "https://careers.xero.com/jobs/":
+    problems.append("Xero is not on careers.xero.com")
+randstad = by_name.get("Randstad NZ")
+if not randstad or randstad.get("baseUrl") != "https://www.randstad.co.nz/jobs/s-it-ict/":
+    problems.append("Randstad is not on the IT path")
+consult = by_name.get("Consult Recruitment")
+if not consult or "consultrecruitment.co.nz" not in (consult.get("baseUrl") or ""):
+    problems.append("Consult is not on the new domain")
+robert = by_name.get("Robert Walters NZ")
+if not robert or "industry=" in (robert.get("baseUrl") or ""):
+    problems.append("Robert Walters base URL carries the disallowed facet")
+if not robert or robert.get("baseUrl") != "https://www.robertwalters.co.nz/expertise/technology/technology-jobs.html":
+    problems.append("Robert Walters is not on the path-only technology board")
+hero = by_name.get("Employment Hero")
+if not hero or not hero.get("enabled"):
+    problems.append("Employment Hero missing or disabled")
+if problems:
+    print("FAIL (" + "; ".join(problems) + ")")
+    raise SystemExit(1)
+print("OK (Xero/Randstad/Consult/Robert Walters/Employment Hero)")
 '; then
   :
 else

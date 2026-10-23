@@ -20,6 +20,10 @@ from adapters.scrapling.scrapling_worker import (  # noqa: E402
     parse_seek_detail,
     parse_seek_listing,
     parse_structured_jobs,
+    parse_sjs_listing,
+    parse_employment_hero_listing,
+    parse_xero_sitemap,
+    xero_title_is_it_candidate,
     relative_days_ago,
     resolve_max_pages,
     sanitize_href,
@@ -86,6 +90,13 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertEqual(8, resolve_max_pages(base_args(max_pages=8), {"maxPages": 12}))
         self.assertEqual(50, resolve_max_pages(base_args(max_pages=50), {}))
         self.assertEqual(50, resolve_max_pages(base_args(max_pages=50), {"maxPages": 0}))
+        # A finite sitemap source may explicitly extend beyond the global cap.
+        self.assertEqual(
+            70,
+            resolve_max_pages(
+                base_args(max_pages=50), {"maxPages": 70, "extendMaxPages": True}
+            ),
+        )
 
     def test_round3_disables_sources_with_no_crawlable_listings(self) -> None:
         for name in ("Younity", "Orion Health", "MyJobSpace"):
@@ -120,29 +131,70 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertEqual("http", talent["fetcher"])
         self.assertTrue(talent["robotsAllows"])
 
-    def test_round13_revives_student_job_search_with_the_class_filter(self) -> None:
-        # Round 13 addendum: the old /job-seeker/jobs URL rendered an empty
-        # shell. The Next.js board is revived on the class-filtered URL, which
-        # IS the ICT filter and is allowed for generic agents by robots.txt.
+    def test_round17_moves_student_job_search_to_the_public_jobs_board(self) -> None:
+        # Round 17: the board moved to student.sjs.co.nz/jobs. The old
+        # ?class=information-communication-technology filter no longer exists,
+        # so the all-industry card grid is rendered and the sjs parser applies
+        # the IT title/summary gate client-side.
         sjs = lookup_source("Student Job Search")
 
         self.assertIsNotNone(sjs)
         self.assertTrue(sjs["enabled"])
-        self.assertEqual(
-            "https://www.sjs.co.nz/job-seeker/jobs?class=information-communication-technology",
-            sjs["jobs_url"],
-        )
-        self.assertEqual("dynamic", sjs["strategy"])
+        self.assertEqual("https://student.sjs.co.nz/jobs", sjs["jobs_url"])
+        self.assertEqual("custom", sjs["strategy"])
         self.assertEqual("dynamic", sjs["fetcher"])
-        self.assertEqual("generic", sjs["parser"])
+        self.assertEqual("sjs", sjs["parser"])
         self.assertTrue(sjs["robotsAllows"])
-        # The detail pages carry no JobPosting JSON-LD, so only /job-details/
-        # candidates are wanted and the sitemap probe is skipped.
-        self.assertEqual("/job-details/", sjs["jobUrlContains"])
-        self.assertIn("JobCard_jobCard", sjs["renderWaitSelector"])
+        self.assertIn("student-job-card", sjs["renderWaitSelector"])
         self.assertTrue(sjs["skipSitemap"])
-        self.assertIn("IndeedJobBot", sjs["notes"])
-        self.assertIn("User-Agent: *", sjs["notes"])
+        self.assertIn("User-agent: *", sjs["notes"])
+        self.assertIn("Allow: /", sjs["notes"])
+        self.assertTrue(any("?q=software" in url for url in sjs["listingUrls"]))
+        self.assertNotIn("job-seeker", sjs["jobs_url"])
+
+    def test_round17_url_refresh_registry_verdicts(self) -> None:
+        # The exact URLs the crawler will request. Never enshrine the
+        # robots-disallowed Robert Walters facet query as a crawl URL.
+        xero = lookup_source("Xero")
+        randstad = lookup_source("Randstad NZ")
+        consult = lookup_source("Consult Recruitment")
+        robert = lookup_source("Robert Walters NZ")
+        employment = lookup_source("Employment Hero")
+        prosple = lookup_source("Prosple NZ")
+
+        self.assertEqual("https://careers.xero.com/jobs/", xero["jobs_url"])
+        self.assertEqual("xero", xero["parser"])
+        self.assertEqual("http", xero["fetcher"])
+        self.assertNotIn("api.ashbyhq.com", xero["jobs_url"])
+
+        self.assertEqual("https://www.randstad.co.nz/jobs/s-it-ict/", randstad["jobs_url"])
+        self.assertEqual("http", randstad["fetcher"])
+        self.assertEqual("custom", randstad["strategy"])
+
+        self.assertEqual(
+            "https://www.consultrecruitment.co.nz/jobs/", consult["jobs_url"]
+        )
+        self.assertNotIn("www.consult.co.nz", consult["jobs_url"])
+
+        self.assertEqual(
+            "https://www.robertwalters.co.nz/expertise/technology/technology-jobs.html",
+            robert["jobs_url"],
+        )
+        self.assertNotIn("?", robert["jobs_url"])
+        self.assertNotIn("industry=", robert["jobs_url"])
+        self.assertEqual("stealth", robert["fetcher"])
+        self.assertEqual("/informationtechnology/jobs/", robert["jobUrlContains"])
+
+        self.assertIsNotNone(employment)
+        self.assertTrue(employment["enabled"])
+        self.assertEqual("http", employment["fetcher"])
+        self.assertEqual("employment-hero", employment["parser"])
+        self.assertIn("job_sector_ids=18", employment["jobs_url"])
+        self.assertTrue(employment["robotsAllows"])
+
+        self.assertFalse(prosple["enabled"])
+        self.assertIn("search-jobs", prosple["jobs_url"])
+        self.assertIn("Cloudflare", prosple["notes"])
 
     def test_title_from_url_produces_readable_fallback(self) -> None:
         self.assertEqual(
@@ -528,6 +580,149 @@ class JobQualityFilterTests(unittest.TestCase):
         postings = parse_structured_jobs(html)
 
         self.assertEqual(["Developer"], [p["title"] for p in postings])
+
+    def test_round17_sjs_card_parser_reads_listing_without_detail_fetch(self) -> None:
+        html = """
+        <article class="student-job-card    ">
+          <a class="student-job-card-link" href="/jobs/online-gaming-support-buddy--h123">
+            View Online Gaming Support Buddy
+          </a>
+          <div class="student-job-card-heading"><h3>Online Gaming Support Buddy</h3></div>
+          <dl class="student-job-meta">
+            <div><dt class="sr-only">Location</dt><dd>Auckland Central, Auckland</dd></div>
+            <div><dt class="sr-only">Work type</dt><dd>Part-time · 10 hrs/week</dd></div>
+            <div><dt class="sr-only">Pay</dt><dd>$30 per hour</dd></div>
+            <div><dt class="sr-only">Advert dates</dt>
+              <dd class="student-job-date-meta">
+                <span>Posted 21 Oct 2026</span><span>Closes 22 Nov 2026</span>
+              </dd>
+            </div>
+          </dl>
+          <div class="student-job-card-body has-bullet-points">
+            <ul class="student-job-bullet-points"><li>Support online gamers.</li></ul>
+            <div class="student-job-summary"><p>Remote technical support role.</p></div>
+          </div>
+        </article>
+        """
+        jobs = parse_sjs_listing("Student Job Search", "https://student.sjs.co.nz/jobs", html)
+
+        self.assertEqual(1, len(jobs))
+        job = jobs[0]
+        self.assertEqual("Online Gaming Support Buddy", job.title)
+        self.assertEqual("Auckland Central, Auckland", job.location)
+        self.assertEqual("$30 per hour", job.salaryText)
+        self.assertEqual("online-gaming-support-buddy--h123", job.sourceJobId)
+        self.assertEqual("2026-10-21T00:00:00Z", job.postedDate)
+        self.assertEqual("2026-11-22T00:00:00Z", job.closingDate)
+        self.assertIn("Remote technical support role", job.descriptionText or "")
+
+    def test_round17_employment_hero_card_parser(self) -> None:
+        html = """
+        <a data-wp-each-child href="https://employmenthero.com/nz/jobs/position/acme-senior-cloud-engineer-abc/">
+          <div class="eh-job-item__card">
+            <p class="eh-job-item__title" data-wp-text="context.item.title">Senior Cloud Engineer</p>
+            <div class="eh-job-item__company"><div data-wp-text="context.item.organisation_name">Acme Ltd</div></div>
+            <span data-wp-text="context.item.vendor_location_name">Auckland 1010</span>
+            <span data-wp-text="context.item.formatted_salary_range">$120,000 - $140,000</span>
+            <span data-wp-each-child class="eh-job-item__tag" data-wp-text="context.tag">Full-time</span>
+            <span data-wp-each-child class="eh-job-item__tag" data-wp-text="context.tag">Hybrid</span>
+            <div class="eh-job-item__posted-date" data-wp-bind--hidden="context.item.eoi">
+              Posted <span data-wp-text="context.item.formatted_posted_date">2 hours ago</span>
+            </div>
+          </div>
+        </a>
+        """
+        jobs = parse_employment_hero_listing(
+            "Employment Hero", "https://employmenthero.com/nz/jobs/", html
+        )
+
+        self.assertEqual(1, len(jobs))
+        job = jobs[0]
+        self.assertEqual("Senior Cloud Engineer", job.title)
+        self.assertEqual("Acme Ltd", job.company)
+        self.assertEqual("Auckland 1010", job.location)
+        self.assertEqual("$120,000 - $140,000", job.salaryText)
+        self.assertIn("Full-time", job.descriptionText or "")
+        self.assertEqual("acme-senior-cloud-engineer-abc", job.sourceJobId)
+
+    def test_round17_xero_sitemap_and_title_prefilter(self) -> None:
+        xml = """
+        <urlset>
+          <url><loc>https://careers.xero.com/jobs/12345678-abcd-1234-abcd-1234567890ab/senior-engineer/</loc></url>
+          <url><loc>https://careers.xero.com/jobs/12345678-abcd-1234-abcd-1234567890ab/senior-engineer/</loc></url>
+          <url><loc>https://careers.xero.com/inside-xero/benefits-wellbeing/</loc></url>
+          <url><loc>https://careers.xero.com/jobs/abcdefab-abcd-1234-abcd-1234567890ab/product-marketing-manager/</loc></url>
+        </urlset>
+        """
+        urls = parse_xero_sitemap(xml)
+
+        self.assertEqual(2, len(urls))
+        self.assertEqual(
+            "https://careers.xero.com/jobs/12345678-abcd-1234-abcd-1234567890ab/senior-engineer/",
+            urls[0],
+        )
+        self.assertTrue(xero_title_is_it_candidate("Senior Engineer Enterprise Platforms"))
+        self.assertTrue(xero_title_is_it_candidate("Engineering Manager Multiple Roles"))
+        self.assertFalse(xero_title_is_it_candidate("Product Marketing Manager"))
+        self.assertFalse(xero_title_is_it_candidate("Senior Account Executive"))
+
+    def test_round17_parses_html_entity_encoded_jsonld_plus(self) -> None:
+        # Xero/Happydance encodes the '+' in application/ld+json as &#x2B;.
+        html = """
+        <script id="js-job-posting" type="application/ld&#x2B;json">
+        {"@type":"JobPosting","title":"Senior Engineer - Database",
+         "jobLocation":{"address":{"addressLocality":"Auckland","addressCountry":"New Zealand"}}}
+        </script>
+        """
+        postings = parse_structured_jobs(html)
+
+        self.assertEqual(["Senior Engineer - Database"], [item["title"] for item in postings])
+
+    def test_round17_xero_branch_keeps_only_nz_it_postings(self) -> None:
+        sitemap = """
+        <urlset>
+          <url><loc>https://careers.xero.com/jobs/11111111-1111-1111-1111-111111111111/senior-engineer/</loc></url>
+          <url><loc>https://careers.xero.com/jobs/22222222-2222-2222-2222-222222222222/senior-engineer-au/</loc></url>
+          <url><loc>https://careers.xero.com/jobs/33333333-3333-3333-3333-333333333333/product-marketing-manager/</loc></url>
+        </urlset>
+        """
+        nz = """
+        <script type="application/ld&#x2B;json">
+        {"@type":"JobPosting","title":"Senior Engineer","industry":"Engineering",
+         "datePosted":"2026-10-20",
+         "jobLocation":{"address":{"addressLocality":"Auckland","addressCountry":"New Zealand"}}}
+        </script>
+        """
+        au = """
+        <script type="application/ld+json">
+        {"@type":"JobPosting","title":"Senior Engineer","industry":"Engineering",
+         "jobLocation":{"address":{"addressLocality":"Melbourne","addressCountry":"Australia"}}}
+        </script>
+        """
+        pages = {
+            "https://careers.xero.com/sitemap.xml": (sitemap, ""),
+            "https://careers.xero.com/jobs/11111111-1111-1111-1111-111111111111/senior-engineer/": (nz, ""),
+            "https://careers.xero.com/jobs/22222222-2222-2222-2222-222222222222/senior-engineer-au/": (au, ""),
+        }
+
+        def fetch(url):
+            return pages[url]
+
+        result = crawl(
+            base_args(
+                source="Xero",
+                url="https://careers.xero.com/jobs/",
+                parser="xero",
+                max_pages=50,
+            ),
+            fetch=fetch,
+        )
+
+        self.assertEqual(1, len(result["jobs"]))
+        self.assertEqual("Senior Engineer", result["jobs"][0]["title"])
+        self.assertIn("New Zealand", result["jobs"][0]["location"])
+        self.assertTrue(result["isComplete"])
+        self.assertEqual(2, result["stats"]["candidates"])
 
     def test_job_detail_falls_back_to_h1_when_jsonld_has_no_title(self) -> None:
         from adapters.scrapling.scrapling_worker import parse_job_detail

@@ -285,7 +285,7 @@
       "tier": 2,
       "category": "recruiter",
       "homepage": "https://www.robertwalters.co.nz/",
-      "jobs_url": "https://www.robertwalters.co.nz/jobs.html",
+      "jobs_url": "https://www.robertwalters.co.nz/expertise/technology/technology-jobs.html",
       "platform": null,
       "enabled": true,
       "frequency_minutes": 1440,
@@ -295,7 +295,9 @@
       "fetcher": "stealth",
       "robotsAllows": true,
       "maxPages": 12,
-      "notes": "Round 4: plain HTTP 403s (header-based block); StealthyFetcher renders the board. The old /jobs/it.html path is now a 404; /jobs.html lists all live roles including the informationtechnology category. robots.txt has no /jobs disallow. Round 10: browser fetch has an automatic Firecrawl self-hosted fallback on render failure (the self-hosted scrape of this host currently answers SCRAPE_ALL_ENGINES_FAILED, so the browser stays primary)."
+      "jobUrlContains": "/informationtechnology/jobs/",
+      "skipSitemap": true,
+      "notes": "Round 4: plain HTTP 403s (header-based block); StealthyFetcher renders the board. The old /jobs/it.html path is now a 404. Round 10: browser fetch has an automatic Firecrawl self-hosted fallback on render failure (the self-hosted scrape of this host currently answers SCRAPE_ALL_ENGINES_FAILED, so the browser stays primary). Round 17: the operator-supplied ?q=&industry=it URL is robots-DISALLOWED (*?*industry= and *?*q=), and the technology facet URL with ?specialization= is disallowed too. The path-only /expertise/technology/technology-jobs.html is robots-ALLOWED, renders 6 information-technology roles, and is now the crawl URL; jobUrlContains keeps the /jobs/jobs-in-*.html facet links out. The Chromium 1243/1248 skew was fixed by pinning playwright/patchright/scrapling and adding a build-time executable check."
     },
     {
       "name": "Tribe Recruitment",

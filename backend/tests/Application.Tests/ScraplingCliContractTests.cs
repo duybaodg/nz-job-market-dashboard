@@ -48,6 +48,32 @@ public sealed class ScraplingCliContractTests
         }
     }
 
+    [Fact]
+    public void Every_enabled_registry_parser_maps_to_itself_not_generic()
+    {
+        // Regression for Round 17: xero/sjs/employment-hero were added to the
+        // Python CLI and registry but not to ParserChoices, so NormaliseParser
+        // silently rewrote them to `generic` and the custom crawl branches never
+        // ran. Every enabled registry parser must be a real .NET CLI choice.
+        var sites = LoadRegistry().Where(site => site.Enabled).ToList();
+
+        foreach (var site in sites)
+        {
+            site.Parser.Should().NotBeNullOrWhiteSpace($"{site.Name} must declare a parser");
+            ScraplingCliContract.NormaliseParser(site.Parser)
+                .Should().Be(site.Parser, $"'{site.Name}' parser '{site.Parser}' is missing from ParserChoices");
+        }
+    }
+
+    [Theory]
+    [InlineData("xero", "xero")]
+    [InlineData("sjs", "sjs")]
+    [InlineData("employment-hero", "employment-hero")]
+    public void NormaliseParser_keeps_round17_registry_values(string input, string expected)
+    {
+        ScraplingCliContract.NormaliseParser(input).Should().Be(expected);
+    }
+
     [Theory]
     [InlineData("ashby", "ashby")]
     [InlineData("trade-me", "trade-me")]

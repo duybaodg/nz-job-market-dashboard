@@ -72,8 +72,8 @@ python3 crawler/tools/coverage_report.py --report /tmp/coverage.json
 
 | Strategy | How it works | Examples |
 | --- | --- | --- |
-| `custom` | Hand-written, unit-tested HTML/feed parser | NZ Government Jobs, MPI (`jobtools`), Absolute IT, Talent Army, Beyond Recruitment, Consult, Comspek, Salt, Digital Garage, JobSeek, Hays (`job-search` + JSON-LD), ANZ/One NZ/LIC (`pageup` microdata), Trade Me Jobs, SEEK, Halter |
-| `api` | Official public ATS JSON postings API | Jade Software (BambooHR), DOC Careers (Workday), Halter (Ashby), Xero (Ashby), Fisher & Paykel (Workday), EROAD (Workday), Pushpay (Greenhouse), Air New Zealand (SmartRecruiters), Inland Revenue (Oracle Recruiting), NZ Defence (Salesforce Apex), Tribe Recruitment (`/api/jobs`) |
+| `custom` | Hand-written, unit-tested HTML/feed parser | NZ Government Jobs, MPI (`jobtools`), Absolute IT, Talent Army, Beyond Recruitment, Consult, Comspek, Salt, Digital Garage, JobSeek, Hays (`job-search` + JSON-LD), ANZ/One NZ/LIC (`pageup` microdata), Trade Me Jobs, SEEK, Xero (`careers.xero.com` sitemap + embedded JobPosting), Student Job Search (rendered cards + `?q=` slices), Employment Hero (cards + detail JSON-LD), Halter |
+| `api` | Official public ATS JSON postings API | Jade Software (BambooHR), DOC Careers (Workday), Halter (Ashby), Fisher & Paykel (Workday), EROAD (Workday), Pushpay (Greenhouse), Air New Zealand (SmartRecruiters), Inland Revenue (Oracle Recruiting), NZ Defence (Salesforce Apex), Tribe Recruitment (`/api/jobs`) |
 | `jsonld` | Schema.org `JobPosting` JSON-LD on the listing/detail page | Gallagher |
 | `rss` | Job RSS/XML feed listing every vacancy | Spark NZ, Fonterra (SuccessFactors `SearchJobs/feed`) |
 | `dynamic` | Browser-render the listing, follow job links, extract JSON-LD → HTML heuristics | company career pages and government sites |

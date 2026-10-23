@@ -61,10 +61,10 @@ class AdapterArgvTests(unittest.TestCase):
 
     def test_xero_argv_parses(self) -> None:
         args = self._parse(
-            self.adapter_argv("Xero", "https://api.ashbyhq.com/posting-api/job-board/xero", "ashby")
+            self.adapter_argv("Xero", "https://careers.xero.com/jobs/", "xero")
         )
         self.assertEqual("Xero", args.source)
-        self.assertEqual("ashby", args.parser)
+        self.assertEqual("xero", args.parser)
         self.assertTrue(args.robots_txt_obey)
 
     def test_trade_me_jobs_argv_parses(self) -> None:

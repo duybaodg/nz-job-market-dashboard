@@ -482,7 +482,7 @@ Setup gotchas (learned the hard way): the nuq-postgres init script requires the 
 
 ## Current Scope
 
-Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, the Find jobs and Market trends audience views, daily listing snapshots with retained-history analytics, scheduled registry-driven crawling of 58 NZ IT job sites, and a self-hosted Firecrawl fetch layer.
+Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, the Find jobs and Market trends audience views, daily listing snapshots with retained-history analytics, scheduled registry-driven crawling of 59 NZ IT job sites, and a self-hosted Firecrawl fetch layer.
 
 Crawling direction: the primary crawler is the Python Scrapling worker, driven by
 `crawler/sources/sites.json`. Each source declares a strategy (`api`, `rss`,
