@@ -5,6 +5,7 @@ import json
 import sys
 import unittest
 import urllib.error
+from argparse import Namespace
 from datetime import datetime, timezone
 from email.message import Message
 from pathlib import Path
@@ -15,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from adapters.scrapling.scrapling_worker import (  # noqa: E402
     HttpStatusError,
+    crawl,
     extract_embedded_json,
     fetch_with_http,
     http_request,
@@ -226,6 +228,54 @@ class SeekRobotsUrlTests(unittest.TestCase):
             parsed = urlsplit(url)
             self.assertEqual("", parsed.query, url)
             self.assertTrue(url.startswith("https://nz.seek.com/information-technology-"), url)
+
+
+class SeekCrawlResilienceTests(unittest.TestCase):
+    CARD = """
+    <article data-automation="normalJob">
+      <a href="/job/95156028">View</a>
+      <span data-automation="jobTitle">Senior Software Engineer</span>
+      <span data-automation="jobCompany">Acme Ltd</span>
+      <span data-automation="jobLocation">Auckland</span>
+      <span data-automation="jobListingDate">Listed six days ago</span>
+      <span data-automation="jobShortDescription">Build things.</span>
+    </article>
+    """
+
+    def _args(self) -> Namespace:
+        return Namespace(
+            source="SEEK NZ",
+            url="https://nz.seek.com/information-technology-jobs",
+            parser="seek",
+            fetcher_type="http",
+            max_pages=50,
+            delay_seconds=0,
+            robots_txt_obey=False,
+            proxy_url="",
+            user_agent="test",
+        )
+
+    def test_one_rate_limited_page_does_not_fail_the_whole_crawl(self) -> None:
+        calls: list[str] = []
+
+        def fetch(url: str) -> tuple[str, str]:
+            calls.append(url)
+            if "data-jobs" in url:
+                raise HttpStatusError(429, url)
+            return self.CARD, "cards"
+
+        result = crawl(self._args(), fetch=fetch, sleeper=lambda _: None)
+
+        self.assertEqual(12, len(calls))
+        self.assertGreater(len(result["jobs"]), 0)
+        self.assertFalse(result["isComplete"], "a partial sweep must not reconcile as complete")
+
+    def test_all_pages_rate_limited_raises_instead_of_returning_zero(self) -> None:
+        def fetch(url: str) -> tuple[str, str]:
+            raise HttpStatusError(429, url)
+
+        with self.assertRaises(RuntimeError):
+            crawl(self._args(), fetch=fetch, sleeper=lambda _: None)
 
 
 class SeekBackoffTests(unittest.TestCase):

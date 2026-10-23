@@ -3430,26 +3430,54 @@ def crawl(
         seek_jobs: list[RawJobInput] = []
         seek_pages: list[RawJobPageInput] = []
         seen_ids: set[str] = set()
+        rate_limited: list[str] = []
+        skipped_by_robots = 0
         for listing_url in listing_urls:
             if len(seek_pages) >= args.max_pages:
                 break
             if not same_site(args.url, listing_url):
                 continue
             if args.robots_txt_obey and not obeys_robots(listing_url, args.user_agent):
+                skipped_by_robots += 1
                 continue
             if seek_pages:
                 sleeper(args.delay_seconds)
-            listing_html, listing_text = fetch(listing_url)
+            try:
+                listing_html, listing_text = fetch(listing_url)
+            except HttpStatusError as exc:
+                # A single keyword slice being rate-limited after the full
+                # backoff should not throw away the pages that succeeded. A run
+                # with NO usable pages still fails loudly below.
+                if exc.status in (429, 503):
+                    rate_limited.append(listing_url)
+                    print(
+                        f"SEEK listing rate-limited after backoff: {listing_url}",
+                        file=sys.stderr,
+                    )
+                    continue
+                raise
             seek_pages.append(raw_page(args, listing_url, listing_html, listing_text))
             for job in parse_seek_listing(args.source, listing_url, listing_html, listing_text):
                 if job.url in seen_ids or not is_plausible_job_title(job.title, args.source):
                     continue
                 seen_ids.add(job.url)
                 seek_jobs.append(job)
+        if not seek_pages:
+            if rate_limited:
+                raise RuntimeError(
+                    "SEEK listing pages were rate-limited after backoff: "
+                    + ", ".join(rate_limited)
+                )
+            raise RuntimeError(
+                "SEEK crawl fetched no listing pages "
+                f"(robots-skipped={skipped_by_robots}, configured={len(listing_urls)})"
+            )
         return {
             "rawPages": [asdict(page) for page in seek_pages],
             "jobs": [asdict(job) for job in seek_jobs],
-            "isComplete": True,
+            # A partial page set must not let reconciliation mark unfetched jobs
+            # as missing; only a complete listing sweep may do that.
+            "isComplete": not rate_limited and skipped_by_robots == 0,
             "stats": {"candidates": len(seen_ids), "kept": len(seek_jobs)},
         }
 
