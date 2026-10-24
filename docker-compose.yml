@@ -21,7 +21,8 @@ services:
   backend:
     build:
       context: .
-      dockerfile: backend/src/Api/Dockerfile
+      dockerfile: docker/Dockerfile
+      target: api
     environment:
       ASPNETCORE_URLS: http://+:8080
       DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB:-nz_job_market};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set to a non-default value}
@@ -73,7 +74,8 @@ services:
   worker:
     build:
       context: .
-      dockerfile: backend/src/Worker/Dockerfile
+      dockerfile: docker/Dockerfile
+      target: worker
     environment:
       DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB:-nz_job_market};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set to a non-default value}
       AI_EXTRACTION_ENABLED: ${AI_EXTRACTION_ENABLED:-false}

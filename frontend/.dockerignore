@@ -1,0 +1,11 @@
+# Round 19: the frontend build context is ./frontend, so the root
+# .dockerignore does not apply. Keep node_modules (251 MB), local dist and
+# test/coverage output out of the context; `npm ci` recreates dependencies
+# inside the image from package-lock.json.
+node_modules/
+dist/
+coverage/
+.git/
+.gitignore
+*.log
+.DS_Store
