@@ -2,6 +2,9 @@
 **/obj/
 **/node_modules/
 **/dist/
+**/__pycache__/
+**/*.pyc
+crawler/.venv/
 .git/
 .env
 .DS_Store
