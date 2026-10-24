@@ -1,15 +1,34 @@
-import { useMemo } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Building2, CalendarPlus, Percent, WalletCards } from 'lucide-react'
 import { AppSidebar } from '../components/layout/AppSidebar'
-import { ActiveTrendChart } from '../components/charts/ActiveTrendChart'
 import { DataStatusBanner } from '../components/dashboard/DataStatusBanner'
 import { RankedBarList } from '../components/charts/RankedBarList'
-import { SalaryDistributionChart } from '../components/charts/SalaryDistributionChart'
 import { StatCard } from '../components/dashboard/StatCard'
 import { ViewHeader } from '../components/layout/ViewHeader'
-import { WeeklyTrendChart } from '../components/charts/WeeklyTrendChart'
 import { navigate, useAppLocation } from '../hooks/useAppLocation'
+
+// Round 19: the three Recharts charts are the only consumers of the charting
+// library. Loading them on demand keeps Recharts out of the initial bundle for
+// the /jobs and /health views; the chart code arrives when /trends renders.
+const WeeklyTrendChart = lazy(() =>
+  import('../components/charts/WeeklyTrendChart').then((module) => ({ default: module.WeeklyTrendChart })),
+)
+const ActiveTrendChart = lazy(() =>
+  import('../components/charts/ActiveTrendChart').then((module) => ({ default: module.ActiveTrendChart })),
+)
+const SalaryDistributionChart = lazy(() =>
+  import('../components/charts/SalaryDistributionChart').then((module) => ({
+    default: module.SalaryDistributionChart,
+  })),
+)
+
+const chartFallback = (
+  <div className="chart-empty" aria-busy="true">
+    Loading chart…
+  </div>
+)
+
 import {
   employerActivity,
   regionDemand,
@@ -273,7 +292,9 @@ export function MarketTrendsPage() {
               Loading retained history…
             </div>
           ) : (
-            <WeeklyTrendChart points={history?.weeklyNewListings ?? []} />
+            <Suspense fallback={chartFallback}>
+              <WeeklyTrendChart points={history?.weeklyNewListings ?? []} />
+            </Suspense>
           )}
           <p className="muted chart-caption">
             {coverage?.hasHistory
@@ -303,7 +324,9 @@ export function MarketTrendsPage() {
               Loading retained history…
             </div>
           ) : (
-            <ActiveTrendChart points={history?.activeTrend ?? []} coverageChanges={history?.coverageChanges ?? []} />
+            <Suspense fallback={chartFallback}>
+              <ActiveTrendChart points={history?.activeTrend ?? []} coverageChanges={history?.coverageChanges ?? []} />
+            </Suspense>
           )}
         </section>
 
@@ -393,7 +416,9 @@ export function MarketTrendsPage() {
                 </p>
               </div>
             </div>
-            <SalaryDistributionChart distribution={salary} />
+            <Suspense fallback={chartFallback}>
+              <SalaryDistributionChart distribution={salary} />
+            </Suspense>
           </section>
 
           <section className="panel">
