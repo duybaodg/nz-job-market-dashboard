@@ -127,7 +127,13 @@ describe('API payload contract', () => {
       'weeklyNewListings[0].count', 'weeklyNewListings[0].isPartial',
       'activeTrend[0].snapshotDate', 'activeTrend[0].activeCount', 'activeTrend[0].sourceCount',
       'activeTrend[0].coverageChanged', 'activeTrend[0].sourcesAdded', 'activeTrend[0].sourcesRemoved',
-      'coverageChanges[0].snapshotDate',
+      'coverageChanges[0].snapshotDate', 'coverageChanges[0].events[0].source',
+      'coverageChanges[0].events[0].direction', 'coverageChanges[0].events[0].classification',
+      'coverageChanges[0].events[0].evidence',
+      'constantSourceComparison.available', 'constantSourceComparison.eligibilityRule',
+      'constantSourceComparison.eligibleSourceCount', 'constantSourceComparison.change.absoluteChange',
+      'constantSourceComparison.rawChange.absoluteChange',
+      'constantSourceComparison.collectionAssociatedResidual',
     ])
     requireNonNull(historyFixture, [
       'coverage.firstDate', 'coverage.lastDate', 'coverage.retentionDays',

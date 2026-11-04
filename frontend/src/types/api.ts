@@ -246,10 +246,36 @@ export type ActiveTrendPoint = {
   sourcesRemoved: string[]
 }
 
+export type SourceCoverageEvent = {
+  source: string
+  direction: 'added' | 'removed'
+  classification: string
+  evidence: string
+}
+
 export type SourceCoverageChange = {
   snapshotDate: string
   sourcesAdded: string[]
   sourcesRemoved: string[]
+  events: SourceCoverageEvent[]
+}
+
+export type ConstantSourceComparison = {
+  available: boolean
+  reason: string | null
+  fromSnapshotDate: string | null
+  toSnapshotDate: string | null
+  observedSourceCount: number | null
+  eligibleSourceCount: number | null
+  fromActiveCount: number | null
+  toActiveCount: number | null
+  change: Change | null
+  rawFromActiveCount: number | null
+  rawToActiveCount: number | null
+  rawChange: Change | null
+  collectionAssociatedResidual: number | null
+  eligibilityRule: string
+  sources: string[]
 }
 
 export type HistoryFilter = {
@@ -282,6 +308,7 @@ export type History = {
   weeklyNewListings: WeeklyNewListingPoint[]
   activeTrend: ActiveTrendPoint[]
   coverageChanges: SourceCoverageChange[]
+  constantSourceComparison: ConstantSourceComparison
   filter: HistoryFilter
   scopeNote: string
   note: string

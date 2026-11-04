@@ -61,7 +61,11 @@ public sealed class HistoryService(
 
         // Source coverage is a property of the whole collection, never of the
         // filtered cohort, so its annotations always use every snapshot.
-        BuildActiveTrend(snapshots, orderedDates, out var coverageChanges);
+        BuildActiveTrend(snapshots, orderedDates, out var rawCoverageChanges);
+        var runObservations = await LoadRunObservationsAsync(orderedDates, cancellationToken);
+        var sourceRegistry = await LoadSourceRegistryAsync(cancellationToken);
+        var coverageChanges = ClassifyCoverageChanges(rawCoverageChanges, snapshots, runObservations, sourceRegistry);
+        var constantSourceComparison = BuildConstantSourceComparison(snapshots, orderedDates, runObservations);
         var weekly = BuildWeekly(scoped, coverage, now);
         var activeTrend = filterSupported ? BuildActiveTrend(scoped, orderedDates, out _) : [];
         var newListings = BuildNewListings(scoped, coverage, coverageDates, period, now, filterSupported);
@@ -95,6 +99,7 @@ public sealed class HistoryService(
             weekly,
             activeTrend,
             coverageChanges,
+            constantSourceComparison,
             filterDto,
             BuildScopeNote(filter, filterSupported),
             coverage.HasHistory
@@ -155,6 +160,306 @@ public sealed class HistoryService(
 
     private static string? Clean(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private async Task<IReadOnlyList<RunObservation>> LoadRunObservationsAsync(
+        IReadOnlyList<DateOnly> snapshotDates,
+        CancellationToken cancellationToken)
+    {
+        if (snapshotDates.Count == 0)
+        {
+            return [];
+        }
+
+        // Include a month before the first snapshot so a returning source can be
+        // recognised as a recovery rather than a brand-new source.
+        var fromUtc = NzReportingCalendar.StartOfLocalDayUtc(snapshotDates[0].AddDays(-30));
+        var runs = await dbContext.CrawlRuns
+            .AsNoTracking()
+            .Where(run => (run.FinishedAt ?? run.StartedAt) >= fromUtc)
+            .Select(run => new
+            {
+                run.Source,
+                run.Status,
+                Timestamp = run.FinishedAt ?? run.StartedAt
+            })
+            .ToListAsync(cancellationToken);
+
+        return runs
+            .Select(run => new RunObservation(
+                run.Source,
+                NzReportingCalendar.LocalDate(run.Timestamp),
+                run.Status))
+            .ToList();
+    }
+
+    private async Task<IReadOnlyList<SourceRegistryRow>> LoadSourceRegistryAsync(CancellationToken cancellationToken)
+    {
+        var sources = await dbContext.JobSources
+            .AsNoTracking()
+            .Select(source => new { source.Name, source.Enabled, source.RetiredAt, source.CreatedAt })
+            .ToListAsync(cancellationToken);
+
+        return sources
+            .Select(source => new SourceRegistryRow(source.Name, source.Enabled, source.RetiredAt, source.CreatedAt))
+            .ToList();
+    }
+
+    private static IReadOnlyList<SourceCoverageChangeDto> ClassifyCoverageChanges(
+        IReadOnlyList<SourceCoverageChangeDto> changes,
+        IReadOnlyList<ListingSnapshot> snapshots,
+        IReadOnlyList<RunObservation> runs,
+        IReadOnlyList<SourceRegistryRow> sourceRegistry)
+    {
+        var registry = sourceRegistry
+            .GroupBy(source => source.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var runsBySourceAndDate = runs
+            .GroupBy(run => (run.Source, run.LocalDate))
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(run => run.Status).ToList(),
+                new SourceDateComparer());
+
+        return changes
+            .Select(change =>
+            {
+                var date = DateOnly.Parse(change.SnapshotDate);
+                var events = new List<SourceCoverageEventDto>();
+
+                foreach (var source in change.SourcesAdded)
+                {
+                    // A source that was observed before this date is recovering
+                    // from an outage; one never observed before is genuinely new
+                    // to the retained record.
+                    var hadPriorObservation =
+                        snapshots.Any(snapshot =>
+                            snapshot.SnapshotDate < date
+                            && string.Equals(snapshot.Source, source, StringComparison.OrdinalIgnoreCase))
+                        || runs.Any(run =>
+                            run.LocalDate < date
+                            && string.Equals(run.Source, source, StringComparison.OrdinalIgnoreCase));
+
+                    if (hadPriorObservation)
+                    {
+                        events.Add(new SourceCoverageEventDto(
+                            source,
+                            "added",
+                            "Recovery",
+                            "This source had earlier retained observations and was absent on the previous snapshot. The reappearance is a collection recovery, not evidence of newly posted roles."));
+                        continue;
+                    }
+
+                    if (registry.TryGetValue(source, out var registered)
+                        && IsRegistryCreationOnOrNear(registered.CreatedAt, date))
+                    {
+                        events.Add(new SourceCoverageEventDto(
+                            source,
+                            "added",
+                            "Configuration added",
+                            $"The current source registry row was created around {NzReportingCalendar.LocalDate(registered.CreatedAt):yyyy-MM-dd}. Historical enabled state is not retained, so this is inferred from the current registry."));
+                        continue;
+                    }
+
+                    events.Add(new SourceCoverageEventDto(
+                        source,
+                        "added",
+                        "First observation",
+                        "No earlier retained snapshot or crawl run exists for this source. The first appearance may reflect a new configuration or newly reachable listings."));
+                }
+
+                foreach (var source in change.SourcesRemoved)
+                {
+                    var statuses = runsBySourceAndDate.GetValueOrDefault((source, date)) ?? [];
+                    registry.TryGetValue(source, out var registered);
+
+                    if (registered is { RetiredAt: not null } || registered is { Enabled: false })
+                    {
+                        events.Add(new SourceCoverageEventDto(
+                            source,
+                            "removed",
+                            "Registry change",
+                            "The source is currently disabled or retired in the registry. Its absence reflects configuration state, not zero demand or confirmed vacancy closures."));
+                        continue;
+                    }
+
+                    if (statuses.Any(status => string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        events.Add(new SourceCoverageEventDto(
+                            source,
+                            "removed",
+                            "Refresh failure",
+                            "A failed crawl run was recorded on this date. The missing rows are treated as an observation gap, never as a zero-source count or a closure."));
+                        continue;
+                    }
+
+                    if (statuses.Any(status => string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        events.Add(new SourceCoverageEventDto(
+                            source,
+                            "removed",
+                            "No observations after a successful refresh",
+                            "The source completed a refresh but contributed no snapshot rows on this date. That is zero yield, not proof that every vacancy closed."));
+                        continue;
+                    }
+
+                    events.Add(new SourceCoverageEventDto(
+                        source,
+                        "removed",
+                        "Not observed (no successful run)",
+                        "No completed crawl run is recorded for this date, so the absence is an observation gap rather than measured zero demand."));
+                }
+
+                return change with { Events = events };
+            })
+            .ToList();
+    }
+
+    private static bool IsRegistryCreationOnOrNear(DateTime createdAtUtc, DateOnly snapshotDate)
+    {
+        var created = NzReportingCalendar.LocalDate(createdAtUtc);
+        return created >= snapshotDate.AddDays(-1) && created <= snapshotDate.AddDays(1);
+    }
+
+    private static ConstantSourceComparisonDto BuildConstantSourceComparison(
+        IReadOnlyList<ListingSnapshot> snapshots,
+        IReadOnlyList<DateOnly> orderedDates,
+        IReadOnlyList<RunObservation> runs)
+    {
+        const string eligibilityRule =
+            "Sources with a valid observation (a snapshot row or a completed crawl run) on every Pacific/Auckland day in the comparison window, counted on both sides from that same source set.";
+
+        if (orderedDates.Count == 0)
+        {
+            return UnavailableConstantComparison(
+                "No retained daily snapshots are available, so a constant-source comparison cannot be computed.",
+                eligibilityRule);
+        }
+
+        var toDate = orderedDates[^1];
+        var fromDate = toDate.AddDays(-7);
+        if (orderedDates.Count < 8 || !orderedDates.Contains(fromDate))
+        {
+            return UnavailableConstantComparison(
+                $"At least eight consecutive snapshot days are required for a seven-day comparison; the retained window is {orderedDates[0]:yyyy-MM-dd} to {toDate:yyyy-MM-dd}.",
+                eligibilityRule);
+        }
+
+        var requiredDates = Enumerable.Range(0, 8).Select(offset => fromDate.AddDays(offset)).ToList();
+        var missingDates = requiredDates.Where(date => !orderedDates.Contains(date)).ToList();
+        if (missingDates.Count > 0)
+        {
+            return UnavailableConstantComparison(
+                $"Snapshot day(s) missing inside the comparison window: {string.Join(", ", missingDates.Select(date => date.ToString("yyyy-MM-dd")))}.",
+                eligibilityRule);
+        }
+
+        var completedRuns = runs
+            .Where(run => string.Equals(run.Status, "Completed", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var observedSources = snapshots
+            .Select(snapshot => snapshot.Source)
+            .Concat(completedRuns.Select(run => run.Source))
+            .Where(source => !string.IsNullOrWhiteSpace(source))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(source => source, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var observations = new HashSet<(string Source, DateOnly Date)>(new SourceDateComparer());
+        foreach (var snapshot in snapshots)
+        {
+            observations.Add((snapshot.Source, snapshot.SnapshotDate));
+        }
+
+        foreach (var run in completedRuns)
+        {
+            observations.Add((run.Source, run.LocalDate));
+        }
+
+        var eligible = observedSources
+            .Where(source => requiredDates.All(date => observations.Contains((source, date))))
+            .OrderBy(source => source, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (eligible.Count == 0)
+        {
+            return UnavailableConstantComparison(
+                $"No source has a valid observation on every day from {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}; a like-for-like comparison would be fabricated.",
+                eligibilityRule);
+        }
+
+        var eligibleSet = eligible.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rawFrom = CountActive(snapshots, fromDate, null);
+        var rawTo = CountActive(snapshots, toDate, null);
+        var from = CountActive(snapshots, fromDate, eligibleSet);
+        var to = CountActive(snapshots, toDate, eligibleSet);
+        var change = ChangeMapper.ToDto(ChangeCalculation.Compute(to, from));
+        var rawChange = ChangeMapper.ToDto(ChangeCalculation.Compute(rawTo, rawFrom));
+        var residual = rawChange.AbsoluteChange is { } rawAbsolute && change.AbsoluteChange is { } constantAbsolute
+            ? rawAbsolute - constantAbsolute
+            : (int?)null;
+
+        return new ConstantSourceComparisonDto(
+            true,
+            null,
+            fromDate.ToString("yyyy-MM-dd"),
+            toDate.ToString("yyyy-MM-dd"),
+            observedSources.Count,
+            eligible.Count,
+            from,
+            to,
+            change,
+            rawFrom,
+            rawTo,
+            rawChange,
+            residual,
+            eligibilityRule,
+            eligible);
+    }
+
+    private static int CountActive(
+        IReadOnlyList<ListingSnapshot> snapshots,
+        DateOnly date,
+        IReadOnlySet<string>? sources) =>
+        snapshots
+            .Where(snapshot => snapshot.SnapshotDate == date
+                && snapshot.IsActive
+                && (sources is null || sources.Contains(snapshot.Source)))
+            .Select(snapshot => snapshot.ContentHash)
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
+    private static ConstantSourceComparisonDto UnavailableConstantComparison(string reason, string rule) =>
+        new(
+            false,
+            reason,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            rule,
+            []);
+
+    private sealed record RunObservation(string Source, DateOnly LocalDate, string Status);
+
+    private sealed record SourceRegistryRow(string Name, bool Enabled, DateTime? RetiredAt, DateTime CreatedAt);
+
+    private sealed class SourceDateComparer : IEqualityComparer<(string Source, DateOnly Date)>
+    {
+        public bool Equals((string Source, DateOnly Date) x, (string Source, DateOnly Date) y) =>
+            string.Equals(x.Source, y.Source, StringComparison.OrdinalIgnoreCase) && x.Date == y.Date;
+
+        public int GetHashCode((string Source, DateOnly Date) obj) =>
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Source), obj.Date);
+    }
+
+
 
     private static SnapshotCoverageDto BuildCoverage(
         IReadOnlyList<ListingSnapshot> snapshots,
@@ -327,7 +632,7 @@ public sealed class HistoryService(
             points.Add(new ActiveTrendPointDto(date, activeCount, sources.Count, changed, added, removed));
             if (changed)
             {
-                changes.Add(new SourceCoverageChangeDto(date, added, removed));
+                changes.Add(new SourceCoverageChangeDto(date, added, removed, []));
             }
 
             previousSources = sources;

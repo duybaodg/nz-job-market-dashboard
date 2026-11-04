@@ -21,10 +21,45 @@ public sealed record WeeklyNewListingDto(
     string? CoverageStartDate,
     string? Note);
 
+/// <summary>
+/// A source appearing or disappearing between two retained snapshots, with an
+/// evidence-based classification. A missing source is never automatically a
+/// closure, and a returning source is never automatically organic growth.
+/// </summary>
+public sealed record SourceCoverageEventDto(
+    string Source,
+    string Direction,
+    string Classification,
+    string Evidence);
+
 public sealed record SourceCoverageChangeDto(
     string SnapshotDate,
     IReadOnlyList<string> SourcesAdded,
-    IReadOnlyList<string> SourcesRemoved);
+    IReadOnlyList<string> SourcesRemoved,
+    IReadOnlyList<SourceCoverageEventDto> Events);
+
+/// <summary>
+/// A like-for-like active-listing comparison over the sources that have a valid
+/// observation on every day of the window. The raw comparison is retained beside
+/// it, and the residual between them is left explicit rather than labelled as
+/// organic demand.
+/// </summary>
+public sealed record ConstantSourceComparisonDto(
+    bool Available,
+    string? Reason,
+    string? FromSnapshotDate,
+    string? ToSnapshotDate,
+    int? ObservedSourceCount,
+    int? EligibleSourceCount,
+    int? FromActiveCount,
+    int? ToActiveCount,
+    ChangeDto? Change,
+    int? RawFromActiveCount,
+    int? RawToActiveCount,
+    ChangeDto? RawChange,
+    int? CollectionAssociatedResidual,
+    string EligibilityRule,
+    IReadOnlyList<string> Sources);
 
 public sealed record ActiveTrendPointDto(
     string SnapshotDate,
@@ -92,6 +127,7 @@ public sealed record HistoryDto(
     IReadOnlyList<WeeklyNewListingDto> WeeklyNewListings,
     IReadOnlyList<ActiveTrendPointDto> ActiveTrend,
     IReadOnlyList<SourceCoverageChangeDto> CoverageChanges,
+    ConstantSourceComparisonDto ConstantSourceComparison,
     HistoryFilterDto Filter,
     string ScopeNote,
     string Note);

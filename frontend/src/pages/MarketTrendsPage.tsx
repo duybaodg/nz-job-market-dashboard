@@ -200,6 +200,7 @@ export function MarketTrendsPage() {
 
   const coverage = history?.coverage
   const missingSnapshotDays = coverage?.missingDates.length ?? 0
+  const constantComparison = history?.constantSourceComparison
   const deduplication = overview?.deduplication
   // Round 15 (M-5): a unique-vacancy count is global (dedup groups cannot be
   // filtered by the current facets). Under an active filter, show the filtered
@@ -435,6 +436,97 @@ export function MarketTrendsPage() {
             <Suspense fallback={chartFallback}>
               <ActiveTrendChart points={history?.activeTrend ?? []} coverageChanges={history?.coverageChanges ?? []} />
             </Suspense>
+          )}
+        </section>
+
+        <section className="panel trend-panel" id="constant-source" aria-label="Constant-source comparison">
+          <div className="panel-header">
+            <div>
+              <h2>Constant-source comparison</h2>
+              <p>
+                Compares the latest snapshot with the snapshot seven days earlier using only sources that were observed
+                on every day in between. Raw totals stay visible beside it.
+              </p>
+            </div>
+          </div>
+          {historyQuery.isError ? (
+            <div className="empty-state error-state" role="alert">
+              Constant-source coverage could not be loaded. This is not evidence of zero source coverage.
+            </div>
+          ) : historyQuery.isLoading ? (
+            <div className="chart-empty" aria-busy="true">
+              Loading constant-source coverage…
+            </div>
+          ) : !constantComparison?.available ? (
+            <div className="chart-empty">
+              <strong>Constant-source comparison unavailable.</strong>{' '}
+              {constantComparison?.reason ?? 'No comparable source observations are retained for this window.'}
+            </div>
+          ) : (
+            <div className="trend-stack">
+              <div className="constant-source-grid">
+                <div>
+                  <span>Constant-source active change</span>
+                  <strong>{constantComparison.change ? describeChange(constantComparison.change) : 'Unavailable'}</strong>
+                  <small>
+                    {constantComparison.fromActiveCount?.toLocaleString('en-NZ')} →{' '}
+                    {constantComparison.toActiveCount?.toLocaleString('en-NZ')} active listings,{' '}
+                    {constantComparison.eligibleSourceCount} of {constantComparison.observedSourceCount} sources eligible
+                  </small>
+                </div>
+                <div>
+                  <span>Raw active change (all sources)</span>
+                  <strong>{constantComparison.rawChange ? describeChange(constantComparison.rawChange) : 'Unavailable'}</strong>
+                  <small>
+                    {constantComparison.rawFromActiveCount?.toLocaleString('en-NZ')} →{' '}
+                    {constantComparison.rawToActiveCount?.toLocaleString('en-NZ')} active listings across every observed
+                    source
+                  </small>
+                </div>
+                <div>
+                  <span>Collection-associated residual</span>
+                  <strong>
+                    {constantComparison.collectionAssociatedResidual == null
+                      ? 'Unavailable'
+                      : `${constantComparison.collectionAssociatedResidual > 0 ? '+' : ''}${constantComparison.collectionAssociatedResidual.toLocaleString('en-NZ')}`}
+                  </strong>
+                  <small>
+                    Raw total change minus the constant-source change. This is an explicit residual that includes source
+                    mix and collection effects; it is not a measure of organic demand.
+                  </small>
+                </div>
+              </div>
+              <table className="constant-source-table">
+                <caption>Constant-source decomposition for {constantComparison.fromSnapshotDate} to {constantComparison.toSnapshotDate} (Pacific/Auckland snapshot dates)</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Source set</th>
+                    <th scope="col">From {constantComparison.fromSnapshotDate}</th>
+                    <th scope="col">To {constantComparison.toSnapshotDate}</th>
+                    <th scope="col">Absolute change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Constant sources only</th>
+                    <td>{constantComparison.fromActiveCount?.toLocaleString('en-NZ')}</td>
+                    <td>{constantComparison.toActiveCount?.toLocaleString('en-NZ')}</td>
+                    <td>{constantComparison.change?.absoluteChange ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">All observed sources (raw)</th>
+                    <td>{constantComparison.rawFromActiveCount?.toLocaleString('en-NZ')}</td>
+                    <td>{constantComparison.rawToActiveCount?.toLocaleString('en-NZ')}</td>
+                    <td>{constantComparison.rawChange?.absoluteChange ?? '—'}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="muted chart-caption">{constantComparison.eligibilityRule}</p>
+              <details>
+                <summary>Eligible sources ({constantComparison.sources.length})</summary>
+                <p className="muted">{constantComparison.sources.join(', ')}</p>
+              </details>
+            </div>
           )}
         </section>
 

@@ -72,14 +72,27 @@ export function ActiveTrendChart({ points, coverageChanges }: ActiveTrendChartPr
 
       {coverageChanges.length > 0 ? (
         <div className="coverage-notes">
-          <h3>Source-coverage changes</h3>
+          <h3>Source-coverage changes, classified</h3>
           <ul>
             {coverageChanges.map((change) => (
               <li key={change.snapshotDate}>
-                <strong>{change.snapshotDate}</strong>{' '}
-                {change.sourcesAdded.length > 0 ? `added ${change.sourcesAdded.join(', ')}` : null}
-                {change.sourcesAdded.length > 0 && change.sourcesRemoved.length > 0 ? '; ' : ''}
-                {change.sourcesRemoved.length > 0 ? `removed ${change.sourcesRemoved.join(', ')}` : null}
+                <strong>{change.snapshotDate}</strong>
+                {change.events.length > 0 ? (
+                  <ul>
+                    {change.events.map((event) => (
+                      <li key={`${change.snapshotDate}-${event.source}-${event.direction}`}>
+                        <strong>{event.classification}</strong> — {event.source} ({event.direction}). {event.evidence}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <>
+                    {' '}
+                    {change.sourcesAdded.length > 0 ? `added ${change.sourcesAdded.join(', ')}` : null}
+                    {change.sourcesAdded.length > 0 && change.sourcesRemoved.length > 0 ? '; ' : ''}
+                    {change.sourcesRemoved.length > 0 ? `removed ${change.sourcesRemoved.join(', ')}` : null}
+                  </>
+                )}
               </li>
             ))}
           </ul>

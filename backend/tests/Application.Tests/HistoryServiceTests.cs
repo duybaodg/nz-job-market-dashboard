@@ -263,6 +263,121 @@ public sealed class HistoryServiceTests
     }
 
     [Fact]
+    public async Task Constant_source_comparison_excludes_a_newly_covered_source_and_reconciles_the_residual()
+    {
+        await using var dbContext = CreateDbContext();
+        var firstDay = new DateOnly(2026, 10, 7);
+        var lastDay = new DateOnly(2026, 10, 14);
+        Seed(dbContext, firstDay, lastDay);
+        AddListing(dbContext, firstDay, "alpha-1", "Alpha",
+            new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), lastDay);
+        AddListing(dbContext, firstDay, "alpha-2", "Alpha",
+            new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc), lastDay);
+        // A newly covered source contributes one listing only on the last day.
+        AddListing(dbContext, lastDay, "new-source", "NewCoverage",
+            new DateTime(2026, 10, 14, 0, 0, 0, DateTimeKind.Utc), lastDay);
+        dbContext.JobSources.Add(new JobSource
+        {
+            Id = Guid.NewGuid(),
+            Name = "NewCoverage",
+            Method = "scraping",
+            Parser = "generic",
+            Enabled = true,
+            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, DateTimeKind.Utc),
+            UpdatedAt = new DateTime(2026, 10, 14, 0, 0, 0, DateTimeKind.Utc)
+        });
+        await dbContext.SaveChangesAsync();
+
+        var history = await new HistoryService(dbContext, new TestClock(Now)).GetHistoryAsync(7, CancellationToken.None);
+        var comparison = history.ConstantSourceComparison;
+
+        comparison.Available.Should().BeTrue();
+        comparison.FromSnapshotDate.Should().Be("2026-10-07");
+        comparison.ToSnapshotDate.Should().Be("2026-10-14");
+        comparison.EligibleSourceCount.Should().Be(1);
+        comparison.Sources.Should().Equal("Alpha");
+        comparison.Change!.AbsoluteChange.Should().Be(0, "the like-for-like set is unchanged");
+        comparison.RawChange!.AbsoluteChange.Should().Be(1, "the raw total rose only because a source was added");
+        comparison.CollectionAssociatedResidual.Should().Be(1);
+        comparison.CollectionAssociatedResidual.Should().Be(
+            comparison.RawChange.AbsoluteChange - comparison.Change.AbsoluteChange,
+            "the decomposition must reconcile to the raw total change");
+
+        var addedEvent = history.CoverageChanges
+            .Single(change => change.SnapshotDate == "2026-10-14")
+            .Events.Single(entry => entry.Source == "NewCoverage");
+        addedEvent.Classification.Should().Be("Configuration added");
+    }
+
+    [Fact]
+    public async Task Failed_refresh_is_an_observation_gap_and_recovery_is_not_organic_growth()
+    {
+        await using var dbContext = CreateDbContext();
+        var firstDay = new DateOnly(2026, 10, 7);
+        var lastDay = new DateOnly(2026, 10, 14);
+        Seed(dbContext, firstDay, lastDay);
+        AddListing(dbContext, firstDay, "alpha", "Alpha",
+            new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), lastDay);
+        // Beta is observed through 10/10, fails on 10/11, then recovers on 10/13.
+        AddListing(dbContext, firstDay, "beta", "Beta",
+            new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc), new DateOnly(2026, 10, 10));
+        AddListing(dbContext, new DateOnly(2026, 10, 13), "beta", "Beta",
+            new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc), lastDay);
+        dbContext.JobSources.Add(new JobSource
+        {
+            Id = Guid.NewGuid(),
+            Name = "Beta",
+            Method = "scraping",
+            Parser = "generic",
+            Enabled = true,
+            CreatedAt = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc),
+            UpdatedAt = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
+        dbContext.CrawlRuns.Add(new CrawlRun
+        {
+            Id = Guid.NewGuid(),
+            Source = "Beta",
+            Status = "Failed",
+            StartedAt = new DateTime(2026, 10, 11, 1, 0, 0, DateTimeKind.Utc),
+            FinishedAt = new DateTime(2026, 10, 11, 1, 1, 0, DateTimeKind.Utc),
+            ErrorMessage = "HTTP 503"
+        });
+        await dbContext.SaveChangesAsync();
+
+        var history = await new HistoryService(dbContext, new TestClock(Now)).GetHistoryAsync(7, CancellationToken.None);
+
+        var removal = history.CoverageChanges
+            .Single(change => change.SnapshotDate == "2026-10-11")
+            .Events.Single(entry => entry.Source == "Beta");
+        removal.Classification.Should().Be("Refresh failure");
+        removal.Evidence.Should().Contain("never as a zero-source count or a closure");
+
+        var recovery = history.CoverageChanges
+            .Single(change => change.SnapshotDate == "2026-10-13")
+            .Events.Single(entry => entry.Source == "Beta");
+        recovery.Classification.Should().Be("Recovery");
+        recovery.Evidence.Should().Contain("collection recovery");
+    }
+
+    [Fact]
+    public async Task Constant_source_comparison_is_unavailable_when_the_window_is_incomplete()
+    {
+        await using var dbContext = CreateDbContext();
+        var firstDay = new DateOnly(2026, 10, 9);
+        var lastDay = new DateOnly(2026, 10, 14);
+        Seed(dbContext, firstDay, lastDay);
+        AddListing(dbContext, firstDay, "alpha", "Alpha",
+            new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), lastDay);
+        await dbContext.SaveChangesAsync();
+
+        var history = await new HistoryService(dbContext, new TestClock(Now)).GetHistoryAsync(7, CancellationToken.None);
+
+        history.ConstantSourceComparison.Available.Should().BeFalse();
+        history.ConstantSourceComparison.Reason.Should().Contain("At least eight consecutive snapshot days");
+        history.ConstantSourceComparison.Change.Should().BeNull();
+    }
+
+    [Fact]
     public async Task History_is_bounded_to_the_requested_period_window()
     {
         await using var dbContext = CreateDbContext();

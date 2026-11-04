@@ -158,7 +158,16 @@ public sealed class ApiPayloadContractTests
             Require(history,
                 "generatedAtUtc", "coverage", "latestActiveCount", "latestSnapshotDate",
                 "activeChange", "comparableFromDate", "newListings", "weeklyNewListings",
-                "activeTrend", "coverageChanges", "filter", "scopeNote", "note");
+                "activeTrend", "coverageChanges", "constantSourceComparison", "filter", "scopeNote", "note");
+            Require(history,
+                "constantSourceComparison.available", "constantSourceComparison.reason",
+                "constantSourceComparison.fromSnapshotDate", "constantSourceComparison.toSnapshotDate",
+                "constantSourceComparison.observedSourceCount", "constantSourceComparison.eligibleSourceCount",
+                "constantSourceComparison.fromActiveCount", "constantSourceComparison.toActiveCount",
+                "constantSourceComparison.change", "constantSourceComparison.rawFromActiveCount",
+                "constantSourceComparison.rawToActiveCount", "constantSourceComparison.rawChange",
+                "constantSourceComparison.collectionAssociatedResidual",
+                "constantSourceComparison.eligibilityRule", "constantSourceComparison.sources");
             RequireNonNull(history, "generatedAtUtc", "latestActiveCount", "latestSnapshotDate");
             Require(history,
                 "filter.region", "filter.roleFamily", "filter.seniority", "filter.skill",
@@ -209,8 +218,14 @@ public sealed class ApiPayloadContractTests
 
             Require(history,
                 "coverageChanges[0].snapshotDate", "coverageChanges[0].sourcesAdded",
-                "coverageChanges[0].sourcesRemoved");
+                "coverageChanges[0].sourcesRemoved", "coverageChanges[0].events");
             RequireNonNull(history, "coverageChanges[0].snapshotDate");
+            Require(history,
+                "coverageChanges[0].events[0].source", "coverageChanges[0].events[0].direction",
+                "coverageChanges[0].events[0].classification", "coverageChanges[0].events[0].evidence");
+            RequireNonNull(history,
+                "constantSourceComparison.available", "constantSourceComparison.eligibilityRule",
+                "coverageChanges[0].events[0].classification");
         }
     }
 
