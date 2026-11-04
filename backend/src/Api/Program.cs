@@ -150,6 +150,10 @@ app.MapGet("/api/analytics/freshness", async (
 
 app.MapGet("/api/analytics/history", async (
         int? days,
+        string? region,
+        string? roleFamily,
+        string? seniority,
+        string? skill,
         IHistoryService historyService,
         CancellationToken cancellationToken) =>
     {
@@ -158,7 +162,17 @@ app.MapGet("/api/analytics/history", async (
             return Results.BadRequest(new { error = "days must be between 1 and 365" });
         }
 
-        return Results.Ok(await historyService.GetHistoryAsync(days ?? 7, cancellationToken));
+        if (new[] { region, roleFamily, seniority, skill }.Any(value => value is { Length: > 120 }))
+        {
+            return Results.BadRequest(new { error = "history filters must be 120 characters or fewer" });
+        }
+
+        var filter = new HistoryFilter(
+            CleanHistoryFilter(region),
+            CleanHistoryFilter(roleFamily),
+            CleanHistoryFilter(seniority),
+            CleanHistoryFilter(skill));
+        return Results.Ok(await historyService.GetHistoryAsync(days ?? 7, filter, cancellationToken));
     })
     .WithName("GetAnalyticsHistory");
 
@@ -316,5 +330,8 @@ app.MapPost("/api/admin/salaries/audit", async (
         CancellationToken cancellationToken) =>
     Results.Ok(await salaryAuditService.RunAsync(cancellationToken)))
     .WithName("RunSalaryAudit");
+
+static string? CleanHistoryFilter(string? value) =>
+    string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
 app.Run();

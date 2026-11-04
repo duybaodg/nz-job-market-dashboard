@@ -122,6 +122,7 @@ describe('API payload contract', () => {
       'activeChange.comparisonAvailable', 'activeChange.current',
       'newListings.days', 'newListings.dateBasis', 'newListings.note',
       'newListings.interval.label', 'newListings.change.current',
+      'filter.hasFilters', 'filter.historyFilterSupported', 'filter.note', 'scopeNote',
       'weeklyNewListings[0].weekStartLocal', 'weeklyNewListings[0].weekEndLocalExclusive',
       'weeklyNewListings[0].count', 'weeklyNewListings[0].isPartial',
       'activeTrend[0].snapshotDate', 'activeTrend[0].activeCount', 'activeTrend[0].sourceCount',

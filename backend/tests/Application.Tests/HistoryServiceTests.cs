@@ -150,6 +150,119 @@ public sealed class HistoryServiceTests
     }
 
     [Fact]
+    public async Task Ten_days_of_snapshots_cannot_produce_a_complete_seven_day_comparison()
+    {
+        await using var dbContext = CreateDbContext();
+        var firstDay = new DateOnly(2026, 10, 6);
+        var lastDay = new DateOnly(2026, 10, 15);
+        Seed(dbContext, firstDay, lastDay);
+        AddListing(dbContext, firstDay, "ten-day", "Alpha", new DateTime(2026, 10, 6, 0, 0, 0, DateTimeKind.Utc));
+        await dbContext.SaveChangesAsync();
+
+        var history = await new HistoryService(dbContext, new TestClock(Now)).GetHistoryAsync(7, CancellationToken.None);
+
+        history.Coverage.SnapshotDays.Should().Be(10);
+        history.Coverage.MissingDates.Should().BeEmpty();
+        history.NewListings.CurrentPeriodCovered.Should().BeTrue("the last seven complete days are retained");
+        history.NewListings.Change.ComparisonAvailable.Should().BeFalse(
+            "the previous equal period starts before the retained ten-day window");
+        history.NewListings.Note.Should().Contain("previous period");
+    }
+
+    [Fact]
+    public async Task A_missing_day_inside_the_window_makes_the_comparison_unavailable()
+    {
+        await using var dbContext = CreateDbContext();
+        SeedCompleteWindow(dbContext);
+        await dbContext.SaveChangesAsync();
+        var missingDay = new DateOnly(2026, 10, 10);
+        dbContext.ListingSnapshots.RemoveRange(
+            dbContext.ListingSnapshots.Where(snapshot => snapshot.SnapshotDate == missingDay));
+        await dbContext.SaveChangesAsync();
+
+        var history = await new HistoryService(dbContext, new TestClock(Now)).GetHistoryAsync(7, CancellationToken.None);
+
+        history.Coverage.MissingDates.Should().Contain("2026-10-10");
+        history.NewListings.CurrentPeriodCovered.Should().BeFalse();
+        history.NewListings.Change.ComparisonAvailable.Should().BeFalse();
+        history.NewListings.Note.Should().Contain("not every day");
+    }
+
+    [Fact]
+    public async Task Filtered_history_uses_period_appropriate_snapshots_and_keeps_inactive_discoveries()
+    {
+        await using var dbContext = CreateDbContext();
+        var firstDay = new DateOnly(2026, 10, 1);
+        var lastDay = new DateOnly(2026, 10, 14);
+        Seed(dbContext, firstDay, lastDay);
+        // A pre-existing listing keeps a snapshot row on every day of the
+        // fixture, including 2026-10-01 before any period listing appeared.
+        AddListing(dbContext, firstDay, "baseline", "Alpha",
+            new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), lastDay);
+
+        // Data & Analytics: one listing discovered in the previous period and
+        // later inactive, plus two discovered in the current period.
+        AddListing(dbContext, new DateOnly(2026, 10, 2), "da-old", "Alpha",
+            new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc), lastDay,
+            roleFamily: "Data & Analytics", activeUntil: new DateOnly(2026, 10, 5));
+        AddListing(dbContext, new DateOnly(2026, 10, 9), "da-new-1", "Beta",
+            new DateTime(2026, 10, 9, 0, 0, 0, DateTimeKind.Utc), lastDay,
+            roleFamily: "Data & Analytics");
+        AddListing(dbContext, new DateOnly(2026, 10, 10), "da-new-2", "Beta",
+            new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc), lastDay,
+            roleFamily: "Data & Analytics");
+
+        // Two Software Engineering listings, one in each period.
+        AddListing(dbContext, new DateOnly(2026, 10, 3), "se-old", "Alpha",
+            new DateTime(2026, 10, 3, 0, 0, 0, DateTimeKind.Utc), lastDay);
+        AddListing(dbContext, new DateOnly(2026, 10, 11), "se-new", "Gamma",
+            new DateTime(2026, 10, 11, 0, 0, 0, DateTimeKind.Utc), lastDay);
+        await dbContext.SaveChangesAsync();
+
+        var service = new HistoryService(dbContext, new TestClock(Now));
+        var filtered = await service.GetHistoryAsync(
+            7,
+            new HistoryFilter(RoleFamily: "Data & Analytics"),
+            CancellationToken.None);
+        var unfiltered = await service.GetHistoryAsync(7, CancellationToken.None);
+
+        filtered.Filter.HistoryFilterSupported.Should().BeTrue();
+        filtered.Filter.RoleFamily.Should().Be("Data & Analytics");
+        filtered.NewListings.Change.Current.Should().Be(2);
+        filtered.NewListings.Change.Previous.Should().Be(1,
+            "the prior-period listing is retained in that period even though it is now inactive");
+        filtered.NewListings.Change.AbsoluteChange.Should().Be(1);
+        filtered.NewListings.Change.PercentChange.Should().Be(100m);
+        filtered.NewListings.Change.ComparisonAvailable.Should().BeTrue();
+
+        unfiltered.NewListings.Change.Current.Should().Be(3);
+        unfiltered.NewListings.Change.Previous.Should().Be(2);
+        unfiltered.NewListings.Change.AbsoluteChange.Should().Be(1);
+        unfiltered.NewListings.Change.PercentChange.Should().Be(50m);
+    }
+
+    [Fact]
+    public async Task Skill_filtered_history_is_declared_unavailable_instead_of_substituted()
+    {
+        await using var dbContext = CreateDbContext();
+        SeedCompleteWindow(dbContext);
+        await dbContext.SaveChangesAsync();
+
+        var history = await new HistoryService(dbContext, new TestClock(Now)).GetHistoryAsync(
+            7,
+            new HistoryFilter(Skill: "Python"),
+            CancellationToken.None);
+
+        history.Filter.HasFilters.Should().BeTrue();
+        history.Filter.HistoryFilterSupported.Should().BeFalse();
+        history.NewListings.CurrentPeriodCovered.Should().BeFalse();
+        history.NewListings.Change.ComparisonAvailable.Should().BeFalse();
+        history.NewListings.Change.PercentChange.Should().BeNull();
+        history.NewListings.Note.Should().Contain("do not retain skill tags");
+        history.ScopeNote.Should().Contain("show all tracked listings");
+    }
+
+    [Fact]
     public async Task History_is_bounded_to_the_requested_period_window()
     {
         await using var dbContext = CreateDbContext();
@@ -234,30 +347,33 @@ public sealed class HistoryServiceTests
         string hash,
         string source,
         DateTime firstSeen,
-        DateOnly? lastDay = null)
+        DateOnly? lastDay = null,
+        string roleFamily = "Software Engineering",
+        DateOnly? activeUntil = null)
     {
         var end = lastDay ?? new DateOnly(2026, 10, 15);
+        var jobId = Guid.NewGuid();
         for (var day = fromDay; day <= end; day = day.AddDays(1))
         {
             dbContext.ListingSnapshots.Add(new ListingSnapshot
             {
                 Id = Guid.NewGuid(),
                 SnapshotDate = day,
-                JobId = Guid.NewGuid(),
+                JobId = jobId,
                 Source = source,
                 SourceCategory = "company",
                 ContentHash = hash,
-                Title = "Software Engineer",
+                Title = roleFamily == "Data & Analytics" ? "Data Analyst" : "Software Engineer",
                 HiringEmployer = source,
                 WorkMode = "Hybrid",
                 Seniority = "Senior",
                 EmploymentType = "Full-time",
-                RoleFamily = "Software Engineering",
+                RoleFamily = roleFamily,
                 SalaryCurrency = "NZD",
                 SalaryPeriod = "Year",
                 FirstSeenAt = firstSeen,
                 LastSeenAt = firstSeen.AddDays(1),
-                IsActive = true,
+                IsActive = activeUntil is null || day <= activeUntil,
                 CapturedAtUtc = firstSeen
             });
         }

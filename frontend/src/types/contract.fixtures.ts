@@ -254,6 +254,16 @@ export const historyFixture: History = {
     },
   ],
   coverageChanges: [{ snapshotDate: '2026-10-17', sourcesAdded: ['PlaceMe IT'], sourcesRemoved: ['JobSeek'] }],
+  filter: {
+    region: null,
+    roleFamily: null,
+    seniority: null,
+    skill: null,
+    hasFilters: false,
+    historyFilterSupported: true,
+    note: 'No cohort filter is applied; history shows all tracked listings.',
+  },
+  scopeNote: 'Historical panels show all tracked listings because no cohort filter is selected.',
   note: 'History is reconstructed from retained daily listing snapshots only.',
 }
 

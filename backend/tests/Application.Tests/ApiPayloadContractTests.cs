@@ -158,8 +158,12 @@ public sealed class ApiPayloadContractTests
             Require(history,
                 "generatedAtUtc", "coverage", "latestActiveCount", "latestSnapshotDate",
                 "activeChange", "comparableFromDate", "newListings", "weeklyNewListings",
-                "activeTrend", "coverageChanges", "note");
+                "activeTrend", "coverageChanges", "filter", "scopeNote", "note");
             RequireNonNull(history, "generatedAtUtc", "latestActiveCount", "latestSnapshotDate");
+            Require(history,
+                "filter.region", "filter.roleFamily", "filter.seniority", "filter.skill",
+                "filter.hasFilters", "filter.historyFilterSupported", "filter.note", "scopeNote");
+            RequireNonNull(history, "filter.hasFilters", "filter.historyFilterSupported", "filter.note", "scopeNote");
 
             Require(history,
                 "coverage.firstDate", "coverage.lastDate", "coverage.snapshotDays",

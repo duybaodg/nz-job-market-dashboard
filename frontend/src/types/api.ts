@@ -252,6 +252,16 @@ export type SourceCoverageChange = {
   sourcesRemoved: string[]
 }
 
+export type HistoryFilter = {
+  region: string | null
+  roleFamily: string | null
+  seniority: string | null
+  skill: string | null
+  hasFilters: boolean
+  historyFilterSupported: boolean
+  note: string
+}
+
 export type NewListingPeriod = {
   days: number
   interval: MetricInterval
@@ -272,5 +282,7 @@ export type History = {
   weeklyNewListings: WeeklyNewListingPoint[]
   activeTrend: ActiveTrendPoint[]
   coverageChanges: SourceCoverageChange[]
+  filter: HistoryFilter
+  scopeNote: string
   note: string
 }

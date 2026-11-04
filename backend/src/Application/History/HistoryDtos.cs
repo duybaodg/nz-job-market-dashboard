@@ -39,6 +39,40 @@ public sealed record ActiveTrendPointDto(
 /// previous period and a coverage flag so a partially retained period is never
 /// compared as if complete.
 /// </summary>
+/// <summary>
+/// The cohort selector applied to retained snapshots. Region, role family and
+/// seniority are captured per snapshot row; skills are not, so a skill filter
+/// makes a historical cohort unavailable rather than silently global.
+/// </summary>
+public sealed record HistoryFilter(
+    string? Region = null,
+    string? RoleFamily = null,
+    string? Seniority = null,
+    string? Skill = null)
+{
+    public static readonly HistoryFilter None = new();
+
+    public bool HasFilters =>
+        !string.IsNullOrWhiteSpace(Region)
+        || !string.IsNullOrWhiteSpace(RoleFamily)
+        || !string.IsNullOrWhiteSpace(Seniority)
+        || !string.IsNullOrWhiteSpace(Skill);
+
+    public bool HasSkillFilter => !string.IsNullOrWhiteSpace(Skill);
+
+    /// <summary>Snapshots retain every other facet but never the skill list.</summary>
+    public bool HistorySupported => !HasSkillFilter;
+}
+
+public sealed record HistoryFilterDto(
+    string? Region,
+    string? RoleFamily,
+    string? Seniority,
+    string? Skill,
+    bool HasFilters,
+    bool HistoryFilterSupported,
+    string Note);
+
 public sealed record NewListingPeriodDto(
     int Days,
     MetricIntervalDto Interval,
@@ -58,4 +92,6 @@ public sealed record HistoryDto(
     IReadOnlyList<WeeklyNewListingDto> WeeklyNewListings,
     IReadOnlyList<ActiveTrendPointDto> ActiveTrend,
     IReadOnlyList<SourceCoverageChangeDto> CoverageChanges,
+    HistoryFilterDto Filter,
+    string ScopeNote,
     string Note);

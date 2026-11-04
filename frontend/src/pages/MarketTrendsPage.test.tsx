@@ -69,13 +69,45 @@ describe('MarketTrendsPage reporting period', () => {
 
     renderPage()
 
-    expect(await screen.findByText('Unique vacancies (all listings)')).toBeInTheDocument()
+    expect(await screen.findByText('Unique vacancies (all active listings, as of now)')).toBeInTheDocument()
+  })
+
+  it('requests filtered history and withholds a comparison snapshots cannot support', async () => {
+    location.search = '?period=7&skill=Python'
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockResolvedValue({
+      ...historyFixture,
+      filter: {
+        ...historyFixture.filter,
+        skill: 'Python',
+        hasFilters: true,
+        historyFilterSupported: false,
+        note: 'Historical snapshots do not retain skill tags, so a skill-filtered historical comparison is unavailable. Charts show all tracked listings.',
+      },
+      newListings: {
+        ...historyFixture.newListings,
+        currentPeriodCovered: false,
+        change: {
+          ...historyFixture.newListings.change,
+          comparisonAvailable: false,
+          percentChange: null,
+          note: 'Comparison unavailable.',
+        },
+        note: 'Comparison unavailable: historical snapshots do not retain skill tags, so this cohort cannot be reconstructed. No substitute percentage is shown.',
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => expect(getHistoryMock).toHaveBeenCalledWith(7, expect.objectContaining({ skill: 'Python' })))
+    expect((await screen.findAllByText(/do not retain skill tags/i)).length).toBeGreaterThan(0)
   })
 
   it('fetches retained history for the selected reporting period', async () => {
     const { rerender } = renderPage()
 
-    await waitFor(() => expect(getHistoryMock).toHaveBeenCalledWith(15))
+    await waitFor(() => expect(getHistoryMock).toHaveBeenCalledWith(15, expect.objectContaining({})))
 
     location.search = '?period=7'
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
@@ -85,6 +117,6 @@ describe('MarketTrendsPage reporting period', () => {
       </QueryClientProvider>,
     )
 
-    await waitFor(() => expect(getHistoryMock).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(getHistoryMock).toHaveBeenCalledWith(7, expect.objectContaining({})))
   })
 })

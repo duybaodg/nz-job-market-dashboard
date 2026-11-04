@@ -37,7 +37,7 @@ import {
   salaryDistribution,
   skillDemand,
 } from '../lib/analytics'
-import { computeChange, describeChange } from '../lib/change'
+import { describeChange } from '../lib/change'
 import { formatCurrency, formatNzDateTime } from '../lib/format'
 import {
   buildJobsHref,
@@ -49,7 +49,6 @@ import {
 import { getHistory, getJobs, getOverview } from '../services/api'
 import type { Job } from '../types/api'
 
-const DAY_MS = 24 * 60 * 60 * 1000
 const emptyJobs: Job[] = []
 
 function time(value: string | null): number {
@@ -66,9 +65,14 @@ function applyTrends(jobs: Job[], filters: TrendsFilterState, exclude?: keyof Tr
   )
 }
 
-function countFirstSeenInWindow(jobs: Job[], now: number, startDaysAgo: number, endDaysAgo: number): number {
-  const start = now - startDaysAgo * DAY_MS
-  const end = now - endDaysAgo * DAY_MS
+function countFirstSeenInInterval(
+  jobs: Job[],
+  interval: { startUtc: string; endUtc: string } | null | undefined,
+): number | null {
+  if (!interval) return null
+  const start = time(interval.startUtc)
+  const end = time(interval.endUtc)
+  if (!start || !end) return null
   return jobs.filter((job) => {
     const firstSeen = time(job.firstSeenAt)
     return firstSeen >= start && firstSeen < end
@@ -79,11 +83,27 @@ export function MarketTrendsPage() {
   const { search } = useAppLocation()
   const filters = useMemo(() => parseTrendsFilterState(search), [search])
   const periodDays = Number(filters.period)
+  const filteredScope = Boolean(filters.region || filters.roleFamily || filters.skill || filters.seniority)
+
   const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all', limit: 5000 }) })
   const overviewQuery = useQuery({ queryKey: ['overview'], queryFn: getOverview })
-  // The retained-history period must follow the reporting-period selector,
-  // otherwise a 15/30-day label would show the 7-day figure.
-  const historyQuery = useQuery({ queryKey: ['history', periodDays], queryFn: () => getHistory(periodDays) })
+
+  // Round 20 (A2): history takes the same cohort as the current cards, and the
+  // filter values are part of the query key so an old request can never land
+  // under the newly selected cohort.
+  const historyFilters = useMemo(
+    () => ({
+      region: filters.region || undefined,
+      roleFamily: filters.roleFamily || undefined,
+      seniority: filters.seniority || undefined,
+      skill: filters.skill || undefined,
+    }),
+    [filters.region, filters.roleFamily, filters.seniority, filters.skill],
+  )
+  const historyQuery = useQuery({
+    queryKey: ['history', periodDays, historyFilters],
+    queryFn: () => getHistory(periodDays, historyFilters),
+  })
 
   const allJobs = jobsQuery.data ?? emptyJobs
   const overview = overviewQuery.data
@@ -94,47 +114,63 @@ export function MarketTrendsPage() {
   const familyCohort = useMemo(() => applyTrends(activeCohort, filters, 'roleFamily'), [activeCohort, filters])
   const regionCohort = useMemo(() => applyTrends(activeCohort, filters, 'region'), [activeCohort, filters])
   const skillCohort = useMemo(() => applyTrends(activeCohort, filters, 'skill'), [activeCohort, filters])
+  // Discovery counts include retained rows that have since expired; using only
+  // the active cohort would silently create a survivor-only comparison.
+  const allStatusCohort = useMemo(() => applyTrends(allJobs, filters), [allJobs, filters])
 
-  const filteredScope = Boolean(filters.region || filters.roleFamily || filters.skill || filters.seniority)
+  const historyFilterSupported = history?.filter.historyFilterSupported ?? true
+  const skillFallbackCurrent = useMemo(
+    () =>
+      !historyFilterSupported && filteredScope
+        ? countFirstSeenInInterval(allStatusCohort, history?.newListings.interval)
+        : null,
+    [allStatusCohort, filteredScope, history, historyFilterSupported],
+  )
 
-  // Round 15 (L-4): the backend exposes the configured retention window in the
-  // history payload; never hardcode it here (CRAWLER_RETENTION_DAYS may change).
-  const retentionDays = history?.coverage.retentionDays ?? 20
-
-  // Preferred source: retained daily snapshots. The fallback counts the current
-  // retained rows (first-seen only) and is labelled as such - it is never
-  // presented as retained history.
-  const fallbackNewListings = useMemo(() => {
-    const now = Date.now()
-    const current = countFirstSeenInWindow(cohort, now, periodDays, 0)
-    const previousAvailable = periodDays * 2 <= retentionDays
-    const previous = previousAvailable ? countFirstSeenInWindow(cohort, now, periodDays * 2, periodDays) : null
-    return { current, previous, previousAvailable, change: computeChange(current, previous) }
-  }, [cohort, periodDays, retentionDays])
-
-  // Retained snapshots cannot be filtered by region/family/skill/seniority, so a
-  // filtered view uses the current rows for the filtered cohort instead of
-  // showing an all-listings discovery count beside the filtered cards.
-  const retainedNewListings = filteredScope ? undefined : history?.newListings
-  const newListings = retainedNewListings
-    ? {
-        current: retainedNewListings.change.current,
-        change: retainedNewListings.change,
-        comparisonAvailable: retainedNewListings.change.comparisonAvailable,
-        dateBasis: retainedNewListings.dateBasis,
-        note: retainedNewListings.note,
+  const newListings = useMemo(() => {
+    if (historyQuery.isLoading) {
+      return {
+        status: 'loading' as const,
+        current: null,
+        change: null,
+        comparisonAvailable: false,
+        dateBasis: 'Retained daily snapshots (discovery)',
+        note: 'Loading retained history…',
       }
-    : {
-        current: fallbackNewListings.current,
-        change: fallbackNewListings.change,
-        comparisonAvailable: fallbackNewListings.previousAvailable,
-        dateBasis: 'Current retained rows only (first-seen)',
-        note: filteredScope
-          ? 'Filtered cohort counted from current retained rows; retained daily snapshots cannot be filtered.'
-          : fallbackNewListings.previousAvailable
-            ? 'Fallback: counted from current retained rows because no daily snapshots exist yet.'
-            : `Fallback: current retained rows only; the previous equal period is outside the ${retentionDays}-day retention window.`,
+    }
+
+    if (historyQuery.isError || !history) {
+      return {
+        status: 'error' as const,
+        current: null,
+        change: null,
+        comparisonAvailable: false,
+        dateBasis: 'Retained daily snapshots (discovery)',
+        note: 'Historical snapshots could not be loaded. This is a data-loading failure, not zero discovery.',
       }
+    }
+
+    if (!historyFilterSupported && filteredScope) {
+      return {
+        status: skillFallbackCurrent == null ? ('unavailable' as const) : ('ready' as const),
+        current: skillFallbackCurrent,
+        change: null,
+        comparisonAvailable: false,
+        dateBasis: 'Current retained rows only (discovery), including rows that have since expired',
+        note: history.filter.note,
+      }
+    }
+
+    const period = history.newListings
+    return {
+      status: period.currentPeriodCovered ? ('ready' as const) : ('unavailable' as const),
+      current: period.currentPeriodCovered ? period.change.current : null,
+      change: period.change,
+      comparisonAvailable: period.currentPeriodCovered && period.change.comparisonAvailable,
+      dateBasis: period.dateBasis,
+      note: period.note ?? '',
+    }
+  }, [filteredScope, history, historyFilterSupported, historyQuery.isError, historyQuery.isLoading, skillFallbackCurrent])
 
   const salary = useMemo(() => salaryDistribution(cohort), [cohort])
   const roleSalaries = useMemo(() => salaryByRoleFamily(cohort), [cohort])
@@ -216,7 +252,13 @@ export function MarketTrendsPage() {
           <div>
             <span>Comparison</span>
             <strong>
-              {newListings.comparisonAvailable ? 'Previous equal period' : 'Comparison unavailable'}
+              {newListings.status === 'loading'
+                ? 'Loading retained history…'
+                : newListings.status === 'error'
+                  ? 'Comparison unavailable (load failed)'
+                  : newListings.comparisonAvailable
+                    ? 'Previous equal complete period'
+                    : 'Comparison unavailable'}
             </strong>
           </div>
           <div>
@@ -262,8 +304,16 @@ export function MarketTrendsPage() {
           <StatCard
             icon={CalendarPlus}
             label={`New listings (${filters.period}d)`}
-            value={newListings.current.toLocaleString('en-NZ')}
-            detail={`First seen · ${newListings.comparisonAvailable ? describeChange(newListings.change) : newListings.note ?? 'comparison unavailable'}`}
+            value={newListings.current == null ? 'Unavailable' : newListings.current.toLocaleString('en-NZ')}
+            detail={
+              newListings.status === 'loading'
+                ? 'Loading retained history…'
+                : newListings.status === 'error'
+                  ? newListings.note
+                  : newListings.status === 'unavailable'
+                    ? `First seen · ${newListings.note || 'current period is not fully retained'}`
+                    : `First seen · ${newListings.comparisonAvailable && newListings.change ? describeChange(newListings.change) : newListings.note || 'comparison unavailable'}`
+            }
           />
           <StatCard
             icon={WalletCards}
@@ -358,7 +408,7 @@ export function MarketTrendsPage() {
             {coverage?.hasHistory
               ? `Snapshot coverage ${coverage.firstDate} to ${coverage.lastDate} (${coverage.snapshotDays} daily snapshots${
                   missingSnapshotDays > 0 ? `, ${missingSnapshotDays} missing day${missingSnapshotDays === 1 ? '' : 's'}` : ''
-                }). ${newListings.dateBasis}. ${retainedNewListings?.note ?? ''}`
+                }). ${newListings.dateBasis}. ${newListings.note}`
               : coverage?.note ?? 'No snapshots retained yet; history will appear as daily captures accumulate.'}
           </p>
         </section>

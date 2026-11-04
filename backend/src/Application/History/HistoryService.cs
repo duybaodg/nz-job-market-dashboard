@@ -10,6 +10,8 @@ namespace Application.History;
 public interface IHistoryService
 {
     Task<HistoryDto> GetHistoryAsync(int days, CancellationToken cancellationToken);
+
+    Task<HistoryDto> GetHistoryAsync(int days, HistoryFilter filter, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -27,8 +29,15 @@ public sealed class HistoryService(
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
 
-    public async Task<HistoryDto> GetHistoryAsync(int days, CancellationToken cancellationToken)
+    public Task<HistoryDto> GetHistoryAsync(int days, CancellationToken cancellationToken) =>
+        GetHistoryAsync(days, HistoryFilter.None, cancellationToken);
+
+    public async Task<HistoryDto> GetHistoryAsync(
+        int days,
+        HistoryFilter filter,
+        CancellationToken cancellationToken)
     {
+        filter ??= HistoryFilter.None;
         var period = Math.Clamp(days, 1, 365);
         var now = clock.GetUtcNow().UtcDateTime;
         // Round 15 (H-12): bound the snapshot scan to the requested period plus
@@ -42,17 +51,28 @@ public sealed class HistoryService(
             .ToListAsync(cancellationToken);
 
         var coverage = BuildCoverage(snapshots, now, lifecycle.RetentionDays);
-        var weekly = BuildWeekly(snapshots, coverage, now);
-        var activeTrend = BuildActiveTrend(snapshots, out var coverageChanges);
-        var newListings = BuildNewListings(snapshots, coverage, period, now);
+        var coverageDates = snapshots.Select(snapshot => snapshot.SnapshotDate).ToHashSet();
+        var orderedDates = coverageDates.OrderBy(date => date).ToList();
+        var filterSupported = filter.HistorySupported;
+        var predicate = filterSupported ? BuildPredicate(filter) : null;
+        // A skill filter cannot be reconstructed from snapshots. Charts then stay
+        // global and are labelled as such; the period comparison is withheld.
+        var scoped = predicate is null ? snapshots : snapshots.Where(predicate).ToList();
+
+        // Source coverage is a property of the whole collection, never of the
+        // filtered cohort, so its annotations always use every snapshot.
+        BuildActiveTrend(snapshots, orderedDates, out var coverageChanges);
+        var weekly = BuildWeekly(scoped, coverage, now);
+        var activeTrend = filterSupported ? BuildActiveTrend(scoped, orderedDates, out _) : [];
+        var newListings = BuildNewListings(scoped, coverage, coverageDates, period, now, filterSupported);
 
         var latest = activeTrend.LastOrDefault();
         ChangeDto activeChange;
         string? comparableFromDate = null;
 
-        if (latest is null)
+        if (latest is null || !filterSupported)
         {
-            activeChange = ChangeMapper.ToDto(ChangeCalculation.Compute(0, null));
+            activeChange = ChangeMapper.ToDto(ChangeCalculation.Compute(latest?.ActiveCount ?? 0, null));
         }
         else
         {
@@ -63,6 +83,7 @@ public sealed class HistoryService(
                 ChangeCalculation.Compute(latest.ActiveCount, comparable?.ActiveCount));
         }
 
+        var filterDto = ToFilterDto(filter);
         return new HistoryDto(
             now,
             coverage,
@@ -74,10 +95,66 @@ public sealed class HistoryService(
             weekly,
             activeTrend,
             coverageChanges,
+            filterDto,
+            BuildScopeNote(filter, filterSupported),
             coverage.HasHistory
                 ? "History is reconstructed from retained daily listing snapshots only."
                 : "No daily snapshots have been retained yet, so historical trends are unavailable.");
     }
+
+    private static Func<ListingSnapshot, bool>? BuildPredicate(HistoryFilter filter)
+    {
+        var region = Clean(filter.Region);
+        var roleFamily = Clean(filter.RoleFamily);
+        var seniority = Clean(filter.Seniority);
+
+        if (region is null && roleFamily is null && seniority is null)
+        {
+            return null;
+        }
+
+        return snapshot =>
+            (region is null
+                || string.Equals(snapshot.Region, region, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(snapshot.Location, region, StringComparison.OrdinalIgnoreCase))
+            && (roleFamily is null
+                || string.Equals(snapshot.RoleFamily, roleFamily, StringComparison.OrdinalIgnoreCase))
+            && (seniority is null
+                || string.Equals(snapshot.Seniority, seniority, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static HistoryFilterDto ToFilterDto(HistoryFilter filter)
+    {
+        var region = Clean(filter.Region);
+        var roleFamily = Clean(filter.RoleFamily);
+        var seniority = Clean(filter.Seniority);
+        var skill = Clean(filter.Skill);
+        var hasFilters = region is not null || roleFamily is not null || seniority is not null || skill is not null;
+        var supported = skill is null;
+
+        return new HistoryFilterDto(
+            region,
+            roleFamily,
+            seniority,
+            skill,
+            hasFilters,
+            supported,
+            supported
+                ? hasFilters
+                    ? "Historical charts and comparisons use the same region, role-family and seniority selection as the current cohort."
+                    : "No cohort filter is applied; history shows all tracked listings."
+                : "Historical snapshots do not retain skill tags, so a skill-filtered historical comparison is unavailable. Charts show all tracked listings.");
+    }
+
+    private static string BuildScopeNote(HistoryFilter filter, bool filterSupported) =>
+        !filter.HasFilters
+            ? "Historical panels show all tracked listings because no cohort filter is selected."
+            : filterSupported
+                ? "Historical panels follow the selected region, role family and seniority cohort."
+                : "Historical panels show all tracked listings because snapshots do not retain the selected skill; no substitute percentage is derived.";
+
+    private static string? Clean(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static SnapshotCoverageDto BuildCoverage(
         IReadOnlyList<ListingSnapshot> snapshots,
@@ -219,15 +296,22 @@ public sealed class HistoryService(
 
     private static IReadOnlyList<ActiveTrendPointDto> BuildActiveTrend(
         IReadOnlyList<ListingSnapshot> snapshots,
+        IReadOnlyList<DateOnly> orderedDates,
         out IReadOnlyList<SourceCoverageChangeDto> coverageChanges)
     {
         var changes = new List<SourceCoverageChangeDto>();
         var points = new List<ActiveTrendPointDto>();
+        var byDate = snapshots
+            .GroupBy(snapshot => snapshot.SnapshotDate)
+            .ToDictionary(group => group.Key, group => group.ToList());
         HashSet<string>? previousSources = null;
 
-        foreach (var group in snapshots.GroupBy(snapshot => snapshot.SnapshotDate).OrderBy(group => group.Key))
+        // Iterate every retained date, not only dates with a matching row, so a
+        // filtered cohort's zero days are real zeros rather than missing points.
+        foreach (var dateOnly in orderedDates)
         {
-            var active = group.Where(snapshot => snapshot.IsActive).ToList();
+            var rows = byDate.GetValueOrDefault(dateOnly) ?? [];
+            var active = rows.Where(snapshot => snapshot.IsActive).ToList();
             var activeCount = active.Select(snapshot => snapshot.ContentHash).Distinct(StringComparer.Ordinal).Count();
             var sources = active.Select(snapshot => snapshot.Source).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -238,7 +322,7 @@ public sealed class HistoryService(
                 ? []
                 : previousSources.Except(sources, StringComparer.OrdinalIgnoreCase).OrderBy(source => source).ToList();
             var changed = added.Count > 0 || removed.Count > 0;
-            var date = group.Key.ToString("yyyy-MM-dd");
+            var date = dateOnly.ToString("yyyy-MM-dd");
 
             points.Add(new ActiveTrendPointDto(date, activeCount, sources.Count, changed, added, removed));
             if (changed)
@@ -256,19 +340,27 @@ public sealed class HistoryService(
     private static NewListingPeriodDto BuildNewListings(
         IReadOnlyList<ListingSnapshot> snapshots,
         SnapshotCoverageDto coverage,
+        IReadOnlySet<DateOnly> coverageDates,
         int days,
-        DateTime now)
+        DateTime now,
+        bool historyFilterSupported)
     {
         const string dateBasis = "Crawler first-seen timestamp (discovery), by complete Pacific/Auckland days";
         var interval = NzReportingCalendar.LastCompleteDays(days, now);
         var previous = NzReportingCalendar.PreviousPeriod(interval);
 
-        var firstCoverage = coverage.FirstDate is null ? (DateOnly?)null : DateOnly.Parse(coverage.FirstDate);
-        var currentCovered = firstCoverage is not null && firstCoverage <= interval.StartLocalDate;
-        var previousCovered = firstCoverage is not null && firstCoverage <= previous.StartLocalDate;
+        // A timestamp range is not completeness: every local day in both the
+        // current and previous windows must actually have a retained snapshot.
+        var currentCovered = historyFilterSupported && CoversCompleteWindow(coverageDates, interval);
+        var previousCovered = historyFilterSupported && CoversCompleteWindow(coverageDates, previous);
 
-        var current = CountDistinctFirstSeen(snapshots, interval);
-        var previousCount = previousCovered ? CountDistinctFirstSeen(snapshots, previous) : (int?)null;
+        var current = historyFilterSupported ? CountDistinctFirstSeen(snapshots, interval) : 0;
+        // A comparison is only meaningful when the current period is itself
+        // complete; an incomplete numerator cannot be compared with a complete
+        // previous period.
+        var previousCount = currentCovered && previousCovered
+            ? CountDistinctFirstSeen(snapshots, previous)
+            : (int?)null;
         var change = ChangeMapper.ToDto(ChangeCalculation.Compute(current, previousCount));
 
         string? note = null;
@@ -276,13 +368,17 @@ public sealed class HistoryService(
         {
             note = "No retained snapshots yet; the current period is not covered.";
         }
+        else if (!historyFilterSupported)
+        {
+            note = "Comparison unavailable: historical snapshots do not retain skill tags, so this cohort cannot be reconstructed. No substitute percentage is shown.";
+        }
         else if (!currentCovered)
         {
-            note = $"Snapshot coverage starts {coverage.FirstDate}, so this period is only partially retained.";
+            note = $"Current period is only partially retained: not every day in {interval.StartLocalDate:yyyy-MM-dd} to {interval.EndLocalDateExclusive:yyyy-MM-dd} (exclusive) has a snapshot.";
         }
         else if (!previousCovered)
         {
-            note = "Comparison unavailable: the previous equal period predates retained snapshots.";
+            note = $"Comparison unavailable: not every day in the previous period {previous.StartLocalDate:yyyy-MM-dd} to {previous.EndLocalDateExclusive:yyyy-MM-dd} (exclusive) is retained.";
         }
 
         return new NewListingPeriodDto(
@@ -292,6 +388,19 @@ public sealed class HistoryService(
             currentCovered,
             dateBasis,
             note);
+    }
+
+    private static bool CoversCompleteWindow(IReadOnlySet<DateOnly> coverageDates, ReportingInterval interval)
+    {
+        for (var date = interval.StartLocalDate; date < interval.EndLocalDateExclusive; date = date.AddDays(1))
+        {
+            if (!coverageDates.Contains(date))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static int CountDistinctFirstSeen(IReadOnlyList<ListingSnapshot> snapshots, ReportingInterval interval) =>

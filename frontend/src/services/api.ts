@@ -60,8 +60,18 @@ export function getFreshness() {
   return getJson<Freshness>('/api/analytics/freshness')
 }
 
-export function getHistory(days?: number) {
-  const suffix = days ? `?days=${encodeURIComponent(String(days))}` : ''
+export function getHistory(
+  days?: number,
+  filters?: { region?: string; roleFamily?: string; seniority?: string; skill?: string },
+) {
+  const query = new URLSearchParams()
+  if (days) query.set('days', String(days))
+  if (filters?.region) query.set('region', filters.region)
+  if (filters?.roleFamily) query.set('roleFamily', filters.roleFamily)
+  if (filters?.seniority) query.set('seniority', filters.seniority)
+  if (filters?.skill) query.set('skill', filters.skill)
+
+  const suffix = query.toString() ? `?${query.toString()}` : ''
   return getJson<History>(`/api/analytics/history${suffix}`)
 }
 
