@@ -3,8 +3,10 @@ import '@testing-library/jest-dom/vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
 import { MarketTrendsPage } from './MarketTrendsPage'
 import { historyFixture, jobFixture, overviewFixture } from '../types/contract.fixtures'
+import type { History } from '../types/api'
 
 const { getHistoryMock, getJobsMock, getOverviewMock } = vi.hoisted(() => ({
   getHistoryMock: vi.fn(),
@@ -48,6 +50,70 @@ describe('MarketTrendsPage reporting period', () => {
   })
 
   afterEach(cleanup)
+
+  it('never presents a measured zero while the initial requests are pending', async () => {
+    location.search = '?period=7'
+    const pending = new Promise<never>(() => {})
+    getJobsMock.mockReturnValue(pending)
+    getOverviewMock.mockReturnValue(pending)
+    getHistoryMock.mockReturnValue(pending)
+
+    renderPage()
+
+    expect((await screen.findAllByText('Loading…')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('status').some((status) => /Loading current market metrics/.test(status.textContent ?? ''))).toBe(true)
+  })
+
+  it('shows a load failure instead of zero when the current metrics request fails', async () => {
+    location.search = '?period=7'
+    getJobsMock.mockRejectedValue(new Error('jobs unavailable'))
+    getOverviewMock.mockRejectedValue(new Error('overview unavailable'))
+    getHistoryMock.mockResolvedValue(historyFixture)
+
+    renderPage()
+
+    expect(await screen.findByText(/not zero demand/i)).toBeInTheDocument()
+    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0)
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
+  })
+
+  it('does not let a late response for an old filter overwrite the current cohort', async () => {
+    location.search = '?period=7&region=Auckland'
+    let resolveOld: (value: History) => void = () => {}
+    const oldRequest = new Promise<History>((resolve) => {
+      resolveOld = resolve
+    })
+    const wellingtonHistory = {
+      ...historyFixture,
+      latestActiveCount: 222,
+      latestSnapshotDate: '2026-10-17',
+      filter: { ...historyFixture.filter, region: 'Wellington', hasFilters: true },
+    }
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockImplementation((_days: number, filters: { region?: string }) =>
+      filters?.region === 'Auckland' ? oldRequest : Promise.resolve(wellingtonHistory),
+    )
+
+    const { rerender } = renderPage()
+    location.search = '?period=7&region=Wellington'
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <MarketTrendsPage />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText(/222 listings on the 2026-10-17 snapshot/)).toBeInTheDocument()
+
+    await act(async () => {
+      resolveOld({ ...historyFixture, latestActiveCount: 111, latestSnapshotDate: '2026-10-17' })
+    })
+
+    await waitFor(() => expect(screen.getByText(/222 listings on the 2026-10-17 snapshot/)).toBeInTheDocument())
+    expect(screen.queryByText(/111 listings on the 2026-10-17 snapshot/)).not.toBeInTheDocument()
+  })
 
   it('hides the global unique-vacancy headline when filters are active', async () => {
     location.search = '?period=7&region=Auckland'

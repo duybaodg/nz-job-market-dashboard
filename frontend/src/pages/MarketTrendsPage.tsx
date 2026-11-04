@@ -118,6 +118,9 @@ export function MarketTrendsPage() {
   // the active cohort would silently create a survivor-only comparison.
   const allStatusCohort = useMemo(() => applyTrends(allJobs, filters), [allJobs, filters])
 
+  const metricsLoading = jobsQuery.isLoading || overviewQuery.isLoading
+  const metricsRefreshing = !metricsLoading && (jobsQuery.isFetching || overviewQuery.isFetching)
+  const jobsUnavailable = jobsQuery.isError
   const historyFilterSupported = history?.filter.historyFilterSupported ?? true
   const skillFallbackCurrent = useMemo(
     () =>
@@ -281,31 +284,51 @@ export function MarketTrendsPage() {
 
         {overview ? <DataStatusBanner status={overview.dataStatus} /> : null}
 
-        <section className="stats-grid" aria-busy={overviewQuery.isLoading || jobsQuery.isLoading}>
+        <p className="metric-status" role="status" aria-live="polite">
+          {metricsLoading
+            ? 'Loading current market metrics from the API…'
+            : metricsRefreshing
+              ? 'Refreshing current market metrics; the previous successful response is still shown and marked.'
+              : historyQuery.isLoading
+                ? 'Loading retained historical snapshots…'
+                : historyQuery.isFetching
+                  ? 'Refreshing retained historical snapshots…'
+                  : ''}
+        </p>
+
+        <section className="stats-grid" aria-busy={metricsLoading}>
           <StatCard
             icon={Building2}
             label={showUniqueVacancies ? 'Unique vacancies (all active listings, as of now)' : 'Active tracked listings (as of now)'}
             value={
-              showUniqueVacancies
-                ? overview!.uniqueVacancies!.toLocaleString('en-NZ')
-                : overview
-                  ? cohort.length.toLocaleString('en-NZ')
-                  : 'Unavailable'
+              metricsLoading
+                ? 'Loading…'
+                : jobsUnavailable
+                  ? 'Unavailable'
+                  : showUniqueVacancies
+                    ? overview!.uniqueVacancies!.toLocaleString('en-NZ')
+                    : overview
+                      ? cohort.length.toLocaleString('en-NZ')
+                      : 'Unavailable'
             }
             detail={
-              showUniqueVacancies
-                ? `${deduplication!.activeListings.toLocaleString('en-NZ')} active listings · ${deduplication!.listingsInGroups.toLocaleString('en-NZ')} listings in ${deduplication!.groups} vacancy group${deduplication!.groups === 1 ? '' : 's'} · ${deduplication!.listingsMerged} duplicate row${deduplication!.listingsMerged === 1 ? '' : 's'} removed · ${deduplicationStatus}`
-                : activeChange
-                  ? `As of now · ${describeChange(activeChange)} · ${deduplicationStatus}`
-                  : filteredScope
-                    ? `As of now · comparison unavailable for a filtered cohort · ${deduplicationStatus}`
-                    : `As of now · comparison needs daily snapshots · ${deduplicationStatus}`
+              metricsLoading
+                ? 'Waiting for the active-listing and overview responses before showing a count.'
+                : jobsUnavailable
+                  ? 'The active-listing feed failed to load. This is a loading failure, not zero listings.'
+                  : showUniqueVacancies
+                    ? `${deduplication!.activeListings.toLocaleString('en-NZ')} active listings · ${deduplication!.listingsInGroups.toLocaleString('en-NZ')} listings in ${deduplication!.groups} vacancy group${deduplication!.groups === 1 ? '' : 's'} · ${deduplication!.listingsMerged} duplicate row${deduplication!.listingsMerged === 1 ? '' : 's'} removed · ${deduplicationStatus}`
+                    : activeChange
+                      ? `As of now · ${describeChange(activeChange)} · ${deduplicationStatus}`
+                      : filteredScope
+                        ? `As of now · comparison unavailable for a filtered cohort · ${deduplicationStatus}`
+                        : `As of now · comparison needs daily snapshots · ${deduplicationStatus}`
             }
           />
           <StatCard
             icon={CalendarPlus}
-            label={`New listings (${filters.period}d)`}
-            value={newListings.current == null ? 'Unavailable' : newListings.current.toLocaleString('en-NZ')}
+            label={`New listings (${filters.period}d, first seen)`}
+            value={newListings.current == null ? (newListings.status === 'loading' ? 'Loading…' : 'Unavailable') : newListings.current.toLocaleString('en-NZ')}
             detail={
               newListings.status === 'loading'
                 ? 'Loading retained history…'
@@ -318,15 +341,41 @@ export function MarketTrendsPage() {
           />
           <StatCard
             icon={WalletCards}
-            label="Median advertised salary"
-            value={salary.suppressed ? 'Not enough data' : formatCurrency(salary.median)}
-            detail={`${salary.sampleSize} comparable annual NZD listings of ${cohort.length}${salary.smallSample ? ' · small sample' : ''}`}
+            label="Median advertised salary (active cohort)"
+            value={
+              metricsLoading
+                ? 'Loading…'
+                : jobsUnavailable
+                  ? 'Unavailable'
+                  : salary.suppressed
+                    ? 'Not enough data'
+                    : formatCurrency(salary.median)
+            }
+            detail={
+              metricsLoading
+                ? 'Waiting for the active cohort before computing salary coverage.'
+                : jobsUnavailable
+                  ? 'The active-listing feed failed to load; this is not zero salary data.'
+                  : `${salary.sampleSize} comparable annual NZD listings of ${cohort.length}${salary.smallSample ? ' · small sample' : ''}`
+            }
           />
           <StatCard
             icon={Percent}
-            label="Hiring employers"
-            value={employers.distinctEmployers.toLocaleString('en-NZ')}
-            detail={`${employers.disclosedListings} listings name an employer · ${employers.agencyOnlyListings} agency-only · ${employers.unknownListings} unknown`}
+            label="Hiring employers (active cohort)"
+            value={
+              metricsLoading
+                ? 'Loading…'
+                : jobsUnavailable
+                  ? 'Unavailable'
+                  : employers.distinctEmployers.toLocaleString('en-NZ')
+            }
+            detail={
+              metricsLoading
+                ? 'Waiting for the active cohort before counting employers.'
+                : jobsUnavailable
+                  ? 'The active-listing feed failed to load; this is not zero employers.'
+                  : `${employers.disclosedListings} listings name an employer · ${employers.agencyOnlyListings} agency-only · ${employers.unknownListings} unknown`
+            }
           />
         </section>
 
@@ -344,37 +393,59 @@ export function MarketTrendsPage() {
             <div>
               <dt>Unique vacancies</dt>
               <dd>
-                {showUniqueVacancies
-                  ? `${overview!.uniqueVacancies!.toLocaleString('en-NZ')} validated vacancy groups in the active population`
-                  : `Unavailable — ${deduplicationStatus}`}
+                {metricsLoading
+                  ? 'Loading…'
+                  : showUniqueVacancies
+                    ? `${overview!.uniqueVacancies!.toLocaleString('en-NZ')} validated vacancy groups in the active population`
+                    : `Unavailable — ${deduplicationStatus}`}
                 <small>
-                  {showUniqueVacancies
-                    ? `Active listing rows minus duplicate rows inside validated groups. ${deduplicationStatus}.`
-                    : 'No validated deduplication grouping is available for this capture.'}
+                  {metricsLoading
+                    ? 'Waiting for the overview and validated deduplication metadata.'
+                    : showUniqueVacancies
+                      ? `Active listing rows minus duplicate rows inside validated groups. ${deduplicationStatus}.`
+                      : 'No validated deduplication grouping is available for this capture. No zero is inferred.'}
                 </small>
               </dd>
             </div>
             <div>
               <dt>Active tracked listings</dt>
               <dd>
-                {overview ? `${overview.activeListings.toLocaleString('en-NZ')} source rows` : 'Unavailable'}
+                {metricsLoading
+                  ? 'Loading…'
+                  : jobsUnavailable
+                    ? 'Unavailable'
+                    : overview
+                      ? `${overview.activeListings.toLocaleString('en-NZ')} source rows`
+                      : 'Unavailable'}
                 <small>
-                  {overview
-                    ? `As of ${formatNzDateTime(overview.generatedAtUtc)}; one advertisement per source, before grouping.`
-                    : 'The live overview has not loaded.'}
+                  {metricsLoading
+                    ? 'Waiting for the live overview.'
+                    : jobsUnavailable
+                      ? 'The active-listing feed failed to load; this is not zero listings.'
+                      : overview
+                        ? `As of ${formatNzDateTime(overview.generatedAtUtc)}; one advertisement per source, before grouping.`
+                        : 'The live overview is unavailable.'}
                 </small>
               </dd>
             </div>
             <div>
               <dt>Historical active listings</dt>
               <dd>
-                {history?.latestSnapshotDate
-                  ? `${history.latestActiveCount.toLocaleString('en-NZ')} listings on the ${history.latestSnapshotDate} snapshot`
-                  : 'Unavailable'}
+                {historyQuery.isLoading
+                  ? 'Loading…'
+                  : historyQuery.isError
+                    ? 'Unavailable'
+                    : history?.latestSnapshotDate
+                      ? `${history.latestActiveCount.toLocaleString('en-NZ')} listings on the ${history.latestSnapshotDate} snapshot`
+                      : 'Unavailable'}
                 <small>
-                  {history?.latestSnapshotDate
-                    ? 'Retained daily snapshot as of that Pacific/Auckland capture date; it can differ from the live count because the snapshot is frozen.'
-                    : 'No retained snapshot is available for this period.'}
+                  {historyQuery.isLoading
+                    ? 'Loading retained snapshots…'
+                    : historyQuery.isError
+                      ? 'Retained snapshots could not be loaded; this is not zero historical activity.'
+                      : history?.latestSnapshotDate
+                        ? 'Retained daily snapshot as of that Pacific/Auckland capture date; it can differ from the live count because the snapshot is frozen.'
+                        : 'No retained snapshot is available for this period.'}
                 </small>
               </dd>
             </div>
@@ -406,11 +477,15 @@ export function MarketTrendsPage() {
             </Suspense>
           )}
           <p className="muted chart-caption">
-            {coverage?.hasHistory
-              ? `Snapshot coverage ${coverage.firstDate} to ${coverage.lastDate} (${coverage.snapshotDays} daily snapshots${
-                  missingSnapshotDays > 0 ? `, ${missingSnapshotDays} missing day${missingSnapshotDays === 1 ? '' : 's'}` : ''
-                }). ${newListings.dateBasis}. ${newListings.note}`
-              : coverage?.note ?? 'No snapshots retained yet; history will appear as daily captures accumulate.'}
+            {historyQuery.isLoading
+              ? 'Loading snapshot coverage and retained history…'
+              : historyQuery.isError
+                ? 'Snapshot coverage could not be loaded. This is a request failure, not an absence of history.'
+                : coverage?.hasHistory
+                  ? `Snapshot coverage ${coverage.firstDate} to ${coverage.lastDate} (${coverage.snapshotDays} daily snapshots${
+                      missingSnapshotDays > 0 ? `, ${missingSnapshotDays} missing day${missingSnapshotDays === 1 ? '' : 's'}` : ''
+                    }). ${history?.scopeNote ?? ''} ${newListings.dateBasis}. ${newListings.note}`
+                  : coverage?.note ?? 'No snapshots retained yet; history will appear as daily captures accumulate.'}
           </p>
         </section>
 

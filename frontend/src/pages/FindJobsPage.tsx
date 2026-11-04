@@ -77,6 +77,8 @@ export function FindJobsPage() {
 
   const allJobs = jobsQuery.data ?? emptyJobs
   const overview = overviewQuery.data
+  const jobsLoading = jobsQuery.isLoading
+  const jobsUnavailable = jobsQuery.isError
   const options = useMemo(() => optionsFor(allJobs), [allJobs])
 
   const filtered = useMemo(() => {
@@ -147,22 +149,37 @@ export function FindJobsPage() {
 
         <JobFilters options={options} filters={state.filters} onChange={onFilterChange} />
 
-        <section className="results-panel" id="results">
+        <section className="results-panel" id="results" aria-busy={jobsLoading}>
           <div className="results-header">
             <div>
               <h2>
                 {jobsQuery.isError
                   ? 'Results unavailable'
-                  : `${filtered.length.toLocaleString('en-NZ')} matching ${
-                      state.filters.status === 'active' ? 'active ' : ''
-                    }roles`}
+                  : jobsLoading
+                    ? 'Loading matching roles…'
+                    : `${filtered.length.toLocaleString('en-NZ')} matching ${
+                        state.filters.status === 'active' ? 'active ' : ''
+                      }roles`}
               </h2>
               <FilterChips chips={chips} onRemove={onRemove} onClearAll={onClearAll} />
             </div>
-            <button type="button" className="refresh-button" onClick={exportCsv} disabled={filtered.length === 0}>
+            <button
+              type="button"
+              className="refresh-button"
+              onClick={exportCsv}
+              disabled={filtered.length === 0 || jobsLoading}
+            >
               <Download aria-hidden="true" /> Export CSV
             </button>
           </div>
+
+          <p className="metric-status" role="status" aria-live="polite">
+            {jobsLoading
+              ? 'Loading the listing feed…'
+              : jobsQuery.isFetching
+                ? 'Refreshing the listing feed; the previous successful result is still shown.'
+                : ''}
+          </p>
 
           {jobsQuery.isError ? (
             <div className="empty-state error-state" role="alert">
@@ -185,29 +202,64 @@ export function FindJobsPage() {
           )}
         </section>
 
-        <section className="market-context" aria-label="Market context for the current search">
+        <section className="market-context" aria-label="Market context for the current search" aria-busy={jobsLoading}>
           <div>
             <span>Median advertised salary</span>
-            <strong>{context.salary.suppressed ? 'Not enough data' : formatCurrency(context.salary.median)}</strong>
+            <strong>
+              {jobsLoading
+                ? 'Loading…'
+                : jobsUnavailable
+                  ? 'Unavailable'
+                  : context.salary.suppressed
+                    ? 'Not enough data'
+                    : formatCurrency(context.salary.median)}
+            </strong>
             <small>
-              {context.salary.sampleSize} comparable annual NZD listings
-              {context.salary.smallSample ? ' · small sample' : ''} of {filtered.length}
+              {jobsLoading
+                ? 'Waiting for the matching listing cohort.'
+                : jobsUnavailable
+                  ? 'Listing feed failed to load; this is not zero salary data.'
+                  : `${context.salary.sampleSize} comparable annual NZD listings${context.salary.smallSample ? ' · small sample' : ''} of ${filtered.length}`}
             </small>
           </div>
           <div>
             <span>Leading role family</span>
-            <strong>{context.topFamily?.label ?? '—'}</strong>
-            <small>{context.topFamily ? `${context.topFamily.count} listings · ${context.topFamily.share}%` : 'no data'}</small>
+            <strong>{jobsLoading ? 'Loading…' : jobsUnavailable ? 'Unavailable' : context.topFamily?.label ?? '—'}</strong>
+            <small>
+              {jobsLoading
+                ? 'Waiting for the matching listing cohort.'
+                : jobsUnavailable
+                  ? 'Listing feed failed to load; this is not an empty cohort.'
+                  : context.topFamily
+                    ? `${context.topFamily.count} listings · ${context.topFamily.share}%`
+                    : 'No listing in this successful cohort has a role family.'}
+            </small>
           </div>
           <div>
             <span>Most requested skill</span>
-            <strong>{context.topSkill?.skill ?? '—'}</strong>
-            <small>{context.topSkill ? `${context.topSkill.count} listings` : 'no skills extracted'}</small>
+            <strong>{jobsLoading ? 'Loading…' : jobsUnavailable ? 'Unavailable' : context.topSkill?.skill ?? '—'}</strong>
+            <small>
+              {jobsLoading
+                ? 'Waiting for the matching listing cohort.'
+                : jobsUnavailable
+                  ? 'Listing feed failed to load; this is not zero skill extraction.'
+                  : context.topSkill
+                    ? `${context.topSkill.count} listings`
+                    : 'No skill was extracted from this successful cohort.'}
+            </small>
           </div>
           <div>
             <span>Top region</span>
-            <strong>{context.topRegion?.label ?? '—'}</strong>
-            <small>{context.topRegion ? `${context.topRegion.count} listings` : 'no data'}</small>
+            <strong>{jobsLoading ? 'Loading…' : jobsUnavailable ? 'Unavailable' : context.topRegion?.label ?? '—'}</strong>
+            <small>
+              {jobsLoading
+                ? 'Waiting for the matching listing cohort.'
+                : jobsUnavailable
+                  ? 'Listing feed failed to load; this is not zero regional demand.'
+                  : context.topRegion
+                    ? `${context.topRegion.count} listings`
+                    : 'No listing in this successful cohort has a normalised region.'}
+            </small>
           </div>
         </section>
       </main>
