@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Building2, CalendarPlus, Percent, WalletCards } from 'lucide-react'
+import { FilterChips } from '../components/jobs/FilterChips'
 import { AppSidebar } from '../components/layout/AppSidebar'
 import { DataStatusBanner } from '../components/dashboard/DataStatusBanner'
 import { RankedBarList } from '../components/charts/RankedBarList'
@@ -44,6 +45,7 @@ import {
   parseTrendsFilterState,
   serializeTrendsFilterState,
   setTrendsFilter,
+  trendsFilterChips,
   type TrendsFilterState,
 } from '../lib/urlState'
 import { getHistory, getJobs, getOverview } from '../services/api'
@@ -84,6 +86,7 @@ export function MarketTrendsPage() {
   const filters = useMemo(() => parseTrendsFilterState(search), [search])
   const periodDays = Number(filters.period)
   const filteredScope = Boolean(filters.region || filters.roleFamily || filters.skill || filters.seniority)
+  const chips = trendsFilterChips(filters)
 
   const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all', limit: 5000 }) })
   const overviewQuery = useQuery({ queryKey: ['overview'], queryFn: getOverview })
@@ -192,7 +195,13 @@ export function MarketTrendsPage() {
     navigate(query ? `/trends?${query}` : '/trends')
   }
 
-  const clearFilters = () => navigate('/trends')
+  const clearFilters = () => {
+    // "Clear all" clears the cohort filters but keeps the reporting period the
+    // user selected; the period is a reporting control, not a cohort filter.
+    const next: TrendsFilterState = { ...filters, region: '', roleFamily: '', skill: '', seniority: '' }
+    const query = serializeTrendsFilterState(next)
+    navigate(query ? `/trends?${query}` : '/trends')
+  }
 
   const matchingJobsHref = buildJobsHref({
     location: filters.region,
@@ -242,6 +251,16 @@ export function MarketTrendsPage() {
             <strong>Tracked NZ tech listings</strong>
           </div>
           <div>
+            <span>Current cohort</span>
+            <strong>
+              {metricsLoading
+                ? 'Loading…'
+                : jobsUnavailable
+                  ? 'Unavailable'
+                  : `${cohort.length.toLocaleString('en-NZ')} active listing${cohort.length === 1 ? '' : 's'}`}
+            </strong>
+          </div>
+          <div>
             <span>Reporting period</span>
             <select
               aria-label="Reporting period"
@@ -252,6 +271,16 @@ export function MarketTrendsPage() {
               <option value="15">Last 15 complete days</option>
               <option value="30">Last 30 complete days</option>
             </select>
+          </div>
+          <div>
+            <span>Window (NZ)</span>
+            <strong>
+              {history
+                ? `${history.newListings.interval.startLocalDate} to ${history.newListings.interval.endLocalDateExclusive} (end exclusive)`
+                : historyQuery.isLoading
+                  ? 'Loading…'
+                  : 'Unavailable'}
+            </strong>
           </div>
           <div>
             <span>Comparison</span>
@@ -267,14 +296,16 @@ export function MarketTrendsPage() {
           </div>
           <div>
             <span>Data freshness</span>
-            <strong>{overview ? formatNzDateTime(overview.dataStatus.lastSuccessfulUpdateUtc) : 'unavailable'}</strong>
+            <strong>
+              {metricsLoading
+                ? 'Loading…'
+                : overview
+                  ? formatNzDateTime(overview.dataStatus.lastSuccessfulUpdateUtc)
+                  : 'Unavailable'}
+            </strong>
           </div>
-          {filteredScope ? (
-            <button type="button" className="clear-all" onClick={clearFilters}>
-              Clear filters
-            </button>
-          ) : null}
         </section>
+        <FilterChips chips={chips} onRemove={(name) => setFilter(name, '')} onClearAll={clearFilters} />
 
         {overviewQuery.isError || jobsQuery.isError ? (
           <section className="empty-state error-state" role="alert">
@@ -455,10 +486,11 @@ export function MarketTrendsPage() {
         <section className="panel trend-panel" id="weekly-trend">
           <div className="panel-header">
             <div>
-              <h2>Weekly new listings</h2>
+              <h2>Weekly new listings (first seen)</h2>
               <p>
-                Unique listings by first-seen week from retained daily snapshots (Pacific/Auckland weeks). Incomplete
-                weeks are labelled and never compared as if complete.
+                Unique listings by first-seen week from retained daily snapshots (Pacific/Auckland weeks). This panel
+                always shows every retained week; the reporting-period selector controls the new-listings card and
+                comparison, not this chart. Incomplete weeks are labelled and never compared as if complete.
               </p>
             </div>
             <CalendarPlus aria-hidden="true" />
@@ -492,11 +524,14 @@ export function MarketTrendsPage() {
         <section className="panel trend-panel" id="active-trend">
           <div className="panel-header">
             <div>
-              <h2>Active listings over time</h2>
+              <h2>Active listings over time (snapshot stock)</h2>
               <p>
                 Historical active counts from retained daily snapshots, with source-coverage changes annotated so an
-                added source is never read as demand growth.
+                added source is never read as demand growth. The seven-day active change always compares the latest
+                snapshot with the snapshot seven days earlier; the reporting-period selector does not move it. The line
+                follows the selected cohort; the source-coverage annotations describe the whole collection.
               </p>
+              <p className="muted chart-caption">{history?.scopeNote}</p>
             </div>
           </div>
           {historyQuery.isError ? (
@@ -520,7 +555,8 @@ export function MarketTrendsPage() {
               <h2>Constant-source comparison</h2>
               <p>
                 Compares the latest snapshot with the snapshot seven days earlier using only sources that were observed
-                on every day in between. Raw totals stay visible beside it.
+                on every day in between. Raw totals stay visible beside it. This collection panel uses all tracked
+                listings and is not narrowed by the cohort filter above.
               </p>
             </div>
           </div>
@@ -571,31 +607,33 @@ export function MarketTrendsPage() {
                   </small>
                 </div>
               </div>
-              <table className="constant-source-table">
-                <caption>Constant-source decomposition for {constantComparison.fromSnapshotDate} to {constantComparison.toSnapshotDate} (Pacific/Auckland snapshot dates)</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Source set</th>
-                    <th scope="col">From {constantComparison.fromSnapshotDate}</th>
-                    <th scope="col">To {constantComparison.toSnapshotDate}</th>
-                    <th scope="col">Absolute change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <th scope="row">Constant sources only</th>
-                    <td>{constantComparison.fromActiveCount?.toLocaleString('en-NZ')}</td>
-                    <td>{constantComparison.toActiveCount?.toLocaleString('en-NZ')}</td>
-                    <td>{constantComparison.change?.absoluteChange ?? '—'}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">All observed sources (raw)</th>
-                    <td>{constantComparison.rawFromActiveCount?.toLocaleString('en-NZ')}</td>
-                    <td>{constantComparison.rawToActiveCount?.toLocaleString('en-NZ')}</td>
-                    <td>{constantComparison.rawChange?.absoluteChange ?? '—'}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <div className="table-scroll">
+                <table className="constant-source-table">
+                  <caption>Constant-source decomposition for {constantComparison.fromSnapshotDate} to {constantComparison.toSnapshotDate} (Pacific/Auckland snapshot dates)</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Source set</th>
+                      <th scope="col">From {constantComparison.fromSnapshotDate}</th>
+                      <th scope="col">To {constantComparison.toSnapshotDate}</th>
+                      <th scope="col">Absolute change</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <th scope="row">Constant sources only</th>
+                      <td>{constantComparison.fromActiveCount?.toLocaleString('en-NZ')}</td>
+                      <td>{constantComparison.toActiveCount?.toLocaleString('en-NZ')}</td>
+                      <td>{constantComparison.change?.absoluteChange ?? '—'}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">All observed sources (raw)</th>
+                      <td>{constantComparison.rawFromActiveCount?.toLocaleString('en-NZ')}</td>
+                      <td>{constantComparison.rawToActiveCount?.toLocaleString('en-NZ')}</td>
+                      <td>{constantComparison.rawChange?.absoluteChange ?? '—'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
               <p className="muted chart-caption">{constantComparison.eligibilityRule}</p>
               <details>
                 <summary>Eligible sources ({constantComparison.sources.length})</summary>
@@ -620,6 +658,10 @@ export function MarketTrendsPage() {
               onSelect={(label) => setFilter('roleFamily', filters.roleFamily === label ? '' : label)}
               selectLabel="Filter by role family"
             />
+            <p className="muted chart-caption">
+              Active now · denominator {familyCohort.length.toLocaleString('en-NZ')} active listings matching the other
+              filters. Selecting a family narrows the rest of the page but not this list.
+            </p>
             {selectedFamilyRow ? (
               <div className="drilldown">
                 <h3>Seniority within {selectedFamilyRow.label}</h3>
@@ -654,8 +696,9 @@ export function MarketTrendsPage() {
               selectLabel="Filter by region"
             />
             <p className="muted chart-caption">
-              {regions.nationwide} nationwide · {regions.multiLocation} multi-location listings (counted once under their
-              primary region)
+              Active now · denominator {regionCohort.length.toLocaleString('en-NZ')} active listings matching the other
+              filters. {regions.nationwide} nationwide · {regions.multiLocation} multi-location listings (counted once
+              under their primary region).
             </p>
           </section>
 
@@ -694,6 +737,11 @@ export function MarketTrendsPage() {
             <Suspense fallback={chartFallback}>
               <SalaryDistributionChart distribution={salary} />
             </Suspense>
+            <p className="muted chart-caption">
+              Active now · sample {salary.sampleSize.toLocaleString('en-NZ')} comparable annual NZD listings out of{' '}
+              {salary.cohortCount.toLocaleString('en-NZ')} active listings in this cohort. Missing and incomparable
+              salaries are excluded, never treated as zero.
+            </p>
           </section>
 
           <section className="panel">
@@ -733,6 +781,10 @@ export function MarketTrendsPage() {
                 </tbody>
               </table>
             )}
+            <p className="muted chart-caption">
+              Active now · denominator {cohort.length.toLocaleString('en-NZ')} active listings in this cohort. Families
+              with fewer than five comparable annual NZD samples are omitted, not shown as zero.
+            </p>
           </section>
 
           <section className="panel">
@@ -752,6 +804,7 @@ export function MarketTrendsPage() {
               emptyMessage="No employer is named in this cohort."
             />
             <p className="muted chart-caption">
+              Active now · denominator {cohort.length.toLocaleString('en-NZ')} active listings in this cohort.{' '}
               {employers.disclosedListings} listings disclose an employer · {employers.agencyOnlyListings} agency-only ·{' '}
               {employers.unknownListings} unknown.
               {overview
@@ -782,7 +835,18 @@ export function MarketTrendsPage() {
                 </li>
                 <li>
                   <strong>New listings</strong> use the crawler first-seen timestamp (discovery), not a substituted
-                  posted date. <strong>Active tracked listings</strong> is a as-of count of rows still active.
+                  posted date. <strong>Active tracked listings</strong> is an as-of count of rows still active.
+                </li>
+                <li>
+                  <strong>Reporting period</strong> is the last {filters.period} complete Pacific/Auckland calendar days,
+                  ending at the most recent local midnight; the in-progress local day is excluded. The new-listings card,
+                  its comparison and the window label follow this selector. Weekly and active-trend panels use their own
+                  stated snapshot ranges.
+                </li>
+                <li>
+                  <strong>First seen</strong> is a flow (listings discovered inside a window) and <strong>active
+                  listings</strong> is a stock (rows active at a capture time). The two populations are labelled
+                  separately and are not expected to match.
                 </li>
                 <li>
                   <strong>Median advertised salary</strong> is the midpoint of comparable permanent annual NZD
@@ -821,11 +885,19 @@ export function MarketTrendsPage() {
                 </li>
                 <li>
                   Historical active counts compare the latest snapshot with the snapshot exactly seven days earlier when
-                  it exists; otherwise the comparison is declared unavailable.
+                  it exists; otherwise the comparison is declared unavailable. The seven-day change is not moved by the
+                  reporting-period selector.
                 </li>
                 <li>
-                  Source-coverage changes are annotated on the active trend so added sources cannot silently look like
-                  demand growth.
+                  Source-coverage changes are classified from retained observations and crawl-run outcomes. A missing
+                  source can mean a refresh failure or an observation gap, never automatically zero demand or a closure.
+                  The constant-source comparison restricts both sides to sources observed every day and leaves the
+                  collection-associated residual explicit.
+                </li>
+                <li>
+                  Historical panels follow the selected region, role family and seniority cohort when snapshots retain
+                  those fields. Skills are not stored in snapshots, so a skill-filtered historical comparison is declared
+                  unavailable rather than substituted.
                 </li>
               </ul>
               {employers.agencyOnlyListings > 0 ? (

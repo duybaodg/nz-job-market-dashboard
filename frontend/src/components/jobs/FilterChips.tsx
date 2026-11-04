@@ -1,13 +1,18 @@
 import { X } from 'lucide-react'
-import type { JobFilterChip, JobFilterState } from '../../lib/urlState'
 
-type FilterChipsProps = {
-  chips: JobFilterChip[]
-  onRemove: (name: keyof JobFilterState) => void
+export type FilterChip<T extends string = string> = {
+  name: T
+  label: string
+  display: string
+}
+
+type FilterChipsProps<T extends string> = {
+  chips: FilterChip<T>[]
+  onRemove: (name: T) => void
   onClearAll: () => void
 }
 
-export function FilterChips({ chips, onRemove, onClearAll }: FilterChipsProps) {
+export function FilterChips<T extends string>({ chips, onRemove, onClearAll }: FilterChipsProps<T>) {
   if (chips.length === 0) {
     return null
   }

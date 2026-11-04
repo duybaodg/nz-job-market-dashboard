@@ -221,17 +221,39 @@ export const defaultTrendsFilters: TrendsFilterState = {
 }
 
 const TRENDS_KEYS: Array<keyof TrendsFilterState> = ['period', 'region', 'roleFamily', 'skill', 'seniority']
+const TRENDS_FILTER_KEYS: Array<Exclude<keyof TrendsFilterState, 'period'>> = [
+  'region',
+  'roleFamily',
+  'skill',
+  'seniority',
+]
+const MAX_FILTER_LENGTH = 120
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
+
+/**
+ * A filter value from the URL is untrusted input. Trim it, reject control
+ * characters and overlong values, and fall back to "no filter" rather than
+ * rendering a broken or misleading cohort.
+ */
+function safeFilterValue(value: string | null): string {
+  if (value == null) return ''
+  const trimmed = value.trim()
+  if (trimmed.length === 0 || trimmed.length > MAX_FILTER_LENGTH || CONTROL_CHARACTERS.test(trimmed)) {
+    return ''
+  }
+  return trimmed
+}
 
 export function parseTrendsFilterState(search: string): TrendsFilterState {
   const params = new URLSearchParams(search)
   const filters: TrendsFilterState = { ...defaultTrendsFilters }
 
-  for (const key of TRENDS_KEYS) {
-    const value = params.get(key)
-    if (value != null) filters[key] = value
+  for (const key of TRENDS_FILTER_KEYS) {
+    filters[key] = safeFilterValue(params.get(key))
   }
 
-  if (!oneOf(TREND_PERIODS, filters.period)) filters.period = defaultTrendsFilters.period
+  const period = params.get('period')
+  filters.period = oneOf(TREND_PERIODS, period) ? period : defaultTrendsFilters.period
   return filters
 }
 
@@ -252,6 +274,26 @@ export function setTrendsFilter(state: TrendsFilterState, name: keyof TrendsFilt
   const filters = { ...state, [name]: value }
   if (name === 'period' && !oneOf(TREND_PERIODS, filters.period)) filters.period = defaultTrendsFilters.period
   return filters
+}
+
+export type TrendsFilterChip = {
+  name: Exclude<keyof TrendsFilterState, 'period'>
+  label: string
+  display: string
+}
+
+const TRENDS_CHIP_LABELS: Record<Exclude<keyof TrendsFilterState, 'period'>, string> = {
+  region: 'Region',
+  roleFamily: 'Role family',
+  skill: 'Skill',
+  seniority: 'Seniority',
+}
+
+/** Visible chips for the trends cohort; the reporting period is a separate control. */
+export function trendsFilterChips(state: TrendsFilterState): TrendsFilterChip[] {
+  return TRENDS_FILTER_KEYS
+    .filter((key) => Boolean(state[key]))
+    .map((key) => ({ name: key, label: TRENDS_CHIP_LABELS[key], display: state[key] }))
 }
 
 /** Builds a Find-jobs URL from the trends view so a chart click applies a visible filter. */

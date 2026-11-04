@@ -12,6 +12,7 @@ import {
   setJobFilter,
   setJobPage,
   setJobSort,
+  trendsFilterChips,
   type JobViewState,
 } from './urlState'
 
@@ -100,5 +101,29 @@ describe('trends URL state', () => {
     expect(parseTrendsFilterState(query)).toEqual(state)
     expect(parseTrendsFilterState('')).toEqual({ period: '7', region: '', roleFamily: '', skill: '', seniority: '' })
     expect(parseTrendsFilterState('?period=999').period).toBe('7')
+  })
+
+  it('trims values and falls back safely on invalid trend filter input', () => {
+    expect(parseTrendsFilterState('?region=%20Auckland%20&roleFamily=Security').region).toBe('Auckland')
+
+    const longValue = 'x'.repeat(121)
+    const parsed = parseTrendsFilterState(`?region=${longValue}&roleFamily=%00bad&skill=%20%20&seniority=Lead`)
+    expect(parsed.region).toBe('')
+    expect(parsed.roleFamily).toBe('')
+    expect(parsed.skill).toBe('')
+    expect(parsed.seniority).toBe('Lead')
+  })
+
+  it('lists visible trend filter chips without the reporting period', () => {
+    const chips = trendsFilterChips({
+      period: '15',
+      region: 'Auckland',
+      roleFamily: 'Data & Analytics',
+      skill: '',
+      seniority: 'Senior',
+    })
+
+    expect(chips.map((chip) => chip.name)).toEqual(['region', 'roleFamily', 'seniority'])
+    expect(chips.find((chip) => chip.name === 'roleFamily')?.display).toBe('Data & Analytics')
   })
 })

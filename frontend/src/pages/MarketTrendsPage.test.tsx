@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { MarketTrendsPage } from './MarketTrendsPage'
+import { navigate } from '../hooks/useAppLocation'
 import { historyFixture, jobFixture, overviewFixture } from '../types/contract.fixtures'
 import type { History } from '../types/api'
 
@@ -115,6 +116,18 @@ describe('MarketTrendsPage reporting period', () => {
     expect(screen.queryByText(/111 listings on the 2026-10-17 snapshot/)).not.toBeInTheDocument()
   })
 
+  it('clears cohort filters while keeping the selected reporting period', async () => {
+    location.search = '?period=15&region=Auckland&roleFamily=Data+%26+Analytics'
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockResolvedValue(historyFixture)
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear all' }))
+    expect(vi.mocked(navigate)).toHaveBeenCalledWith('/trends?period=15')
+  })
+
   it('hides the global unique-vacancy headline when filters are active', async () => {
     location.search = '?period=7&region=Auckland'
     getJobsMock.mockResolvedValue([jobFixture])
@@ -123,8 +136,10 @@ describe('MarketTrendsPage reporting period', () => {
 
     renderPage()
 
-    expect((await screen.findAllByText('Active tracked listings')).length).toBeGreaterThan(0)
-    expect(screen.queryByText('Unique vacancies (all listings)')).not.toBeInTheDocument()
+    expect((await screen.findAllByText(/Active tracked listings/)).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Unique vacancies (all active listings, as of now)')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Remove filter Region: Auckland/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument()
   })
 
   it('shows the labelled global unique-vacancy headline without filters', async () => {

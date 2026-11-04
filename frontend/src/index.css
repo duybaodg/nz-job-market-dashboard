@@ -339,6 +339,7 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
 .constant-source-grid span { display: block; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
 .constant-source-grid strong { display: block; margin-top: 5px; font-size: 17px; overflow-wrap: anywhere; }
 .constant-source-grid small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.table-scroll { overflow-x: auto; max-width: 100%; }
 .constant-source-table { min-width: 0; }
 .constant-source-table th, .constant-source-table td { padding: 8px; font-size: 13px; }
 .constant-source-table caption { caption-side: top; text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 6px; }
