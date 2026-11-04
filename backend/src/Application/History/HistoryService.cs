@@ -364,19 +364,34 @@ public sealed class HistoryService(
             .OrderBy(source => source, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var observations = new HashSet<(string Source, DateOnly Date)>(new SourceDateComparer());
-        foreach (var snapshot in snapshots)
-        {
-            observations.Add((snapshot.Source, snapshot.SnapshotDate));
-        }
+        var runsBySourceAndDate = runs
+            .GroupBy(run => (run.Source, run.LocalDate))
+            .ToDictionary(group => group.Key, group => group.ToList(), new SourceDateComparer());
+        var sourcesWithRunRecords = runs
+            .Select(run => run.Source)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var snapshotsBySourceAndDate = snapshots
+            .GroupBy(snapshot => (snapshot.Source, snapshot.SnapshotDate))
+            .Select(group => group.Key)
+            .ToHashSet(new SourceDateComparer());
 
-        foreach (var run in completedRuns)
+        // A snapshot row alone is not proof of a refresh: the daily capture also
+        // writes retained inactive rows, so a failed source can still appear on
+        // every day. When run records exist for a source, only a Completed run
+        // proves an observation; snapshot rows are the fallback for older sources
+        // that have no retained run history at all.
+        bool HasValidObservation(string source, DateOnly date)
         {
-            observations.Add((run.Source, run.LocalDate));
+            if (runsBySourceAndDate.TryGetValue((source, date), out var sourceRuns))
+            {
+                return sourceRuns.Any(run => string.Equals(run.Status, "Completed", StringComparison.OrdinalIgnoreCase));
+            }
+
+            return !sourcesWithRunRecords.Contains(source) && snapshotsBySourceAndDate.Contains((source, date));
         }
 
         var eligible = observedSources
-            .Where(source => requiredDates.All(date => observations.Contains((source, date))))
+            .Where(source => requiredDates.All(date => HasValidObservation(source, date)))
             .OrderBy(source => source, StringComparer.OrdinalIgnoreCase)
             .ToList();
 

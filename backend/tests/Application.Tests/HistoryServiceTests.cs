@@ -323,6 +323,10 @@ public sealed class HistoryServiceTests
             new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc), new DateOnly(2026, 10, 10));
         AddListing(dbContext, new DateOnly(2026, 10, 13), "beta", "Beta",
             new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc), lastDay);
+        // The daily capture also writes inactive rows, so Beta still appears on
+        // the failed days. Those rows must not prove a valid observation.
+        AddInactiveSnapshot(dbContext, new DateOnly(2026, 10, 11), "beta", "Beta");
+        AddInactiveSnapshot(dbContext, new DateOnly(2026, 10, 12), "beta", "Beta");
         dbContext.JobSources.Add(new JobSource
         {
             Id = Guid.NewGuid(),
@@ -357,6 +361,11 @@ public sealed class HistoryServiceTests
             .Events.Single(entry => entry.Source == "Beta");
         recovery.Classification.Should().Be("Recovery");
         recovery.Evidence.Should().Contain("collection recovery");
+
+        history.ConstantSourceComparison.Sources.Should().Contain("Alpha");
+        history.ConstantSourceComparison.Sources.Should().NotContain(
+            "Beta",
+            "a source with a failed refresh must not enter the constant-source set just because suspended rows were captured");
     }
 
     [Fact]
@@ -492,6 +501,35 @@ public sealed class HistoryServiceTests
                 CapturedAtUtc = firstSeen
             });
         }
+    }
+
+    private static void AddInactiveSnapshot(
+        ApplicationDbContext dbContext,
+        DateOnly day,
+        string hash,
+        string source)
+    {
+        dbContext.ListingSnapshots.Add(new ListingSnapshot
+        {
+            Id = Guid.NewGuid(),
+            SnapshotDate = day,
+            JobId = Guid.NewGuid(),
+            Source = source,
+            SourceCategory = "company",
+            ContentHash = hash,
+            Title = "Software Engineer",
+            HiringEmployer = source,
+            WorkMode = "Hybrid",
+            Seniority = "Senior",
+            EmploymentType = "Full-time",
+            RoleFamily = "Software Engineering",
+            SalaryCurrency = "NZD",
+            SalaryPeriod = "Year",
+            FirstSeenAt = new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc),
+            LastSeenAt = new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc),
+            IsActive = false,
+            CapturedAtUtc = new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 
     private static ApplicationDbContext CreateDbContext()
