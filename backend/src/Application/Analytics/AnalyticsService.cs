@@ -342,7 +342,10 @@ public sealed class AnalyticsService(
             0,
             0,
             DeduplicationEngine.MaxGroupSize,
-            null);
+            null,
+            0,
+            "not-run",
+            "Deduplication has not run; no unique-vacancy count is published.");
     }
 
     private async Task<IReadOnlyDictionary<Guid, EmployerType>> LoadEmployerTypesAsync(CancellationToken cancellationToken)

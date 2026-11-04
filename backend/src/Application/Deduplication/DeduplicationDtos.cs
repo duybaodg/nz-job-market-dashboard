@@ -4,6 +4,17 @@ namespace Application.Deduplication;
 /// The published dedup state. <see cref="Active"/> is only true once at least
 /// one full pass has completed and passed its integrity validation; until then
 /// no unique-vacancy count is published.
+///
+/// The three counting terms are deliberately separate:
+/// <see cref="Groups"/> is the number of vacancy groups,
+/// <see cref="ListingsInGroups"/> is every active source row that participates
+/// in one of those groups, and <see cref="ListingsMerged"/> is the duplicate
+/// rows removed from the listing count (rows-in-groups − groups). They are
+/// computed from the current active population so the identity
+/// vacancies = activeListings − listingsMerged always holds.
+///
+/// <see cref="Status"/> is "validated", "not-run", "failed" or "invalid"; a
+/// missing pass is never presented as a successful zero-merge run.
 /// </summary>
 public sealed record DeduplicationSummaryDto(
     bool Active,
@@ -15,7 +26,10 @@ public sealed record DeduplicationSummaryDto(
     int ListingsMerged,
     int ReviewCandidates,
     int GroupCap,
-    string? LastRunStatus);
+    string? LastRunStatus,
+    int ListingsInGroups,
+    string Status,
+    string? UnavailableReason);
 
 public sealed record DuplicateGroupMemberDto(
     Guid JobId,

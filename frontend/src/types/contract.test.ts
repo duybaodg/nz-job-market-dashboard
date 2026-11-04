@@ -101,6 +101,7 @@ describe('API payload contract', () => {
       'dataStatus.state', 'dataStatus.lastSuccessfulUpdateUtc', 'dataStatus.newestListingSeenUtc',
       'dataStatus.enabledSources', 'dataStatus.enabledSourcesWithRecentSuccess', 'dataStatus.message',
       'uniqueVacancies', 'deduplication.listingsMerged', 'deduplication.groups',
+      'deduplication.listingsInGroups', 'deduplication.status', 'deduplication.unavailableReason',
       'discoveryBasis',
     ])
     requireNonNull(overviewFixture, [

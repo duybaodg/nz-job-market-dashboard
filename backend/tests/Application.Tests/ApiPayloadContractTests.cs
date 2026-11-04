@@ -83,6 +83,13 @@ public sealed class ApiPayloadContractTests
             "newlyDiscovered", "newlyPosted",
             "salary", "employers", "dataStatus", "mostActiveRegion", "mostRequestedSkill",
             "interval", "uniqueVacancies", "deduplication", "discoveryBasis");
+        Require(overview,
+            "deduplication.active", "deduplication.lastValidatedAtUtc", "deduplication.matchVersion",
+            "deduplication.activeListings", "deduplication.uniqueVacancies", "deduplication.groups",
+            "deduplication.listingsMerged", "deduplication.listingsInGroups",
+            "deduplication.reviewCandidates", "deduplication.groupCap",
+            "deduplication.lastRunStatus", "deduplication.status", "deduplication.unavailableReason");
+        RequireNonNull(overview, "deduplication.status");
 
         RequireNonNull(overview,
             "generatedAtUtc", "activeListings", "postedDateKnown", "postedDateMissing",

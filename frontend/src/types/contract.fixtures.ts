@@ -130,9 +130,12 @@ export const overviewFixture: Overview = {
     uniqueVacancies: 432,
     groups: 1,
     listingsMerged: 1,
+    listingsInGroups: 2,
     reviewCandidates: 1,
     groupCap: 4,
     lastRunStatus: 'Completed',
+    status: 'validated',
+    unavailableReason: null,
   },
   discoveryBasis:
     'Listings first seen or posted inside the window, including rows that have since expired while still inside the 20-day retention window. Not a census of every vacancy ever advertised.',

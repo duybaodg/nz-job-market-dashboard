@@ -317,8 +317,11 @@ public sealed class ListingDeduplicationService(
 
         dbContext.DuplicateReviewCandidates.AddRange(newCandidates);
 
-        var merged = groups.Sum(group => Math.Max(0, group.MemberCount - 1));
-        var uniqueVacancies = Math.Max(0, activeJobs.Count - merged);
+        var population = DeduplicationPopulation.FromActiveGroupSizes(
+            activeJobs.Count,
+            groups.Select(group => group.MemberCount));
+        var merged = population.ListingsMerged;
+        var uniqueVacancies = population.UniqueVacancies;
         var valid = Validate(groups, allJobs);
 
         run.FinishedAt = DateTime.UtcNow;
@@ -344,14 +347,27 @@ public sealed class ListingDeduplicationService(
             newCandidates.Count,
             valid);
 
-        return ToSummary(run, groups.Count, merged, activeJobs.Count, newCandidates.Count, active: valid);
+        return ToSummary(run, population, newCandidates.Count, active: valid);
     }
 
     public async Task<DeduplicationSummaryDto> GetSummaryAsync(CancellationToken cancellationToken)
     {
         var activeListings = await dbContext.Jobs.CountAsync(job => job.IsActive, cancellationToken);
-        var groups = await dbContext.DuplicateGroups.AsNoTracking().ToListAsync(cancellationToken);
-        var merged = groups.Sum(group => Math.Max(0, group.MemberCount - 1));
+
+        // Round 20 (A1): derive the headline from the current active population.
+        // The last validated run's stored UniqueVacancies is a historical value
+        // from that run's population; pairing it with today's active listing and
+        // group counts produced impossible headlines (e.g. 718 vacancies from
+        // 705 active listings). The grouping itself is still only published when
+        // a run has passed integrity validation.
+        var activeGroupSizes = await dbContext.Jobs
+            .AsNoTracking()
+            .Where(job => job.IsActive && job.DuplicateGroupId != null)
+            .GroupBy(job => job.DuplicateGroupId!.Value)
+            .Select(group => group.Count())
+            .ToListAsync(cancellationToken);
+        var population = DeduplicationPopulation.FromActiveGroupSizes(activeListings, activeGroupSizes);
+
         var reviews = await dbContext.DuplicateReviewCandidates
             .AsNoTracking()
             .CountAsync(candidate => candidate.ResolvedAt == null, cancellationToken);
@@ -366,17 +382,36 @@ public sealed class ListingDeduplicationService(
             .FirstOrDefaultAsync(cancellationToken);
 
         var active = lastValidated is not null;
+        var (status, reason) = DescribeStatus(active, latestRun);
         return new DeduplicationSummaryDto(
             active,
             lastValidated?.FinishedAt,
             DeduplicationMatchMethods.MatchVersion,
             activeListings,
-            active ? lastValidated!.UniqueVacancies : null,
-            groups.Count,
-            merged,
+            active ? population.UniqueVacancies : null,
+            population.Groups,
+            population.ListingsMerged,
             reviews,
             DeduplicationEngine.MaxGroupSize,
-            latestRun?.Status);
+            latestRun?.Status,
+            population.ListingsInGroups,
+            status,
+            reason);
+    }
+
+    private static (string Status, string? Reason) DescribeStatus(bool active, DeduplicationRun? latestRun)
+    {
+        if (!active)
+        {
+            return latestRun switch
+            {
+                null => ("not-run", "Deduplication has not run; no unique-vacancy count is published."),
+                { Status: "Failed" } => ("failed", "The latest deduplication pass failed; no unique-vacancy count is published."),
+                _ => ("invalid", "No deduplication pass has passed integrity validation; no unique-vacancy count is published.")
+            };
+        }
+
+        return ("validated", null);
     }
 
     public async Task<DuplicateGroupsReportDto> GetGroupsAsync(
@@ -646,22 +681,23 @@ public sealed class ListingDeduplicationService(
 
     private static DeduplicationSummaryDto ToSummary(
         DeduplicationRun run,
-        int groups,
-        int merged,
-        int activeListings,
+        DeduplicationPopulation population,
         int reviewCandidates,
         bool active) =>
         new(
             active,
             active ? run.FinishedAt : null,
             run.MatchVersion,
-            activeListings,
-            active ? run.UniqueVacancies : null,
-            groups,
-            merged,
+            population.ActiveListings,
+            active ? population.UniqueVacancies : null,
+            population.Groups,
+            population.ListingsMerged,
             reviewCandidates,
             DeduplicationEngine.MaxGroupSize,
-            run.Status);
+            run.Status,
+            population.ListingsInGroups,
+            active ? "validated" : "invalid",
+            active ? null : "The deduplication pass did not pass integrity validation; no unique-vacancy count is published.");
 
     private async Task<IReadOnlyDictionary<string, string>> LoadSourceCategoriesAsync(CancellationToken cancellationToken)
     {

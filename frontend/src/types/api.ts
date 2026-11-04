@@ -105,9 +105,12 @@ export type DeduplicationSummary = {
   uniqueVacancies: number | null
   groups: number
   listingsMerged: number
+  listingsInGroups: number
   reviewCandidates: number
   groupCap: number
   lastRunStatus: string | null
+  status: 'validated' | 'not-run' | 'failed' | 'invalid'
+  unavailableReason: string | null
 }
 
 export type DataFreshnessState = 'Fresh' | 'Stale' | 'Partial' | 'Unavailable'

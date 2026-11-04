@@ -168,8 +168,15 @@ export function MarketTrendsPage() {
   // Round 15 (M-5): a unique-vacancy count is global (dedup groups cannot be
   // filtered by the current facets). Under an active filter, show the filtered
   // active-listing count instead and label the scope explicitly.
+  // Round 20 (A1): only a pass that passed integrity validation may publish a
+  // vacancy count; a missing/failed pass is "unavailable", not zero.
   const showUniqueVacancies =
-    !filteredScope && (deduplication?.active ?? false) && overview?.uniqueVacancies != null
+    !filteredScope && deduplication?.status === 'validated' && overview?.uniqueVacancies != null
+  const deduplicationStatus = deduplication
+    ? deduplication.status === 'validated'
+      ? `Grouping validated ${formatNzDateTime(deduplication.lastValidatedAtUtc)}`
+      : `Deduplication ${deduplication.status.replace('-', ' ')}${deduplication.unavailableReason ? ` — ${deduplication.unavailableReason}` : ''}`
+    : 'Deduplication status unavailable'
 
   return (
     <div className="app-shell" id="market-trends">
@@ -234,7 +241,7 @@ export function MarketTrendsPage() {
         <section className="stats-grid" aria-busy={overviewQuery.isLoading || jobsQuery.isLoading}>
           <StatCard
             icon={Building2}
-            label={showUniqueVacancies ? 'Unique vacancies (all listings)' : 'Active tracked listings'}
+            label={showUniqueVacancies ? 'Unique vacancies (all active listings, as of now)' : 'Active tracked listings (as of now)'}
             value={
               showUniqueVacancies
                 ? overview!.uniqueVacancies!.toLocaleString('en-NZ')
@@ -244,12 +251,12 @@ export function MarketTrendsPage() {
             }
             detail={
               showUniqueVacancies
-                ? `${cohort.length.toLocaleString('en-NZ')} listings · ${deduplication!.listingsMerged} duplicate listing${deduplication!.listingsMerged === 1 ? '' : 's'} merged into ${deduplication!.groups} group${deduplication!.groups === 1 ? '' : 's'}`
+                ? `${deduplication!.activeListings.toLocaleString('en-NZ')} active listings · ${deduplication!.listingsInGroups.toLocaleString('en-NZ')} listings in ${deduplication!.groups} vacancy group${deduplication!.groups === 1 ? '' : 's'} · ${deduplication!.listingsMerged} duplicate row${deduplication!.listingsMerged === 1 ? '' : 's'} removed · ${deduplicationStatus}`
                 : activeChange
-                  ? `As of now · ${describeChange(activeChange)}`
+                  ? `As of now · ${describeChange(activeChange)} · ${deduplicationStatus}`
                   : filteredScope
-                    ? 'As of now · comparison unavailable for a filtered cohort'
-                    : 'As of now · comparison needs daily snapshots'
+                    ? `As of now · comparison unavailable for a filtered cohort · ${deduplicationStatus}`
+                    : `As of now · comparison needs daily snapshots · ${deduplicationStatus}`
             }
           />
           <StatCard
@@ -270,6 +277,57 @@ export function MarketTrendsPage() {
             value={employers.distinctEmployers.toLocaleString('en-NZ')}
             detail={`${employers.disclosedListings} listings name an employer · ${employers.agencyOnlyListings} agency-only · ${employers.unknownListings} unknown`}
           />
+        </section>
+
+        <section className="panel count-reconciliation" aria-label="Headline count definitions and as-of context">
+          <div className="panel-header">
+            <div>
+              <h2>Which count is which</h2>
+              <p>
+                These are three different units and capture times. They are not expected to be equal, and none is
+                adjusted to match another.
+              </p>
+            </div>
+          </div>
+          <dl>
+            <div>
+              <dt>Unique vacancies</dt>
+              <dd>
+                {showUniqueVacancies
+                  ? `${overview!.uniqueVacancies!.toLocaleString('en-NZ')} validated vacancy groups in the active population`
+                  : `Unavailable — ${deduplicationStatus}`}
+                <small>
+                  {showUniqueVacancies
+                    ? `Active listing rows minus duplicate rows inside validated groups. ${deduplicationStatus}.`
+                    : 'No validated deduplication grouping is available for this capture.'}
+                </small>
+              </dd>
+            </div>
+            <div>
+              <dt>Active tracked listings</dt>
+              <dd>
+                {overview ? `${overview.activeListings.toLocaleString('en-NZ')} source rows` : 'Unavailable'}
+                <small>
+                  {overview
+                    ? `As of ${formatNzDateTime(overview.generatedAtUtc)}; one advertisement per source, before grouping.`
+                    : 'The live overview has not loaded.'}
+                </small>
+              </dd>
+            </div>
+            <div>
+              <dt>Historical active listings</dt>
+              <dd>
+                {history?.latestSnapshotDate
+                  ? `${history.latestActiveCount.toLocaleString('en-NZ')} listings on the ${history.latestSnapshotDate} snapshot`
+                  : 'Unavailable'}
+                <small>
+                  {history?.latestSnapshotDate
+                    ? 'Retained daily snapshot as of that Pacific/Auckland capture date; it can differ from the live count because the snapshot is frozen.'
+                    : 'No retained snapshot is available for this period.'}
+                </small>
+              </dd>
+            </div>
+          </dl>
         </section>
 
         <section className="panel trend-panel" id="weekly-trend">
