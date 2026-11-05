@@ -353,6 +353,29 @@ app.MapPost("/api/admin/employers/match", async (
     Results.Ok(await employerService.MatchJobsAsync(actor ?? "admin", cancellationToken)))
     .WithName("MatchEmployers");
 
+// --- Round 21 (B3): auditable unmatched-name review queue ------------------
+app.MapGet("/api/admin/employers/review-queue", async (
+        IEmployerReviewService reviewService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await reviewService.GetQueueAsync(cancellationToken)))
+    .WithName("GetEmployerReviewQueue");
+
+app.MapPost("/api/admin/employers/review-queue/decisions", async (
+        RecordEmployerReviewDecisionsRequest request,
+        IEmployerReviewService reviewService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await reviewService.SaveDecisionsAsync(request, cancellationToken));
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    })
+    .WithName("SaveEmployerReviewDecisions");
+
 // --- Round 8: listing deduplication provenance -----------------------------
 
 app.MapGet("/api/admin/duplicates", async (

@@ -395,6 +395,64 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("employer_aliases", (string)null);
                 });
 
+            modelBuilder.Entity("Domain.Entities.EmployerAliasReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AdvertisedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("advertised_name");
+
+                    b.Property<Guid?>("CanonicalEmployerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("canonical_employer_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("decision");
+
+                    b.Property<string>("GroupKey")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("group_key");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTime>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<string>("Reviewer")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reviewer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupKey");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("employer_alias_reviews", (string)null);
+                });
+
             modelBuilder.Entity("Domain.Entities.EmployerAuditEvent", b =>
                 {
                     b.Property<Guid>("Id")

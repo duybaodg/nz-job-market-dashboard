@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INormalisationService, NormalisationService>();
         services.AddScoped<IDeduplicationService, DeduplicationService>();
         services.AddScoped<IEmployerIdentityService, EmployerIdentityService>();
+        services.AddScoped<IEmployerReviewService, EmployerReviewService>();
         services.AddScoped<IListingDeduplicationService, ListingDeduplicationService>();
         services.AddSingleton<HealthReportCache>();
         services.AddScoped<IHealthService, HealthService>();

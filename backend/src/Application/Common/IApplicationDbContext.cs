@@ -14,6 +14,7 @@ public interface IApplicationDbContext
     DbSet<ListingSnapshotRun> ListingSnapshotRuns { get; }
     DbSet<RegistryEvent> RegistryEvents { get; }
     DbSet<ClassificationReview> ClassificationReviews { get; }
+    DbSet<EmployerAliasReview> EmployerAliasReviews { get; }
     DbSet<Employer> Employers { get; }
     DbSet<EmployerAlias> EmployerAliases { get; }
     DbSet<EmployerAuditEvent> EmployerAuditEvents { get; }

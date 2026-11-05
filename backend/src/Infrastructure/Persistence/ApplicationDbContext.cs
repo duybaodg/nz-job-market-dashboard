@@ -16,6 +16,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<ListingSnapshotRun> ListingSnapshotRuns => Set<ListingSnapshotRun>();
     public DbSet<RegistryEvent> RegistryEvents => Set<RegistryEvent>();
     public DbSet<ClassificationReview> ClassificationReviews => Set<ClassificationReview>();
+    public DbSet<EmployerAliasReview> EmployerAliasReviews => Set<EmployerAliasReview>();
     public DbSet<Employer> Employers => Set<Employer>();
     public DbSet<EmployerAlias> EmployerAliases => Set<EmployerAlias>();
     public DbSet<EmployerAuditEvent> EmployerAuditEvents => Set<EmployerAuditEvent>();
@@ -33,6 +34,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         ConfigureListingSnapshots(modelBuilder);
         ConfigureRegistryEvents(modelBuilder);
         ConfigureClassificationReviews(modelBuilder);
+        ConfigureEmployerAliasReviews(modelBuilder);
         ConfigureEmployers(modelBuilder);
         ConfigureDeduplication(modelBuilder);
     }
@@ -277,6 +279,27 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(review => review.ReviewedAt).HasColumnName("reviewed_at");
             entity.HasIndex(review => new { review.JobId, review.RuleVersion }).IsUnique();
             entity.HasIndex(review => review.Label);
+        });
+    }
+
+    private static void ConfigureEmployerAliasReviews(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<EmployerAliasReview>(entity =>
+        {
+            entity.ToTable("employer_alias_reviews");
+            entity.HasKey(review => review.Id);
+            entity.Property(review => review.Id).HasColumnName("id");
+            entity.Property(review => review.NormalizedName).HasColumnName("normalized_name").IsRequired();
+            entity.Property(review => review.AdvertisedName).HasColumnName("advertised_name").IsRequired();
+            entity.Property(review => review.Decision).HasColumnName("decision").IsRequired();
+            entity.Property(review => review.CanonicalEmployerId).HasColumnName("canonical_employer_id");
+            entity.Property(review => review.GroupKey).HasColumnName("group_key").IsRequired();
+            entity.Property(review => review.Reason).HasColumnName("reason");
+            entity.Property(review => review.Reviewer).HasColumnName("reviewer").IsRequired();
+            entity.Property(review => review.CreatedAt).HasColumnName("created_at");
+            entity.Property(review => review.ReviewedAt).HasColumnName("reviewed_at");
+            entity.HasIndex(review => review.NormalizedName).IsUnique();
+            entity.HasIndex(review => review.GroupKey);
         });
     }
 
