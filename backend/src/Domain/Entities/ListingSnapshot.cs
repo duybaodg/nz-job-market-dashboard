@@ -24,6 +24,18 @@ public sealed class ListingSnapshot
     public string Seniority { get; set; } = "Unknown";
     public string EmploymentType { get; set; } = "Unknown";
     public string RoleFamily { get; set; } = "Other / Unknown";
+    /// <summary>
+    /// Round 21: true when this snapshot row was written by a capture that
+    /// looked up the listing's extracted skills. Rows captured before the
+    /// additive migration keep false: their skills are unknown, not empty.
+    /// </summary>
+    public bool SkillsCaptured { get; set; }
+    /// <summary>
+    /// Distinct normalised skill names for this listing at capture time, as a
+    /// JSON array. Empty with <see cref="SkillsCaptured"/> true means the
+    /// capture observed no extracted skill. Never backfilled.
+    /// </summary>
+    public string SkillsJson { get; set; } = "[]";
     public decimal? SalaryMin { get; set; }
     public decimal? SalaryMax { get; set; }
     public string SalaryCurrency { get; set; } = "NZD";

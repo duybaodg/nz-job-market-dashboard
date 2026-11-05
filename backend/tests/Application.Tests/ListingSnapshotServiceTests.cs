@@ -15,8 +15,12 @@ public sealed class ListingSnapshotServiceTests
     public async Task Capture_writes_listing_rows_and_a_coverage_run_then_is_idempotent()
     {
         await using var dbContext = CreateDbContext();
-        AddJob(dbContext, "Xero", "company", "Xero", active: true);
+        var xeroId = AddJob(dbContext, "Xero", "company", "Xero", active: true);
         AddJob(dbContext, "Beyond Recruitment", "recruiter", "Beyond Recruitment", active: false);
+        dbContext.JobSkills.AddRange(
+            new JobSkill { Id = Guid.NewGuid(), JobId = xeroId, SkillName = "C#", SkillType = "ProgrammingLanguage" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = xeroId, SkillName = "Azure", SkillType = "Cloud" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = xeroId, SkillName = "C#", SkillType = "ProgrammingLanguage" });
         await dbContext.SaveChangesAsync();
 
         var service = new ListingSnapshotService(dbContext, new TestClock(Now));
@@ -33,6 +37,13 @@ public sealed class ListingSnapshotServiceTests
         rows.Single(row => row.Source == "Beyond Recruitment").HiringEmployer.Should().BeNull();
         rows.Single(row => row.Source == "Beyond Recruitment").AgencyAdvertised.Should().BeTrue();
         rows.Should().OnlyContain(row => row.RoleFamily == "Software Engineering");
+        rows.Single(row => row.Source == "Xero").SkillsCaptured.Should().BeTrue();
+        rows.Single(row => row.Source == "Xero").SkillsJson.Should().Be("[\"Azure\",\"C#\"]");
+        // Skills are captured per listing at most once, even if a duplicate
+        // job_skills row exists.
+        rows.Single(row => row.Source == "Xero").SkillsJson.Should().NotContain("C#\",\"C#");
+        rows.Single(row => row.Source == "Beyond Recruitment").SkillsCaptured.Should().BeTrue();
+        rows.Single(row => row.Source == "Beyond Recruitment").SkillsJson.Should().Be("[]");
 
         var run = await dbContext.ListingSnapshotRuns.SingleAsync();
         run.ListingCount.Should().Be(2);
@@ -45,8 +56,9 @@ public sealed class ListingSnapshotServiceTests
         (await dbContext.ListingSnapshots.CountAsync()).Should().Be(2);
     }
 
-    private static void AddJob(ApplicationDbContext dbContext, string source, string category, string? company, bool active)
+    private static Guid AddJob(ApplicationDbContext dbContext, string source, string category, string? company, bool active)
     {
+        var jobId = Guid.NewGuid();
         dbContext.JobSources.Add(new JobSource
         {
             Id = Guid.NewGuid(),
@@ -60,7 +72,7 @@ public sealed class ListingSnapshotServiceTests
         });
         dbContext.Jobs.Add(new Job
         {
-            Id = Guid.NewGuid(),
+            Id = jobId,
             Source = source,
             Title = "Software Engineer",
             Company = company,
@@ -72,6 +84,7 @@ public sealed class ListingSnapshotServiceTests
             CreatedAt = Now.AddDays(-2),
             UpdatedAt = Now
         });
+        return jobId;
     }
 
     private static ApplicationDbContext CreateDbContext()

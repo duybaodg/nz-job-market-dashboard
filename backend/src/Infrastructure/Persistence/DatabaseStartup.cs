@@ -18,6 +18,7 @@ public static class DatabaseStartup
     public static async Task MigrateAndSyncAsync(
         ApplicationDbContext dbContext,
         ISourceRegistrySynchronizer synchronizer,
+        IRegistryEventRecorder registryEventRecorder,
         CancellationToken cancellationToken)
     {
         if (!dbContext.Database.IsNpgsql())
@@ -25,6 +26,7 @@ public static class DatabaseStartup
             // Unit-test / non-Postgres provider: nothing to serialise.
             await dbContext.Database.MigrateAsync(cancellationToken);
             await synchronizer.SyncAsync(cancellationToken);
+            await registryEventRecorder.RecordAsync(cancellationToken);
             return;
         }
 
@@ -38,6 +40,11 @@ public static class DatabaseStartup
 
             await dbContext.Database.MigrateAsync(cancellationToken);
             await synchronizer.SyncAsync(cancellationToken);
+            // Round 21: after the registry is in step, append only the state
+            // changes observed since the last event. The first event for each
+            // source is the migration's dated baseline; nothing earlier is
+            // invented.
+            await registryEventRecorder.RecordAsync(cancellationToken);
         }
         finally
         {

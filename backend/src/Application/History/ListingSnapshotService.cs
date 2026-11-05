@@ -72,6 +72,23 @@ public sealed class ListingSnapshotService(
         }
 
         var categories = await LoadSourceCategoriesAsync(cancellationToken);
+        // Round 21: snapshot the extracted skills at capture time. Skills can be
+        // re-extracted later, so this is the evidence for how the taxonomy saw
+        // the listing on this day. A listing with no extracted skill gets an
+        // empty array with SkillsCaptured=true; pre-migration rows stay false.
+        var skillsByJob = (await dbContext.JobSkills
+                .AsNoTracking()
+                .Select(skill => new { skill.JobId, skill.SkillName })
+                .ToListAsync(cancellationToken))
+            .GroupBy(skill => skill.JobId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(skill => skill.SkillName)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(name => name, StringComparer.Ordinal)
+                    .ToList());
         var rows = new List<ListingSnapshot>(jobs.Count);
 
         foreach (var job in jobs)
@@ -79,6 +96,7 @@ public sealed class ListingSnapshotService(
             categories.TryGetValue(job.Source, out var category);
             var employer = EmployerClassifier.Classify(job.Source, category, job.Company);
             var roleFamily = RoleFamilyClassifier.Classify(job.Title);
+            var skills = skillsByJob.TryGetValue(job.Id, out var capturedSkills) ? capturedSkills : [];
 
             rows.Add(new ListingSnapshot
             {
@@ -98,6 +116,8 @@ public sealed class ListingSnapshotService(
                 Seniority = job.Seniority,
                 EmploymentType = job.EmploymentType,
                 RoleFamily = roleFamily.Family,
+                SkillsCaptured = true,
+                SkillsJson = JsonSerializer.Serialize(skills),
                 SalaryMin = job.SalaryMin,
                 SalaryMax = job.SalaryMax,
                 SalaryCurrency = job.SalaryCurrency,

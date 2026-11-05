@@ -12,6 +12,7 @@ public interface IApplicationDbContext
     DbSet<JobSource> JobSources { get; }
     DbSet<ListingSnapshot> ListingSnapshots { get; }
     DbSet<ListingSnapshotRun> ListingSnapshotRuns { get; }
+    DbSet<RegistryEvent> RegistryEvents { get; }
     DbSet<Employer> Employers { get; }
     DbSet<EmployerAlias> EmployerAliases { get; }
     DbSet<EmployerAuditEvent> EmployerAuditEvents { get; }

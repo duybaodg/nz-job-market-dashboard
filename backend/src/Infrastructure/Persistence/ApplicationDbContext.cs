@@ -14,6 +14,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<JobSource> JobSources => Set<JobSource>();
     public DbSet<ListingSnapshot> ListingSnapshots => Set<ListingSnapshot>();
     public DbSet<ListingSnapshotRun> ListingSnapshotRuns => Set<ListingSnapshotRun>();
+    public DbSet<RegistryEvent> RegistryEvents => Set<RegistryEvent>();
     public DbSet<Employer> Employers => Set<Employer>();
     public DbSet<EmployerAlias> EmployerAliases => Set<EmployerAlias>();
     public DbSet<EmployerAuditEvent> EmployerAuditEvents => Set<EmployerAuditEvent>();
@@ -29,6 +30,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         ConfigureCrawlRuns(modelBuilder);
         ConfigureJobSources(modelBuilder);
         ConfigureListingSnapshots(modelBuilder);
+        ConfigureRegistryEvents(modelBuilder);
         ConfigureEmployers(modelBuilder);
         ConfigureDeduplication(modelBuilder);
     }
@@ -198,6 +200,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(snapshot => snapshot.Seniority).HasColumnName("seniority").IsRequired();
             entity.Property(snapshot => snapshot.EmploymentType).HasColumnName("employment_type").IsRequired();
             entity.Property(snapshot => snapshot.RoleFamily).HasColumnName("role_family").IsRequired();
+            entity.Property(snapshot => snapshot.SkillsCaptured).HasColumnName("skills_captured").HasDefaultValue(false);
+            entity.Property(snapshot => snapshot.SkillsJson).HasColumnName("skills_json").HasColumnType("jsonb").IsRequired().HasDefaultValue("[]");
             entity.Property(snapshot => snapshot.SalaryMin).HasColumnName("salary_min");
             entity.Property(snapshot => snapshot.SalaryMax).HasColumnName("salary_max");
             entity.Property(snapshot => snapshot.SalaryCurrency).HasColumnName("salary_currency").IsRequired().HasDefaultValue("NZD");
@@ -224,6 +228,26 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(run => run.IdentifiableEmployerCount).HasColumnName("identifiable_employer_count");
             entity.Property(run => run.SourceCoverageJson).HasColumnName("source_coverage_json").HasColumnType("jsonb");
             entity.HasIndex(run => run.SnapshotDate).IsUnique();
+        });
+    }
+
+    private static void ConfigureRegistryEvents(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RegistryEvent>(entity =>
+        {
+            entity.ToTable("registry_events");
+            entity.HasKey(registryEvent => registryEvent.Id);
+            entity.Property(registryEvent => registryEvent.Id).HasColumnName("id");
+            entity.Property(registryEvent => registryEvent.SourceName).HasColumnName("source_name").IsRequired();
+            entity.Property(registryEvent => registryEvent.EventType).HasColumnName("event_type").IsRequired();
+            entity.Property(registryEvent => registryEvent.Enabled).HasColumnName("enabled");
+            entity.Property(registryEvent => registryEvent.RetiredAt).HasColumnName("retired_at");
+            entity.Property(registryEvent => registryEvent.EventDate).HasColumnName("event_date");
+            entity.Property(registryEvent => registryEvent.RecordedAtUtc).HasColumnName("recorded_at_utc");
+            entity.Property(registryEvent => registryEvent.Reason).HasColumnName("reason").IsRequired();
+            entity.Property(registryEvent => registryEvent.Actor).HasColumnName("actor").IsRequired();
+            entity.HasIndex(registryEvent => new { registryEvent.SourceName, registryEvent.EventDate });
+            entity.HasIndex(registryEvent => registryEvent.EventDate);
         });
     }
 

@@ -26,6 +26,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAnalyticsService, AnalyticsService>();
         services.AddScoped<IHistoryService, HistoryService>();
         services.AddScoped<IListingSnapshotService, ListingSnapshotService>();
+        services.AddScoped<ISnapshotAuditService, SnapshotAuditService>();
+        services.AddScoped<IRegistryEventRecorder, RegistryEventRecorder>();
         services.AddScoped<ICrawlerOrchestrationService, CrawlerOrchestrationService>();
         // Round 15: SSRF guard for the admin crawl trigger (registered-origin +
         // DNS-resolution checks before any adapter fetch).

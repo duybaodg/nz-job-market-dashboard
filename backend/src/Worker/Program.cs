@@ -21,6 +21,7 @@ using (var scope = host.Services.CreateScope())
     await DatabaseStartup.MigrateAndSyncAsync(
         scope.ServiceProvider.GetRequiredService<ApplicationDbContext>(),
         scope.ServiceProvider.GetRequiredService<ISourceRegistrySynchronizer>(),
+        scope.ServiceProvider.GetRequiredService<IRegistryEventRecorder>(),
         CancellationToken.None);
     // One-off repair: remove junk left by older worker versions and
     // re-normalise regions with the Phase-2 mapping. Idempotent.

@@ -73,6 +73,7 @@ using (var scope = app.Services.CreateScope())
     await DatabaseStartup.MigrateAndSyncAsync(
         dbContext,
         scope.ServiceProvider.GetRequiredService<ISourceRegistrySynchronizer>(),
+        scope.ServiceProvider.GetRequiredService<IRegistryEventRecorder>(),
         CancellationToken.None);
 }
 
@@ -209,6 +210,13 @@ app.MapGet("/api/admin/sources", async (
 
 // Round 13: protected by the shared HEALTH_ACCESS_PASSWORD secret.
 app.MapHealthEndpoint();
+
+// --- Round 21: additive snapshot capture / registry-event debug surface -----
+app.MapGet("/api/admin/snapshots/capture-status", async (
+        ISnapshotAuditService auditService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await auditService.GetCaptureStatusAsync(cancellationToken)))
+    .WithName("GetSnapshotCaptureStatus");
 
 // --- Round 9: per-field coverage for the active listing cohort -------------
 app.MapGet("/api/admin/coverage", async (
