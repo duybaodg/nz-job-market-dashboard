@@ -432,7 +432,7 @@ export const qualityFixture: QualitySummary = {
     accuracyDenominator: 128,
     ruleVersion: 'role-family-v1',
     scope: 'Stratified sample of tracked active listings, not a census.',
-    evaluatedAtUtc: '2026-11-05T09:00:00Z',
+    evaluatedAtUtc: '2026-11-05T08:15:00Z',
     method: 'Reviewed title plus stored description excerpt; ambiguous and unknown rows excluded from the denominator.',
   },
   methodologyNote: 'Every percentage is shown with its numerator and denominator.',

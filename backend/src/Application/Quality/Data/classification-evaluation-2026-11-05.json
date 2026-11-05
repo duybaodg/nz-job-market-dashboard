@@ -1,6 +1,6 @@
 {
  "evaluationId": "classification-2026-11-05",
- "evaluatedAtUtc": "2026-11-05T09:00:00Z",
+ "evaluatedAtUtc": "2026-11-05T08:15:00Z",
  "reviewer": "coding-agent-round21",
  "reviewMethod": "Each sampled listing was reviewed against its title plus the first ~1,400 characters of stored description/summary. Labels are conservative: ambiguous multi-family roles and evidence-free rows stay out of the accuracy denominator.",
  "sampling": {

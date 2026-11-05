@@ -212,17 +212,24 @@ GET /api/analytics/top-skills
 GET /api/analytics/jobs-by-region
 GET /api/analytics/freshness         # posted + first-seen counts for the 2, 7 and 15 NZ-day windows
 GET /api/analytics/history           # ?days=7|15|30 daily-snapshot history, weekly trend, coverage changes
+GET /api/analytics/quality           # public, denominator-scoped quality summary (Release B1)
 POST /api/admin/crawl-runs
 GET /api/admin/crawl-runs
 GET /api/admin/crawl-runs/{id}
 GET /api/admin/sources
 GET /api/admin/health                  # per-source crawler health (password-protected, 30s in-memory cache, read-only)
+GET /api/admin/snapshots/capture-status # Round 21: recent snapshot skill-capture proof + registry-event log
+GET /api/admin/quality/classification-sample        # Round 21: stratified review sample with title/description evidence
+GET /api/admin/quality/classification-reviews       # recorded classification labels and confusion counts
+POST /api/admin/quality/classification-labels       # { labels: [...], reviewer } record/update labels
 GET /api/admin/employers               # canonical employers + aliases + job counts + unmatched names
 POST /api/admin/employers              # { canonicalName, type, notes, actor } create a canonical
 POST /api/admin/employers/{id}/aliases # { alias, actor } add an alias and rematch immediately
 DELETE /api/admin/employers/{id}/aliases/{alias}
 POST /api/admin/employers/seed         # one-off bootstrap from distinct company values (idempotent)
 POST /api/admin/employers/match        # repair pass: re-resolve every job by exact/alias match
+GET /api/admin/employers/review-queue  # Round 21: grouped unmatched names for human review (no auto-merge)
+POST /api/admin/employers/review-queue/decisions # matched | kept-separate | agency-client, with provenance
 GET /api/admin/duplicates              # duplicate groups + review candidates (provenance)
 POST /api/admin/dedup/run              # run the incremental, validated dedup pass now
 ```
@@ -429,6 +436,36 @@ The Market trends page labels all of this; where daily snapshots are not yet
 retained it falls back to today's retained rows and says so explicitly.
 Filtered CSV export on Find jobs writes the applied filters, period, metric
 definitions and extraction timestamp and reuses the same screen calculations.
+
+### Round 21 additive capture (Release B)
+
+- `listing_snapshots` now also stores each listing's extracted skills
+  (`skills_captured`, `skills_json`) from the next capture onward. The migration
+  is additive; older rows remain `skills_captured = false` (**unknown**, not
+  empty) and are never backfilled. `GET /api/admin/snapshots/capture-status`
+  proves coverage per snapshot day.
+- `registry_events` is an append-only, dated source-state log. The migration
+  seeds exactly one truthful `state-as-of` 2026-11-05 baseline per current
+  source; later enable/disable/retire/revive changes are appended by the startup
+  recorder. History before the baseline stays unknown.
+- `GET /api/analytics/quality` is a deliberately limited public summary:
+  source-refresh coverage, comparable-salary share, unknown-role share, skill
+  extraction coverage, employer resolution, deduplication status and snapshot
+  completeness, each with numerator, denominator, scope and capture time. It
+  never exposes crawl errors or the gated health payload.
+- Classification accuracy is published only from the committed reviewed sample
+  in `backend/src/Application/Quality/Data/classification-evaluation-2026-11-05.json`
+  (133 stratified listings, 112 correct, 16 false-negative, 3 ambiguous,
+  2 unknown; 87.5% on 128 non-ambiguous decisions, `role-family-v1`). The
+  password-gated sample/label endpoints support the next review round.
+- `GET /api/admin/employers/review-queue` groups similar unmatched names for
+  human review only. No code path auto-merges; an explicit `matched` decision
+  creates a curated alias and preserves the advertised name. `kept-separate`
+  and `agency-client` never create aliases.
+- CSV export is explicitly **all matching records**, not the current page. It
+  includes listing IDs, timestamps, advertised + canonical employer fields and
+  dedup provenance, and prefixes formula-like cells (`= + - @ tab CR`) with an
+  apostrophe. See the definitions in the export preamble.
 
 ## Skill extraction (shared taxonomy)
 Technical skills are extracted from the **full** job description (languages,
