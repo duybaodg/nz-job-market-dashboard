@@ -149,6 +149,14 @@ app.MapGet("/api/analytics/freshness", async (
     Results.Ok(await analyticsService.GetFreshnessAsync(cancellationToken)))
     .WithName("GetAnalyticsFreshness");
 
+// Release B1: intentionally limited public quality summary. This is not the
+// protected health payload; it exposes coverage/denominator measures only.
+app.MapGet("/api/analytics/quality", async (
+        IQualitySummaryService qualityService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await qualityService.GetQualitySummaryAsync(cancellationToken)))
+    .WithName("GetQualitySummary");
+
 app.MapGet("/api/analytics/history", async (
         int? days,
         string? region,

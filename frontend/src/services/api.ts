@@ -1,4 +1,4 @@
-import type { Freshness, HealthReport, History, Job, JobsByRegion, Overview, SkillDemand } from '../types/api'
+import type { Freshness, HealthReport, History, Job, JobsByRegion, Overview, QualitySummary, SkillDemand } from '../types/api'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5050'
 
@@ -58,6 +58,11 @@ export function getJobsByRegion() {
 
 export function getFreshness() {
   return getJson<Freshness>('/api/analytics/freshness')
+}
+
+/** Public, intentionally limited quality summary (Release B1). */
+export function getQuality() {
+  return getJson<QualitySummary>('/api/analytics/quality')
 }
 
 export function getHistory(

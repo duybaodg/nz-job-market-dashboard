@@ -353,6 +353,13 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
 .chart-table th, .chart-table td { padding: 7px 8px; font-size: 13px; }
 .role-salary-table { min-width: 0; }
 .role-salary-table th, .role-salary-table td { padding: 8px; font-size: 13px; }
+.quality-panel .quality-table th, .quality-panel .quality-table td { vertical-align: top; }
+.quality-definitions { margin: 10px 0 0; display: grid; gap: 8px; }
+.quality-definitions dt { font-weight: 800; font-size: 12px; }
+.quality-definitions dd { margin: 2px 0 0; color: #3e514c; font-size: 12px; line-height: 1.45; }
+.quality-classification { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.quality-classification h3 { margin: 0 0 6px; font-size: 14px; }
+.quality-classification p { margin: 6px 0; font-size: 13px; line-height: 1.5; }
 .chart-caption { margin-top: 8px; font-size: 12px; line-height: 1.45; }
 .drilldown { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .drilldown h3 { margin: 0 0 8px; font-size: 13px; }

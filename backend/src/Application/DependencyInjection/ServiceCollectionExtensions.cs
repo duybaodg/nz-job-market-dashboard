@@ -5,6 +5,7 @@ using Application.Employers;
 using Application.Health;
 using Application.History;
 using Application.Jobs;
+using Application.Metrics;
 using Application.Normalisation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,6 +25,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICrawlDataRetentionService, CrawlDataRetentionService>();
         services.AddScoped<IJobContentValidator, JobContentValidator>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
+        services.AddScoped<IQualitySummaryService, QualitySummaryService>();
+        services.AddSingleton<IClassificationEvaluationProvider, UnavailableClassificationEvaluationProvider>();
         services.AddScoped<IHistoryService, HistoryService>();
         services.AddScoped<IListingSnapshotService, ListingSnapshotService>();
         services.AddScoped<ISnapshotAuditService, SnapshotAuditService>();

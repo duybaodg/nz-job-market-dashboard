@@ -313,3 +313,44 @@ export type History = {
   scopeNote: string
   note: string
 }
+
+export type QualityMeasure = {
+  key: string
+  label: string
+  numerator: number | null
+  denominator: number | null
+  percent: number | null
+  displayValue: string
+  scope: string
+  capturedAtUtc: string
+  available: boolean
+  unavailableReason: string | null
+  definition: string
+}
+
+export type QualityClassification = {
+  available: boolean
+  unavailableReason: string | null
+  sampledListings: number
+  reviewedListings: number
+  correct: number
+  falsePositive: number
+  falseNegative: number
+  ambiguous: number
+  unknown: number
+  accuracyPercent: number | null
+  accuracyDenominator: number
+  ruleVersion: string
+  scope: string
+  evaluatedAtUtc: string | null
+  method: string | null
+}
+
+export type QualitySummary = {
+  generatedAtUtc: string
+  population: string
+  activeListings: number
+  measures: QualityMeasure[]
+  classification: QualityClassification
+  methodologyNote: string
+}

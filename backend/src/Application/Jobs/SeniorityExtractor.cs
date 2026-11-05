@@ -28,6 +28,9 @@ public sealed record SeniorityExtraction(string Value, string? Source, decimal? 
 /// </summary>
 public static class SeniorityExtractor
 {
+    /// <summary>Version recorded on every seniority review label.</summary>
+    public const string RuleVersion = "seniority-v1";
+
     private static readonly Regex TitleJunior = new(
         @"(?ix)\b(?:junior|jnr|entry[\s-]?level|graduate|intern|internship|cadet)\b",
         RegexOptions.Compiled);

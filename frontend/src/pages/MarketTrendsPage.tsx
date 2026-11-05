@@ -48,7 +48,7 @@ import {
   trendsFilterChips,
   type TrendsFilterState,
 } from '../lib/urlState'
-import { getHistory, getJobs, getOverview } from '../services/api'
+import { getHistory, getJobs, getOverview, getQuality } from '../services/api'
 import type { Job } from '../types/api'
 
 const emptyJobs: Job[] = []
@@ -90,6 +90,7 @@ export function MarketTrendsPage() {
 
   const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all', limit: 5000 }) })
   const overviewQuery = useQuery({ queryKey: ['overview'], queryFn: getOverview })
+  const qualityQuery = useQuery({ queryKey: ['quality'], queryFn: getQuality })
 
   // Round 20 (A2): history takes the same cohort as the current cards, and the
   // filter values are part of the query key so an old request can never land
@@ -481,6 +482,106 @@ export function MarketTrendsPage() {
               </dd>
             </div>
           </dl>
+        </section>
+
+        <section className="panel quality-panel" id="quality" aria-labelledby="quality-heading">
+          <div className="panel-header">
+            <div>
+              <h2 id="quality-heading">Data quality summary</h2>
+              <p>
+                Public coverage and completeness measures for the tracked dataset. Every percentage shows its
+                numerator and denominator; no operational crawl detail is exposed here.
+              </p>
+            </div>
+          </div>
+          {qualityQuery.isError ? (
+            <div className="empty-state error-state" role="alert">
+              The public quality summary could not be loaded. This is a request failure, not evidence of complete
+              data.
+            </div>
+          ) : qualityQuery.isLoading ? (
+            <div className="chart-empty" aria-busy="true">
+              Loading public quality measures…
+            </div>
+          ) : !qualityQuery.data ? (
+            <div className="chart-empty">No public quality summary is available for this capture.</div>
+          ) : (
+            <>
+              <div className="table-scroll">
+                <table className="role-salary-table quality-table">
+                  <caption>
+                    {qualityQuery.data.population} Captured {formatNzDateTime(qualityQuery.data.generatedAtUtc)}.
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Measure</th>
+                      <th scope="col">Result</th>
+                      <th scope="col">Numerator / denominator</th>
+                      <th scope="col">Scope</th>
+                      <th scope="col">Captured</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {qualityQuery.data.measures.map((measure) => (
+                      <tr key={measure.key}>
+                        <th scope="row">{measure.label}</th>
+                        <td>{measure.available ? measure.displayValue : `Unavailable — ${measure.unavailableReason ?? 'no denominator'}`}</td>
+                        <td>
+                          {measure.numerator == null || measure.denominator == null
+                            ? 'Unavailable'
+                            : `${measure.numerator.toLocaleString('en-NZ')} / ${measure.denominator.toLocaleString('en-NZ')}`}
+                        </td>
+                        <td>{measure.scope}</td>
+                        <td>{formatNzDateTime(measure.capturedAtUtc)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <details>
+                <summary>Measure definitions</summary>
+                <dl className="quality-definitions">
+                  {qualityQuery.data.measures.map((measure) => (
+                    <div key={measure.key}>
+                      <dt>{measure.label}</dt>
+                      <dd>{measure.definition}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+              <div className="quality-classification">
+                <h3>Classification accuracy (reviewed sample)</h3>
+                {qualityQuery.data.classification.available ? (
+                  <>
+                    <p>
+                      <strong>{qualityQuery.data.classification.accuracyPercent?.toFixed(1)}%</strong> correct on{' '}
+                      {qualityQuery.data.classification.accuracyDenominator.toLocaleString('en-NZ')} reviewed
+                      role-family decisions (excluding ambiguous and unknown).{' '}
+                      {qualityQuery.data.classification.reviewedListings.toLocaleString('en-NZ')} of{' '}
+                      {qualityQuery.data.classification.sampledListings.toLocaleString('en-NZ')} sampled listings were
+                      reviewed with rule version {qualityQuery.data.classification.ruleVersion}.
+                    </p>
+                    <p className="muted">
+                      {qualityQuery.data.classification.scope} Method: {qualityQuery.data.classification.method}.
+                      Evaluated {formatNzDateTime(qualityQuery.data.classification.evaluatedAtUtc)}.
+                    </p>
+                    <p className="muted">
+                      Correct {qualityQuery.data.classification.correct} · false positive{' '}
+                      {qualityQuery.data.classification.falsePositive} · false negative{' '}
+                      {qualityQuery.data.classification.falseNegative} · ambiguous{' '}
+                      {qualityQuery.data.classification.ambiguous} · unknown{' '}
+                      {qualityQuery.data.classification.unknown}.
+                    </p>
+                  </>
+                ) : (
+                  <p className="muted">
+                    Not published — {qualityQuery.data.classification.unavailableReason ?? 'no reviewed sample'}.
+                  </p>
+                )}
+              </div>
+              <p className="muted chart-caption">{qualityQuery.data.methodologyNote}</p>
+            </>
+          )}
         </section>
 
         <section className="panel trend-panel" id="weekly-trend">

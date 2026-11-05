@@ -6,20 +6,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { MarketTrendsPage } from './MarketTrendsPage'
 import { navigate } from '../hooks/useAppLocation'
-import { historyFixture, jobFixture, overviewFixture } from '../types/contract.fixtures'
+import { historyFixture, jobFixture, overviewFixture, qualityFixture } from '../types/contract.fixtures'
 import type { History } from '../types/api'
 
-const { getHistoryMock, getJobsMock, getOverviewMock } = vi.hoisted(() => ({
+const { getHistoryMock, getJobsMock, getOverviewMock, getQualityMock } = vi.hoisted(() => ({
   getHistoryMock: vi.fn(),
   getJobsMock: vi.fn(),
   getOverviewMock: vi.fn(),
+  getQualityMock: vi.fn(),
 }))
 
 const { location } = vi.hoisted(() => ({ location: { pathname: '/trends', search: '?period=15' } }))
 
 vi.mock('../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api')>()
-  return { ...actual, getHistory: getHistoryMock, getJobs: getJobsMock, getOverview: getOverviewMock }
+  return { ...actual, getHistory: getHistoryMock, getJobs: getJobsMock, getOverview: getOverviewMock, getQuality: getQualityMock }
 })
 
 vi.mock('../hooks/useAppLocation', () => ({
@@ -48,6 +49,7 @@ describe('MarketTrendsPage reporting period', () => {
     getHistoryMock.mockReset().mockResolvedValue(null)
     getJobsMock.mockReset().mockResolvedValue([])
     getOverviewMock.mockReset().mockResolvedValue(null)
+    getQualityMock.mockReset().mockResolvedValue(qualityFixture)
   })
 
   afterEach(cleanup)
@@ -199,5 +201,19 @@ describe('MarketTrendsPage reporting period', () => {
     )
 
     await waitFor(() => expect(getHistoryMock).toHaveBeenCalledWith(7, expect.objectContaining({})))
+  })
+
+  it('renders every public quality measure with its denominator and never invents accuracy', async () => {
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockResolvedValue(historyFixture)
+
+    renderPage()
+
+    expect(await screen.findByText('Data quality summary')).toBeInTheDocument()
+    expect(await screen.findByText('41 of 44 (93.2%)')).toBeInTheDocument()
+    expect(await screen.findByText('41 / 44')).toBeInTheDocument()
+    expect(await screen.findByText(/Not published/)).toBeInTheDocument()
+    expect(screen.queryByText(/100\.0% correct/)).not.toBeInTheDocument()
   })
 })

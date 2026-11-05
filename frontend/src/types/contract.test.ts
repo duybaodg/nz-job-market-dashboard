@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { freshnessFixture, healthFixture, historyFixture, jobFixture, overviewFixture } from './contract.fixtures'
+import { freshnessFixture, healthFixture, historyFixture, jobFixture, overviewFixture, qualityFixture } from './contract.fixtures'
 
 /**
  * Round 14 consistency contract. One focused check per widget group: every API
@@ -152,6 +152,31 @@ describe('API payload contract', () => {
     requireNonNull(freshnessFixture, ['totalActiveJobs', 'discoveryBasis', 'windows[0].days'])
     requireType(freshnessFixture, 'totalActiveJobs', 'number')
     requireType(freshnessFixture, 'windows[0].newlyPosted', 'number')
+  })
+
+  it('Quality panel reads every measure denominator, capture time and classification scope', () => {
+    requireFields(qualityFixture, [
+      'generatedAtUtc', 'population', 'activeListings', 'methodologyNote',
+      'measures[0].key', 'measures[0].label', 'measures[0].numerator',
+      'measures[0].denominator', 'measures[0].percent', 'measures[0].displayValue',
+      'measures[0].scope', 'measures[0].capturedAtUtc', 'measures[0].available',
+      'measures[0].unavailableReason', 'measures[0].definition',
+      'classification.available', 'classification.unavailableReason',
+      'classification.sampledListings', 'classification.reviewedListings',
+      'classification.correct', 'classification.falsePositive',
+      'classification.falseNegative', 'classification.ambiguous', 'classification.unknown',
+      'classification.accuracyPercent', 'classification.accuracyDenominator',
+      'classification.ruleVersion', 'classification.scope', 'classification.method',
+    ])
+    requireNonNull(qualityFixture, [
+      'generatedAtUtc', 'population', 'activeListings', 'measures[0].key',
+      'measures[0].denominator', 'measures[0].capturedAtUtc', 'measures[0].available',
+      'classification.available', 'classification.ruleVersion', 'classification.scope',
+    ])
+    requireType(qualityFixture, 'activeListings', 'number')
+    requireType(qualityFixture, 'measures[0].available', 'boolean')
+    requireType(qualityFixture, 'classification.available', 'boolean')
+    expect(qualityFixture.measures.every((measure) => measure.denominator !== null)).toBe(true)
   })
 
   it('Crawler health page reads the summary and per-source fields', () => {

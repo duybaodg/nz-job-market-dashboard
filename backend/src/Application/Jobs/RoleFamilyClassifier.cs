@@ -12,6 +12,9 @@ public static class RoleFamilyClassifier
 {
     public const string UnknownFamily = "Other / Unknown";
 
+    /// <summary>Version recorded on every classification review label.</summary>
+    public const string RuleVersion = "role-family-v1";
+
     public sealed record RoleFamilyMatch(string Family, bool Inferred);
 
     // Specific families are listed before the broad Software Engineering rule,
