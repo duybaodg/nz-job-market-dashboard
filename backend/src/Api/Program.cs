@@ -9,6 +9,7 @@ using Application.Employers;
 using Application.Health;
 using Application.History;
 using Application.Jobs;
+using Application.Quality;
 using Infrastructure.DependencyInjection;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -225,6 +226,36 @@ app.MapGet("/api/admin/snapshots/capture-status", async (
         CancellationToken cancellationToken) =>
     Results.Ok(await auditService.GetCaptureStatusAsync(cancellationToken)))
     .WithName("GetSnapshotCaptureStatus");
+
+// --- Round 21 (B2): password-gated classification review workflow ----------
+app.MapGet("/api/admin/quality/classification-sample", async (
+        int? size,
+        IClassificationReviewService reviewService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await reviewService.GetSampleAsync(size ?? ClassificationReviewService.DefaultSampleSize, cancellationToken)))
+    .WithName("GetClassificationSample");
+
+app.MapGet("/api/admin/quality/classification-reviews", async (
+        IClassificationReviewService reviewService,
+        CancellationToken cancellationToken) =>
+    Results.Ok(await reviewService.GetReviewsAsync(cancellationToken)))
+    .WithName("GetClassificationReviews");
+
+app.MapPost("/api/admin/quality/classification-labels", async (
+        RecordClassificationLabelsRequest request,
+        IClassificationReviewService reviewService,
+        CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await reviewService.SaveLabelsAsync(request, cancellationToken));
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    })
+    .WithName("SaveClassificationLabels");
 
 // --- Round 9: per-field coverage for the active listing cohort -------------
 app.MapGet("/api/admin/coverage", async (

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Domain\Domain.csproj" />
@@ -6,6 +6,13 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.21" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Round 21 (B2): the reviewed stratified sample travels with the image so
+         the public accuracy measure is backed by committed evidence, never a
+         hardcoded number. -->
+    <EmbeddedResource Include="Quality/Data/classification-evaluation-2026-11-05.json" />
   </ItemGroup>
 
   <PropertyGroup>

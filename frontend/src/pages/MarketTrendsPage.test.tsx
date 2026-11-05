@@ -203,7 +203,7 @@ describe('MarketTrendsPage reporting period', () => {
     await waitFor(() => expect(getHistoryMock).toHaveBeenCalledWith(7, expect.objectContaining({})))
   })
 
-  it('renders every public quality measure with its denominator and never invents accuracy', async () => {
+  it('renders every public quality measure with its denominator and the reviewed accuracy scope', async () => {
     getJobsMock.mockResolvedValue([jobFixture])
     getOverviewMock.mockResolvedValue(overviewFixture)
     getHistoryMock.mockResolvedValue(historyFixture)
@@ -213,7 +213,8 @@ describe('MarketTrendsPage reporting period', () => {
     expect(await screen.findByText('Data quality summary')).toBeInTheDocument()
     expect(await screen.findByText('41 of 44 (93.2%)')).toBeInTheDocument()
     expect(await screen.findByText('41 / 44')).toBeInTheDocument()
-    expect(await screen.findByText(/Not published/)).toBeInTheDocument()
-    expect(screen.queryByText(/100\.0% correct/)).not.toBeInTheDocument()
+    expect(await screen.findByText(/87\.5%/)).toBeInTheDocument()
+    expect(await screen.findByText(/128 reviewed/)).toBeInTheDocument()
+    expect(screen.getByText(/133 of 133 sampled listings/)).toBeInTheDocument()
   })
 })

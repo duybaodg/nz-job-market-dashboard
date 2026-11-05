@@ -7,6 +7,7 @@ using Application.History;
 using Application.Jobs;
 using Application.Metrics;
 using Application.Normalisation;
+using Application.Quality;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.DependencyInjection;
@@ -26,7 +27,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IJobContentValidator, JobContentValidator>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
         services.AddScoped<IQualitySummaryService, QualitySummaryService>();
-        services.AddSingleton<IClassificationEvaluationProvider, UnavailableClassificationEvaluationProvider>();
+        services.AddScoped<IClassificationReviewService, ClassificationReviewService>();
+        services.AddSingleton<IClassificationEvaluationProvider, EmbeddedClassificationEvaluationProvider>();
         services.AddScoped<IHistoryService, HistoryService>();
         services.AddScoped<IListingSnapshotService, ListingSnapshotService>();
         services.AddScoped<ISnapshotAuditService, SnapshotAuditService>();

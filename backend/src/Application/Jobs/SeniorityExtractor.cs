@@ -117,6 +117,23 @@ public static class SeniorityExtractor
     }
 
     /// <summary>
+    /// Round 21: every explicit level named in the title, in ascending order.
+    /// A title such as "Intermediate/Senior" returns two levels, which is the
+    /// evidence a single-value extractor cannot represent. Used by the review
+    /// sample and never to change the stored seniority value.
+    /// </summary>
+    public static IReadOnlyList<string> DetectTitleLevels(string? title)
+    {
+        var value = title ?? string.Empty;
+        var levels = new List<string>(4);
+        if (TitleJunior.IsMatch(value)) levels.Add("Junior");
+        if (TitleIntermediate.IsMatch(value)) levels.Add("Intermediate");
+        if (TitleSenior.IsMatch(value)) levels.Add("Senior");
+        if (TitleLead.IsMatch(value)) levels.Add("Lead");
+        return levels;
+    }
+
+    /// <summary>
     /// True when the title carries an explicit seniority marker. Used by the
     /// backfill to distinguish a real, source-derived value from the
     /// uninformative <c>Intermediate</c> default that may be refined.

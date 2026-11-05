@@ -75,6 +75,91 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("crawl_runs", (string)null);
                 });
 
+            modelBuilder.Entity("Domain.Entities.ClassificationReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_id");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("label");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("PredictedRoleFamily")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("predicted_role_family");
+
+                    b.Property<string>("PredictedSeniority")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("predicted_seniority");
+
+                    b.Property<DateTime>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<string>("ReviewedRoleFamily")
+                        .HasColumnType("text")
+                        .HasColumnName("reviewed_role_family");
+
+                    b.Property<string>("ReviewedSeniority")
+                        .HasColumnType("text")
+                        .HasColumnName("reviewed_seniority");
+
+                    b.Property<string>("Reviewer")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reviewer");
+
+                    b.Property<string>("RuleVersion")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rule_version");
+
+                    b.Property<string>("SeniorityFlag")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("seniority_flag");
+
+                    b.Property<string>("SeniorityNote")
+                        .HasColumnType("text")
+                        .HasColumnName("seniority_note");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Label");
+
+                    b.HasIndex("JobId", "RuleVersion")
+                        .IsUnique();
+
+                    b.ToTable("classification_reviews", (string)null);
+                });
+
             modelBuilder.Entity("Domain.Entities.DeduplicationRun", b =>
                 {
                     b.Property<Guid>("Id")
