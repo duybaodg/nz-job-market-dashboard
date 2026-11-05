@@ -39,10 +39,13 @@ const emptyJobs: Job[] = []
 
 const CSV_DEFINITIONS = [
   'A source listing is one advertisement captured from one source; the feed keeps every listing and badges cross-source duplicates ("Also on …"). Unique-vacancy counts appear on Market trends once a validated deduplication pass has run.',
-  'Posted date is the source posted date; "First seen" is the crawler discovery timestamp and is never substituted for a posted date.',
+  'Posted date is the source posted date; "First seen" is the crawler discovery timestamp and is never substituted for a posted date. All timestamps are UTC.',
   'Advertised salary is shown with its own currency and pay period; "Salary not advertised" means no figure was confirmed.',
-  'Hiring employer is the admin-reviewed canonical client where disclosed; agency-only and unknown-employer listings are labelled and never guessed.',
+  'Hiring employer is the admin-reviewed canonical client where disclosed; agency-only and unknown-employer listings are labelled and never guessed. "Advertised company" preserves the raw company text.',
   'Role family is inferred deterministically from the job title; the original title is retained.',
+  'Listing ID is the stable source-listing id. Duplicate group ID, duplicate rows removed, also-on sources and canonical listing expose deduplication provenance; source rows are never deleted.',
+  'Cells beginning with =, +, -, @, tab or carriage return are prefixed with an apostrophe to prevent spreadsheet formula execution. The original value follows the marker.',
+  'This export contains every row matching the current filters, not only the visible page. The filter list, sort and reporting period are stated in the comment preamble.',
 ]
 
 function unique(values: Array<string | null | undefined>) {
@@ -163,14 +166,20 @@ export function FindJobsPage() {
               </h2>
               <FilterChips chips={chips} onRemove={onRemove} onClearAll={onClearAll} />
             </div>
-            <button
-              type="button"
-              className="refresh-button"
-              onClick={exportCsv}
-              disabled={filtered.length === 0 || jobsLoading}
-            >
-              <Download aria-hidden="true" /> Export CSV
-            </button>
+            <div className="export-control">
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={exportCsv}
+                disabled={filtered.length === 0 || jobsLoading}
+                aria-describedby="csv-export-scope"
+              >
+                <Download aria-hidden="true" /> Export CSV
+              </button>
+              <small id="csv-export-scope" className="muted">
+                Exports all {filtered.length.toLocaleString('en-NZ')} matching records, not just this page.
+              </small>
+            </div>
           </div>
 
           <p className="metric-status" role="status" aria-live="polite">

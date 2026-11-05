@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FindJobsPage } from './FindJobsPage'
-import { overviewFixture } from '../types/contract.fixtures'
+import { overviewFixture, jobFixture } from '../types/contract.fixtures'
 
 const { getJobsMock, getOverviewMock } = vi.hoisted(() => ({
   getJobsMock: vi.fn(),
@@ -63,5 +63,22 @@ describe('FindJobsPage asynchronous states', () => {
     expect(await screen.findByText('Results unavailable')).toBeInTheDocument()
     expect(screen.getByText(/not an empty result/i)).toBeInTheDocument()
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0)
+  })
+
+  it('states that CSV export covers all matching records, not only the visible page', async () => {
+    const jobs = Array.from({ length: 15 }, (_, index) => ({
+      ...jobFixture,
+      id: `listing-${index}`,
+      title: `Data Engineer ${index}`,
+      url: `https://example.com/${index}`,
+    }))
+    getJobsMock.mockResolvedValue(jobs)
+    getOverviewMock.mockResolvedValue(overviewFixture)
+
+    renderPage()
+
+    expect(await screen.findByText('Exports all 15 matching records, not just this page.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Export CSV/ })).toHaveAttribute('aria-describedby', 'csv-export-scope')
+    expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 10 of 15 matching roles')
   })
 })

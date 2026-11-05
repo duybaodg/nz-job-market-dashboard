@@ -267,6 +267,8 @@ tbody tr:hover { background: #f8faf9; }
 .results-panel { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); padding: 20px; margin-bottom: 18px; }
 .results-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
 .results-header h2 { font-size: 17px; }
+.export-control { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 280px; }
+.export-control small { font-size: 11px; text-align: right; line-height: 1.35; }
 .filter-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .filter-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #bfe0d6; border-radius: 999px; padding: 5px 10px; color: #155f58; background: #eef8f5; font-size: 12px; font-weight: 700; }
 .filter-chip svg { width: 13px; height: 13px; }

@@ -14,7 +14,18 @@ export type CsvExportMeta = {
 
 function escape(value: unknown): string {
   const text = value == null ? '' : String(value)
-  return `"${text.replaceAll('"', '""')}"`
+  return `"${protectFormula(text).replaceAll('"', '""')}"`
+}
+
+/**
+ * Round 21 (B4): spreadsheet formula-injection protection for untrusted text.
+ * A leading =, +, -, @, tab or carriage return can be interpreted as a formula
+ * by Excel/Sheets, so the value is prefixed with an apostrophe inside the CSV
+ * cell. The original text is preserved after that marker.
+ */
+function protectFormula(text: string): string {
+  const first = text.trimStart()[0]
+  return first && ['=', '+', '-', '@', '\t', '\r'].includes(first) ? `'${text}` : text
 }
 
 function row(values: unknown[]): string {
@@ -34,6 +45,7 @@ export function buildJobsCsv(jobs: Job[], meta: CsvExportMeta): string {
     `# Applied filters: ${chips.length > 0 ? chips.map((chip) => `${chip.label}=${chip.display}`).join('; ') : 'none'}`,
     `# Reporting period: ${meta.period}`,
     `# Sorting: ${meta.sort}`,
+    '# Export scope: all matching records (not the current page)',
     `# Row count: ${jobs.length}`,
     ...meta.definitions.map((definition) => `# Definition: ${definition}`),
     '',
@@ -63,6 +75,16 @@ export function buildJobsCsv(jobs: Job[], meta: CsvExportMeta): string {
       'Source category',
       'Skills',
       'Listing URL',
+      'Listing ID',
+      'Advertised company',
+      'Duplicate group ID',
+      'Duplicate rows removed',
+      'Also on sources',
+      'Canonical listing',
+      'Employer canonical ID',
+      'Employer canonical name',
+      'Last seen',
+      'Expired at',
     ]),
   ]
 
@@ -97,6 +119,16 @@ export function buildJobsCsv(jobs: Job[], meta: CsvExportMeta): string {
         job.sourceCategory,
         [...new Set(job.skills)].join(' | '),
         job.url,
+        job.id,
+        job.company ?? '',
+        job.duplicateGroupId ?? '',
+        job.duplicateCount,
+        job.alsoOnSources.join(' | '),
+        job.isCanonicalListing ? 'yes' : 'no',
+        job.employerCanonicalId ?? '',
+        job.employerCanonicalName ?? '',
+        job.lastSeenAt,
+        job.expiredAt ?? '',
       ]),
     )
   }
