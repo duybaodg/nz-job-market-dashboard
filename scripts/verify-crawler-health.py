@@ -13,7 +13,8 @@ Checks:
      appear only in the separate `retiredSources` bucket.
   3. Revived sources are present, enabled, and report their live `jobsYielded`.
   4. Every health `jobsYielded` equals the active jobs-feed count for the same
-     source, and no feed source is missing from health.
+     source; feed rows from retired sources are reported separately, and no
+     current-registry source is missing from health.
   5. Each source's state, failures and zero-yield streak independently recompute
      from `/api/admin/crawl-runs` (sources caught mid-crawl are reported as
      skipped, not failed).
@@ -52,6 +53,16 @@ REMOVED = [
     "H2R Technology",
     "Health NZ Careers",
     "Jora NZ",
+    # Round 23 (2026-11-07): government boards retired from the registry.
+    # Their job rows are retained (never hard-deleted), so they may still
+    # appear in the jobs feed; retirement only removes them from the active
+    # health/registry lists.
+    "NZ Government Jobs",
+    "NZ Defence Careers",
+    "Inland Revenue Careers",
+    "MPI Careers",
+    "DOC Careers",
+    "NZ Police",
 ]
 REVIVED = ["PlaceMe IT", "Talent International NZ", "Student Job Search"]
 
@@ -190,17 +201,25 @@ def main() -> int:
         )
 
     # --- 4. jobsYielded matches the active jobs feed ------------------------
+    # Retired sources keep their historical job rows (never hard-deleted), so
+    # the feed may legitimately still contain jobs from a source that is only in
+    # retiredSources[]. Those are excluded from the "absent from health" check;
+    # every current-registry source must still reconcile exactly.
     jobs = fetch("/api/jobs")
     feed_counts = Counter(job["source"] for job in jobs)
     for name, entry in active.items():
         expected = feed_counts.get(name, 0)
         if entry["jobsYielded"] != expected:
             fail(f"{name}: health jobsYielded={entry['jobsYielded']} but jobs feed has {expected} active")
-    feed_without_health = sorted(set(feed_counts) - set(active))
+    feed_without_health = sorted(set(feed_counts) - set(active) - set(retired))
     if feed_without_health:
         fail(f"jobs feed yields from sources absent from health: {', '.join(feed_without_health)}")
+    current_feed_sources = set(feed_counts) & set(active)
+    retired_feed_sources = sorted(set(feed_counts) & set(retired))
     yielding = sum(1 for entry in active.values() if entry["jobsYielded"] > 0)
-    print(f"  yielding sources: health={yielding}, jobs feed={len(feed_counts)}")
+    print(f"  yielding sources: health={yielding}, jobs feed={len(current_feed_sources)}")
+    if retired_feed_sources:
+        print(f"  retained jobs from retired sources: {', '.join(retired_feed_sources)}")
 
     # --- 5. states recompute from crawl_runs --------------------------------
     runs_by_source: dict[str, list] = {}

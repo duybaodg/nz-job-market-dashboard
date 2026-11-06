@@ -78,9 +78,9 @@ services (postgres/backend/worker/frontend) on a Raspberry Pi 5.
   SalaryAudit, employer match, dedup) must be safe to re-run. Test that.
 - **docs/* is gitignored** — plans/reports stay local on purpose.
 
-## Current state (end of Round 14, Oct 2026)
+## Current state (Round 14 baseline; counts updated Round 23, Nov 2026)
 
-- 59 tracked sources, ~43 yielding; states visible at `/api/admin/health`
+- 54 tracked sources, ~43 yielding; states visible at `/api/admin/health`
   (password-gated). Disabled sources carry documented reasons in
   `sites.json` notes; removing a source from sites.json retires it
   (reversible — re-adding revives it).

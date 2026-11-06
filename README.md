@@ -1,10 +1,10 @@
 # NZ Job Market Intelligence Dashboard
 
-Analytics dashboard for New Zealand job-market trends using live, normalized job listings. Crawling is registry-driven across ~60 NZ IT job sources with per-site strategies (public ATS APIs, Schema.org JSON-LD, browser-rendered HTML, and a self-hosted Firecrawl fetch layer). The app serves two audience views — **Find jobs** (job seekers) and **Market trends** (analysts) — plus a password-protected **Crawler health** view for operations. The public API needs no authentication; an optional OpenAI-compatible field-enrichment pass is available but disabled by default (`AI_EXTRACTION_ENABLED`).
+Analytics dashboard for New Zealand job-market trends using live, normalized job listings. Crawling is registry-driven across 54 NZ IT job sources with per-site strategies (public ATS APIs, Schema.org JSON-LD, browser-rendered HTML, and a self-hosted Firecrawl fetch layer). The app serves two audience views — **Find jobs** (job seekers) and **Market trends** (analysts) — plus a password-protected **Crawler health** view for operations. The public API needs no authentication; an optional OpenAI-compatible field-enrichment pass is available but disabled by default (`AI_EXTRACTION_ENABLED`).
 
 ## Current status (October 2026)
 
-- **~43 of 59 tracked sources actively yielding** (430+ live listings); the rest are disabled with documented reasons (robots-blocked, bot-walls, dead sites) or temporarily empty of IT roles
+- **~43 of 54 tracked sources actively yielding** (430+ live listings); the rest are disabled with documented reasons (robots-blocked, bot-walls, dead sites) or temporarily empty of IT roles
 - Data quality: canonical "City, Region" NZ locations, full-text technical-skill extraction (272-skill shared taxonomy, ~87% of jobs carry skills), salary parsing with provenance and questionable-parse flagging, advertiser-vs-employer separation, conservative cross-source deduplication (validated v1 engine)
 - Daily listing snapshots retained for historical trends (comparable-period analytics fill in as history accumulates)
 - Health monitoring: `/health` dashboard + Telegram alerts on state changes
@@ -519,7 +519,7 @@ Setup gotchas (learned the hard way): the nuq-postgres init script requires the 
 
 ## Current Scope
 
-Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, the Find jobs and Market trends audience views, daily listing snapshots with retained-history analytics, scheduled registry-driven crawling of 59 NZ IT job sites, and a self-hosted Firecrawl fetch layer.
+Implemented: monorepo foundation, PostgreSQL schema and migrations, live-job lifecycle, API endpoints, the Find jobs and Market trends audience views, daily listing snapshots with retained-history analytics, scheduled registry-driven crawling of 54 NZ IT job sites, and a self-hosted Firecrawl fetch layer.
 
 Crawling direction: the primary crawler is the Python Scrapling worker, driven by
 `crawler/sources/sites.json`. Each source declares a strategy (`api`, `rss`,
