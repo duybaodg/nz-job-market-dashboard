@@ -86,6 +86,7 @@ CUSTOM_PARSERS = frozenset(
         "linkedin",
         "seek",
         "trade-me",
+        "younity",
     }
 )
 

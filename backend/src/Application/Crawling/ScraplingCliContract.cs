@@ -54,6 +54,7 @@ public static class ScraplingCliContract
         "tribe",
         "oracle",
         "salesforce",
+        "younity",
     };
 
     public static readonly IReadOnlySet<string> FetcherChoices = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

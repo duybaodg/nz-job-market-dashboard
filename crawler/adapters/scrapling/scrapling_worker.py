@@ -44,6 +44,7 @@ from parsers.dispatch import *  # noqa: E402,F401,F403
 from parsers.recruiters import *  # noqa: E402,F401,F403
 from parsers.seek import *  # noqa: E402,F401,F403
 from parsers.ats import *  # noqa: E402,F401,F403
+from parsers.younity import *  # noqa: E402,F401,F403
 from linkedin import *  # noqa: E402,F401,F403
 from normalisation import _same_site_redirect  # noqa: E402
 
@@ -1170,6 +1171,122 @@ def crawl(
             "stats": {"candidates": len(cards_by_url), "kept": len(jobs)},
         }
 
+    if parser == "younity":
+        # Round 23: the WordPress /it-jobs/ page embeds a JobAdder widget. Its
+        # settings carry the public board key; the widget's JSONP list/detail
+        # endpoints return HTML fragments. Every request below (landing, list,
+        # detail) goes through obeys_robots even though both robots.txt files
+        # currently allow the paths — see parsers/younity.py for the verdicts.
+        if args.robots_txt_obey and not obeys_robots(args.url, args.user_agent):
+            raise RuntimeError(f"Robots.txt does not allow crawling {args.url}")
+
+        landing_html, _ = fetch(args.url)
+        jobadder_key = extract_jobadder_key(landing_html)
+        if not jobadder_key:
+            raise RuntimeError(
+                "Younity page did not expose a JobAdder widget key "
+                f"(_jaJobsSettings.key) at {args.url}"
+            )
+
+        younity_pages: list[RawJobPageInput] = []
+        cards: list[dict[str, Any]] = []
+        seen_job_ids: set[str] = set()
+        total_pages = 1
+        page_number = 1
+        while page_number <= total_pages and len(younity_pages) < args.max_pages:
+            list_url = younity_list_url(jobadder_key, page_number)
+            if args.robots_txt_obey and not obeys_robots(list_url, args.user_agent):
+                raise RuntimeError(f"Robots.txt does not allow crawling {list_url}")
+            if younity_pages:
+                sleeper(args.delay_seconds)
+            list_payload, _ = fetch(list_url)
+            list_fragment = decode_jobadder_jsonp(list_payload)
+            younity_pages.append(
+                raw_page(args, list_url, list_fragment, clean_text(list_fragment))
+            )
+
+            page_cards, parsed_total = parse_younity_list(list_fragment)
+            if parsed_total is not None:
+                total_pages = max(1, parsed_total)
+            if not page_cards:
+                break
+            for card in page_cards:
+                if card["jobId"] in seen_job_ids:
+                    continue
+                seen_job_ids.add(card["jobId"])
+                cards.append(card)
+            if page_number >= total_pages:
+                break
+            page_number += 1
+
+        truncated = page_number < total_pages
+        younity_jobs: list[RawJobInput] = []
+        detail_failures = 0
+        for card in cards:
+            if len(younity_pages) >= args.max_pages:
+                truncated = True
+                break
+            detail_url = younity_detail_url(jobadder_key, card["jobId"])
+            if args.robots_txt_obey and not obeys_robots(detail_url, args.user_agent):
+                raise RuntimeError(f"Robots.txt does not allow crawling {detail_url}")
+            if younity_pages:
+                sleeper(args.delay_seconds)
+            try:
+                detail_payload, _ = fetch(detail_url)
+            except HttpStatusError as exc:
+                # One unavailable detail page must not discard the cards that
+                # did load; the run is marked incomplete so reconciliation does
+                # not treat the missing posting as filled.
+                detail_failures += 1
+                print(
+                    f"Younity detail unavailable ({exc.status}): {detail_url}",
+                    file=sys.stderr,
+                )
+                continue
+
+            detail_fragment = decode_jobadder_jsonp(detail_payload)
+            younity_pages.append(
+                raw_page(args, detail_url, detail_fragment, clean_text(detail_fragment))
+            )
+            job = parse_younity_detail(
+                args.source,
+                YOUNITY_JOB_URL_TEMPLATE.format(job_id=card["jobId"]),
+                card["jobId"],
+                card["title"],
+                card.get("location"),
+                card.get("employment"),
+                detail_fragment,
+            )
+            # The board is curated to ICT, Digital & Technology, and the live
+            # classification is the source's own IT signal. Use it when the
+            # title alone has no taxonomy keyword (e.g. "nCino Functional
+            # Consultant"); otherwise apply the shared content gate.
+            category = str(card.get("category") or "")
+            classified_it = any(
+                marker in category.upper()
+                for marker in ("ICT", "TECHNOLOGY", "DIGITAL")
+            )
+            if not is_plausible_job_title(job.title, job.source):
+                continue
+            if not classified_it and not looks_like_it_job(
+                job.title, job.descriptionText or ""
+            ):
+                continue
+            if candidate_rejection_reason(job, crawl_url=args.url):
+                continue
+            younity_jobs.append(job)
+
+        if not younity_pages:
+            raise RuntimeError("Younity crawl fetched no JobAdder listing pages")
+
+        return {
+            "rawPages": [asdict(page) for page in younity_pages],
+            "jobs": [asdict(job) for job in younity_jobs],
+            # A bounded page set or a failed detail page is not a full sweep.
+            "isComplete": not truncated and detail_failures == 0,
+            "stats": {"candidates": len(cards), "kept": len(younity_jobs)},
+        }
+
     if parser == "rss":
         # Job RSS/XML feeds (SuccessFactors SearchJobs/feed) list every vacancy.
         if args.robots_txt_obey and not obeys_robots(args.url, args.user_agent):
@@ -1534,6 +1651,7 @@ PARSER_CHOICES = (
     "tribe",
     "oracle",
     "salesforce",
+    "younity",
 )
 
 #: Fetcher back-ends accepted on the CLI.

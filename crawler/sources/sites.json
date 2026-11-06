@@ -320,6 +320,26 @@
       "notes": "DISABLED 2026-10-12 (Round 3): younity.co.nz/it-jobs/ is a content hub; its listings are embedded LinkedIn/SEEK widgets (\"Listed by: LinkedIn Seek\") and the site exposes no own job data or public API. Round 4 re-probe: unchanged."
     },
     {
+      "name": "Younity IT Jobs",
+      "tier": 2,
+      "category": "recruiter",
+      "homepage": "https://younity.co.nz/",
+      "jobs_url": "https://younity.co.nz/it-jobs/",
+      "platform": "jobadder",
+      "enabled": true,
+      "frequency_minutes": 1440,
+      "strategy": "custom",
+      "httpStatus": 200,
+      "parser": "younity",
+      "sitemapJobUrls": 0,
+      "fetcher": "http",
+      "robotsAllows": true,
+      "delaySeconds": 1,
+      "maxPages": 60,
+      "extendMaxPages": true,
+      "notes": "Round 23 (2026-11-07): the WordPress /it-jobs/ page embeds a JobAdder widget (_jaJobsSettings); listing cards and details come from apps.jobadder.com/widgets/V1/Jobs/RenderJobList and RenderJobDetails. Robots verified 2026-11-07 with the honest crawler UA: younity.co.nz is User-agent:* / empty Disallow (allow all) and /it-jobs/ is 200; apps.jobadder.com is Disallow: / followed by Allow: /widgets/v1/* and Allow: /widgets/V1/*. Every request still goes through obeys_robots. The older 'Younity' content-hub entry stays disabled."
+    },
+    {
       "name": "Consult Recruitment",
       "tier": 2,
       "category": "recruiter",

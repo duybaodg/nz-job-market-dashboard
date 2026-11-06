@@ -70,6 +70,7 @@ public sealed class ScraplingCliContractTests
     [InlineData("sjs", "sjs")]
     [InlineData("employment-hero", "employment-hero")]
     [InlineData("linkedin-guest", "linkedin-guest")]
+    [InlineData("younity", "younity")]
     public void NormaliseParser_keeps_round17_registry_values(string input, string expected)
     {
         ScraplingCliContract.NormaliseParser(input).Should().Be(expected);
@@ -156,6 +157,17 @@ public sealed class ScraplingCliContractTests
         {
             names.Should().NotContain(retired);
         }
+    }
+
+    [Fact]
+    public void Round23_younity_it_jobs_is_an_enabled_younity_source()
+    {
+        var younity = LoadRegistry().Single(site => site.Name == "Younity IT Jobs");
+
+        younity.Enabled.Should().BeTrue();
+        younity.Parser.Should().Be("younity");
+        younity.Fetcher.Should().Be("http");
+        ScraplingCliContract.NormaliseParser(younity.Parser).Should().Be("younity");
     }
 
     private static IReadOnlySet<string> PythonChoices(string name)

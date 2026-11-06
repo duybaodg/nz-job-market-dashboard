@@ -54,7 +54,7 @@ class SourceRegistryTests(unittest.TestCase):
     def test_registry_covers_the_full_nz_site_list(self) -> None:
         registry = load_registry()
 
-        self.assertGreaterEqual(len(registry), 53)
+        self.assertGreaterEqual(len(registry), 54)
         # Every entry must carry a crawl strategy so the worker can route it.
         self.assertTrue(all(site.get("strategy") for site in registry.values()))
 
@@ -112,6 +112,22 @@ class SourceRegistryTests(unittest.TestCase):
                      "Inland Revenue Careers", "MPI Careers", "DOC Careers",
                      "NZ Police"):
             self.assertIsNone(lookup_source(name), name)
+
+    def test_round23_enables_the_younity_jobadder_board(self) -> None:
+        younity = lookup_source("Younity IT Jobs")
+
+        self.assertIsNotNone(younity)
+        self.assertTrue(younity["enabled"])
+        self.assertEqual("https://younity.co.nz/it-jobs/", younity["jobs_url"])
+        self.assertEqual("younity", younity["parser"])
+        self.assertEqual("http", younity["fetcher"])
+        self.assertEqual("jobadder", younity["platform"])
+        self.assertTrue(younity["robotsAllows"])
+        self.assertEqual(1, younity["delaySeconds"])
+        self.assertIn("Allow: /widgets/v1/*", younity["notes"])
+        self.assertIn("Allow: /widgets/V1/*", younity["notes"])
+        # The old content-hub entry remains disabled and is not the crawl path.
+        self.assertFalse(lookup_source("Younity")["enabled"])
 
     def test_round12_removes_retired_sources(self) -> None:
         # User decision: these eight are not coming back, so they are deleted
