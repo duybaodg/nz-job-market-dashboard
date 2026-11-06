@@ -124,6 +124,7 @@ public sealed record SkillHistoryDto(
 public sealed record CohortComparisonDto(
     DateTime GeneratedAtUtc,
     int Days,
+    string TaxonomyVersion,
     MetricIntervalDto Interval,
     ComparisonCohortDto A,
     ComparisonCohortDto B,

@@ -94,6 +94,7 @@ public sealed class CohortComparisonService(
         return new CohortComparisonDto(
             now,
             days,
+            rules.Version,
             MetricIntervalMapper.ToDto(interval, isPartial: false),
             cohortA.Dto,
             cohortB.Dto,
@@ -334,13 +335,38 @@ public sealed class CohortComparisonService(
         var requiredDays = RequiredDays(interval, previousInterval);
         if (capturedDates.Count == 0)
         {
+            // Distinguish "skill capture has not started" from "the first
+            // skill-captured snapshot exists but is outside the complete
+            // window". The latter is the live case on 2026-11-06: the capture
+            // day is the in-progress local day and is excluded by design.
+            var anyCapturedDates = await dbContext.ListingSnapshots
+                .AsNoTracking()
+                .Where(snapshot => snapshot.SkillsCaptured)
+                .Select(snapshot => snapshot.SnapshotDate)
+                .Distinct()
+                .OrderBy(date => date)
+                .ToListAsync(cancellationToken);
+
+            if (anyCapturedDates.Count == 0)
+            {
+                return UnavailableSkillHistory(
+                    "No snapshot day has captured skills yet, so a current-versus-previous skill-share comparison is unavailable. Snapshot skill capture begins with the first Round 21 capture.",
+                    0,
+                    requiredDays,
+                    days,
+                    null,
+                    null);
+            }
+
+            var firstCaptured = anyCapturedDates[0];
+            var lastCaptured = anyCapturedDates[^1];
             return UnavailableSkillHistory(
-                "No snapshot day has captured skills yet, so a current-versus-previous skill-share comparison is unavailable. Snapshot skill capture begins with the first Round 21 capture.",
+                $"No snapshot day inside the {requiredDays}-day comparison window captured skills. Snapshot skill capture begins {firstCaptured:yyyy-MM-dd} (latest {lastCaptured:yyyy-MM-dd}), but the complete window ends {interval.EndLocalDateExclusive.AddDays(-1):yyyy-MM-dd}; the current and previous skill-share history cannot be computed yet.",
                 0,
                 requiredDays,
                 days,
-                null,
-                null);
+                firstCaptured,
+                lastCaptured);
         }
 
         var first = capturedDates[0];

@@ -171,7 +171,7 @@ public sealed class ApiPayloadContractTests
         var json = Json(comparison);
 
         Require(json,
-            "generatedAtUtc", "days", "interval", "a", "b", "activeCountDifference",
+            "generatedAtUtc", "days", "taxonomyVersion", "interval", "a", "b", "activeCountDifference",
             "skillDifferences", "skillHistory", "dateRule", "scopeNote", "notes");
         Require(json,
             "a.key", "a.label", "a.definition", "a.activeListings", "a.listingsWithSkills",
@@ -207,7 +207,7 @@ public sealed class ApiPayloadContractTests
             "skillHistory.basis", "skillHistory.aCurrentListings", "skillHistory.aPreviousListings",
             "skillHistory.bCurrentListings", "skillHistory.bPreviousListings", "skillHistory.skills");
         RequireNonNull(json,
-            "generatedAtUtc", "days", "interval.label", "dateRule", "scopeNote", "notes",
+            "generatedAtUtc", "days", "taxonomyVersion", "interval.label", "dateRule", "scopeNote", "notes",
             "a.key", "a.label", "a.activeListings", "a.listingsWithSkills",
             "a.skillCoveragePercent", "a.salary.eligibleCount", "a.salary.cohortCount",
             "a.salary.coveragePercent", "a.salary.suppressed", "a.salary.currency",
@@ -218,6 +218,7 @@ public sealed class ApiPayloadContractTests
             "activeCountDifference.baseline", "activeCountDifference.note",
             "skillHistory.available", "skillHistory.skillsCapturedSnapshotDays",
             "skillHistory.requiredCompleteDays", "skillHistory.periodDays", "skillHistory.skills");
+        json.GetProperty("taxonomyVersion").GetString().Should().Be("data-subrole-v1");
         json.GetProperty("a").GetProperty("definition").GetProperty("dataSubRole").GetString()
             .Should().Be("data-engineer");
         json.GetProperty("b").GetProperty("definition").GetProperty("dataSubRole").GetString()

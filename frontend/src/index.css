@@ -341,7 +341,8 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
 .constant-source-grid span { display: block; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
 .constant-source-grid strong { display: block; margin-top: 5px; font-size: 17px; overflow-wrap: anywhere; }
 .constant-source-grid small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.45; }
-.table-scroll { overflow-x: auto; max-width: 100%; }
+.table-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+.table-scroll:focus-visible { outline: 3px solid rgba(23, 121, 111, .35); outline-offset: 2px; border-radius: 8px; }
 .constant-source-table { min-width: 0; }
 .constant-source-table th, .constant-source-table td { padding: 8px; font-size: 13px; }
 .constant-source-table caption { caption-side: top; text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 6px; }
@@ -442,7 +443,10 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
 .explorer-skills { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .explorer-skills li { border-radius: 999px; padding: 4px 8px; background: #e9f5f2; color: #155f58; font-size: 12px; }
 .explorer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.explorer-table { min-width: 0; }
+/* Keep seven columns legible on a phone by scrolling the table inside
+   .table-scroll instead of squeezing every column; the mobile block-table
+   conversion is explicitly overridden below so headers stay visible. */
+.explorer-table { min-width: 720px; }
 .explorer-table th, .explorer-table td { padding: 8px; font-size: 13px; vertical-align: top; }
 .explorer-table caption { caption-side: top; text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 6px; }
 .explorer-table th[scope='row'] { font-size: 13px; text-transform: none; letter-spacing: 0; color: #26312f; }
@@ -458,6 +462,8 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
   .explorer-stats { grid-template-columns: 1fr; }
   .explorer-grid { grid-template-columns: 1fr; }
   .explorer-taxonomy-bar .refresh-button { margin-left: 0; width: 100%; }
+  .role-explorer .ranked-bar { grid-template-columns: minmax(112px, 1.4fr) minmax(40px, 1fr) auto; gap: 8px; }
+  .role-explorer .ranked-bar-label { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }
   .explorer-table thead { display: table-header-group; }
   .explorer-table tbody { display: table-row-group; }
   .explorer-table tr { display: table-row; border: 0; padding: 0; }
@@ -496,7 +502,9 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
 .comparison-bar-b { background: #b7791f; }
 .comparison-bar-value { text-align: right; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .compare-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
-.compare-table { min-width: 0; }
+/* Keep the cohort columns aligned on narrow screens: the table keeps its
+   header row and scrolls horizontally inside .table-scroll. */
+.compare-table { min-width: 640px; }
 .compare-table th, .compare-table td { padding: 8px; font-size: 13px; vertical-align: top; }
 .compare-table caption { caption-side: top; text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 6px; }
 .compare-history-unavailable { border: 1px solid #dfbd72; border-radius: 12px; padding: 12px; background: #fff8e9; font-size: 13px; line-height: 1.5; }
@@ -509,7 +517,8 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
 
 @media (max-width: 720px) {
   .compare-cohort-fields { grid-template-columns: 1fr; }
-  .comparison-bar-row { grid-template-columns: 52px minmax(30px, 1fr) 64px; gap: 6px; }
+  .comparison-bar-row { grid-template-columns: 60px minmax(24px, 1fr) 90px; gap: 6px; }
+  .comparison-bar-value { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
   .compare-table thead { display: table-header-group; }
   .compare-table tbody { display: table-row-group; }
   .compare-table tr { display: table-row; border: 0; padding: 0; }

@@ -333,7 +333,7 @@ export function DataRoleExplorer({ jobs, filters, onChange, onClear }: DataRoleE
             </div>
           </div>
 
-          <div className="table-scroll">
+          <div className="table-scroll" role="region" aria-label="Data and Analytics sub-role breakdown table" tabIndex={0}>
             <table className="explorer-table">
               <caption>
                 Data &amp; Analytics sub-role breakdown · taxonomy {data.taxonomyVersion} · effective{' '}

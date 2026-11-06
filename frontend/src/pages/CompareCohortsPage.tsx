@@ -302,6 +302,10 @@ export function CompareCohortsPage() {
             <strong>Identical for both cohorts</strong>
           </div>
           <div>
+            <span>Sub-role taxonomy</span>
+            <strong>{comparison ? comparison.taxonomyVersion : loading ? 'Loading…' : 'Unavailable'}</strong>
+          </div>
+          <div>
             <span>Data freshness</span>
             <strong>{overviewQuery.data ? formatNzDateTime(overviewQuery.data.dataStatus.lastSuccessfulUpdateUtc) : 'Unavailable'}</strong>
           </div>
@@ -363,7 +367,7 @@ export function CompareCohortsPage() {
                   },
                 ]}
               />
-              <div className="table-scroll">
+              <div className="table-scroll" role="region" aria-label="Active listing count comparison table" tabIndex={0}>
                 <table className="compare-table">
                   <caption>Active count difference · Cohort A is the explicit baseline</caption>
                   <thead>
@@ -410,14 +414,16 @@ export function CompareCohortsPage() {
                 bLabel="Cohort B"
                 items={comparison.skillDifferences.map((skill) => ({
                   label: skill.skillName,
-                  aValue: skill.aCount,
-                  bValue: skill.bCount,
-                  aDisplay: `${skill.aCount.toLocaleString('en-NZ')} (${skill.aSharePercent}%)`,
-                  bDisplay: `${skill.bCount.toLocaleString('en-NZ')} (${skill.bSharePercent}%)`,
+                  // Bar length is the share (a common 0–100 scale), not the raw
+                  // count: the two cohort denominators can differ.
+                  aValue: skill.aSharePercent,
+                  bValue: skill.bSharePercent,
+                  aDisplay: `${skill.aSharePercent}% (${skill.aCount.toLocaleString('en-NZ')}/${skill.aListingDenominator.toLocaleString('en-NZ')})`,
+                  bDisplay: `${skill.bSharePercent}% (${skill.bCount.toLocaleString('en-NZ')}/${skill.bListingDenominator.toLocaleString('en-NZ')})`,
                 }))}
                 emptyMessage="No extracted skill appears in either cohort."
               />
-              <div className="table-scroll">
+              <div className="table-scroll" role="region" aria-label="Skill share comparison table" tabIndex={0}>
                 <table className="compare-table">
                   <caption>Skill share by cohort · denominator is each cohort's active listing count</caption>
                   <thead>
@@ -461,7 +467,7 @@ export function CompareCohortsPage() {
                     <p>Comparable permanent annual NZD midpoints only. Groups below five are suppressed; 5–9 are flagged.</p>
                   </div>
                 </div>
-                <div className="table-scroll">
+                <div className="table-scroll" role="region" aria-label="Salary sample and coverage table" tabIndex={0}>
                   <table className="compare-table">
                     <caption>Descriptive salary summary · no causal salary-premium claim is made</caption>
                     <thead>
@@ -499,7 +505,7 @@ export function CompareCohortsPage() {
                     <p>Complete Pacific/Auckland windows only; the current and previous periods are equal length.</p>
                   </div>
                 </div>
-                <div className="table-scroll">
+                <div className="table-scroll" role="region" aria-label="New listings period comparison table" tabIndex={0}>
                   <table className="compare-table">
                     <caption>Period counts follow the same completeness gate for both cohorts</caption>
                     <thead>
@@ -561,7 +567,7 @@ export function CompareCohortsPage() {
                 </div>
               ) : (
                 <>
-                  <div className="table-scroll">
+                  <div className="table-scroll" role="region" aria-label="Skill-share history table" tabIndex={0}>
                     <table className="compare-table">
                       <caption>
                         {comparison.skillHistory.currentPeriodLabel} · previous {comparison.skillHistory.previousPeriodLabel}

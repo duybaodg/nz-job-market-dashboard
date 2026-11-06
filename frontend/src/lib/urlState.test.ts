@@ -212,6 +212,9 @@ describe('comparison URL state', () => {
     expect(parseComparisonState('?days=99&aRole=nope&bRole=%00bad').days).toBe('7')
     expect(parseComparisonState('?days=99&aRole=nope&bRole=%00bad').aRole).toBe('data-analyst')
     expect(parseComparisonState('?days=99&aRole=nope&bRole=%00bad').bRole).toBe('data-engineer')
+    const cleared = { ...defaultComparisonState, aRole: '', bRole: '' }
+    expect(parseComparisonState(serializeComparisonState(cleared))).toEqual(cleared)
+    expect(serializeComparisonState(cleared)).toContain('aRole=all')
   })
 
   it('resets an invalid role selection', () => {

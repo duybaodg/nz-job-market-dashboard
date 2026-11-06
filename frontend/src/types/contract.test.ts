@@ -240,7 +240,7 @@ describe('Data & Analytics explorer contract', () => {
 describe('Two-cohort comparison contract', () => {
   it('carries both cohort definitions, counts, skill points, salary samples and history eligibility', () => {
     requireFields(comparisonFixture, [
-      'generatedAtUtc', 'days', 'interval', 'a', 'b', 'activeCountDifference',
+      'generatedAtUtc', 'days', 'taxonomyVersion', 'interval', 'a', 'b', 'activeCountDifference',
       'skillDifferences', 'skillHistory', 'dateRule', 'scopeNote', 'notes',
       'a.key', 'a.label', 'a.definition', 'a.activeListings', 'a.listingsWithSkills',
       'a.skillCoveragePercent', 'a.salary', 'a.newListings',
@@ -271,7 +271,7 @@ describe('Two-cohort comparison contract', () => {
       'skillHistory.bCurrentListings', 'skillHistory.bPreviousListings', 'skillHistory.skills',
     ])
     requireNonNull(comparisonFixture, [
-      'generatedAtUtc', 'days', 'interval.label', 'dateRule', 'scopeNote', 'notes',
+      'generatedAtUtc', 'days', 'taxonomyVersion', 'interval.label', 'dateRule', 'scopeNote', 'notes',
       'a.key', 'a.label', 'a.activeListings', 'a.listingsWithSkills', 'a.skillCoveragePercent',
       'a.salary.eligibleCount', 'a.salary.cohortCount', 'a.salary.coveragePercent',
       'a.salary.suppressed', 'a.salary.currency', 'a.salary.payPeriod', 'a.salary.basis',
@@ -282,6 +282,7 @@ describe('Two-cohort comparison contract', () => {
       'skillHistory.available', 'skillHistory.skillsCapturedSnapshotDays',
       'skillHistory.requiredCompleteDays', 'skillHistory.periodDays', 'skillHistory.skills',
     ])
+    expect(comparisonFixture.taxonomyVersion).toBe('data-subrole-v1')
     expect(comparisonFixture.skillDifferences[0].differencePercentagePoints).toBe(-9.2)
     expect(comparisonFixture.skillHistory.available).toBe(false)
     expect(comparisonFixture.skillHistory.reason).toContain('14 complete skill-captured days')

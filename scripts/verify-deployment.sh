@@ -55,7 +55,9 @@ import json
 import sys
 
 jobs = json.load(open(sys.argv[1], encoding="utf-8"))
-required = ["roleFamily", "advertiserType", "employerDisclosure", "sourceCategory", "salaryPeriod", "duplicateCount", "alsoOnSources", "employerCanonicalName"]
+required = ["roleFamily", "advertiserType", "employerDisclosure", "sourceCategory", "salaryPeriod", "duplicateCount", "alsoOnSources", "employerCanonicalName",
+            "dataSubRoleKey", "dataSubRole", "dataSubRoleUncertain", "dataSubRoleCandidates",
+            "dataSubRoleUncertainReason", "dataSubRoleVersion"]
 missing = [key for key in required if any(key not in job for job in jobs)]
 if missing:
     print("missing keys: " + ", ".join(missing))
@@ -464,6 +466,122 @@ print("  top skills: " + ", ".join(item["skillName"] + "=" + str(item["jobCount"
 PY
 fi
 rm -f "$skills_jobs" "$top_skills"
+
+printf '%-28s ' "Round 22 data role explorer"
+roles_tmp=$(mktemp)
+if ! curl -fsS --max-time 30 "${BASE_URL}/api/analytics/data-roles" -o "$roles_tmp" 2>/dev/null; then
+  echo "FAIL (no response)"
+  fail=1
+elif python3 - "$roles_tmp" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+roles = data.get("roles", [])
+problems = []
+if data.get("taxonomyVersion") != "data-subrole-v1":
+    problems.append("taxonomyVersion is not data-subrole-v1")
+if not data.get("taxonomyEffectiveDate"):
+    problems.append("taxonomyEffectiveDate is missing")
+if data.get("cohortCount") != sum(role.get("listingCount", 0) for role in roles):
+    problems.append("cohortCount != sum of sub-role listing counts")
+if data.get("classifiedCount") + data.get("uncertainCount") != data.get("cohortCount"):
+    problems.append("classified + uncertain != cohortCount")
+for role in roles:
+    salary = role.get("salary", {})
+    if salary.get("eligibleCount", 0) >= 5 and salary.get("suppressed"):
+        problems.append(role.get("key") + " suppresses a sample of five or more")
+    if salary.get("eligibleCount", 0) < 5 and not salary.get("suppressed"):
+        problems.append(role.get("key") + " publishes a sample below five")
+    if 5 <= salary.get("eligibleCount", 0) <= 9 and not salary.get("smallSample"):
+        problems.append(role.get("key") + " fails to flag a 5-9 sample")
+    if salary.get("eligibleCount") is not None and role.get("listingCount") is not None:
+        expected = 0 if role["listingCount"] == 0 else round(salary["eligibleCount"] / role["listingCount"] * 100, 1)
+        if abs(salary.get("coveragePercent", 0) - expected) > 0.05:
+            problems.append(role.get("key") + " salary coverage arithmetic differs")
+if problems:
+    print("FAIL (" + "; ".join(problems) + ")")
+    raise SystemExit(1)
+print("OK (taxonomy=%s, cohort=%d, classified=%d, uncertain=%d, roles=%d)" % (
+    data["taxonomyVersion"], data["cohortCount"], data["classifiedCount"],
+    data["uncertainCount"], len(roles)))
+for role in roles:
+    print("  %-28s %3d listings, salary sample %d/%d" % (
+        role["label"], role["listingCount"], role["salary"]["eligibleCount"],
+        role["salary"]["cohortCount"]))
+PY
+then
+  :
+else
+  fail=1
+fi
+rm -f "$roles_tmp"
+
+printf '%-28s ' "Round 22 cohort comparison"
+compare_tmp=$(mktemp)
+compare_url="${BASE_URL}/api/analytics/compare?days=7&aRoleFamily=Data%20%26%20Analytics&aDataSubRole=data-analyst&bRoleFamily=Data%20%26%20Analytics&bDataSubRole=data-engineer"
+if ! curl -fsS --max-time 30 "$compare_url" -o "$compare_tmp" 2>/dev/null; then
+  echo "FAIL (no response)"
+  fail=1
+elif python3 - "$compare_tmp" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+problems = []
+if data.get("days") != 7:
+    problems.append("days is not 7")
+if data.get("taxonomyVersion") != "data-subrole-v1":
+    problems.append("taxonomyVersion is not data-subrole-v1")
+if data["a"].get("key") != "A" or data["b"].get("key") != "B":
+    problems.append("cohort keys are not A/B")
+if data["a"]["definition"].get("dataSubRole") != "data-analyst":
+    problems.append("cohort A sub-role is not data-analyst")
+if data["b"]["definition"].get("dataSubRole") != "data-engineer":
+    problems.append("cohort B sub-role is not data-engineer")
+for key in ("a", "b"):
+    cohort = data[key]
+    salary = cohort["salary"]
+    if salary.get("eligibleCount", 0) >= 5 and salary.get("suppressed"):
+        problems.append(key + " suppresses a sample of five or more")
+    if salary.get("eligibleCount", 0) < 5 and not salary.get("suppressed"):
+        problems.append(key + " publishes a sample below five")
+    if 5 <= salary.get("eligibleCount", 0) <= 9 and not salary.get("smallSample"):
+        problems.append(key + " fails to flag a 5-9 sample")
+    if salary.get("eligibleCount", 0) > cohort.get("activeListings", 0):
+        problems.append(key + " salary eligible exceeds active listings")
+    if cohort["newListings"].get("available"):
+        if cohort["newListings"].get("currentNewListings") is None:
+            problems.append(key + " says period is available but current count is null")
+for skill in data.get("skillDifferences", []):
+    expected = round(skill["bSharePercent"] - skill["aSharePercent"], 1)
+    if abs(skill["differencePercentagePoints"] - expected) > 0.11:
+        problems.append(skill["skillName"] + " difference is not B minus A in percentage points")
+    if skill["aSharePercent"] and skill["aListingDenominator"] == 0:
+        problems.append(skill["skillName"] + " has a share with a zero denominator")
+if data["activeCountDifference"]["relativeDifferencePercent"] is None and data["activeCountDifference"]["baselineAvailable"]:
+    problems.append("relative count difference is null while the baseline is available")
+if not data.get("dateRule") or "identical date rules" not in data["dateRule"]:
+    problems.append("dateRule does not state identical rules")
+skill_history = data.get("skillHistory", {})
+if skill_history.get("available") is False and not skill_history.get("reason"):
+    problems.append("unavailable skill history has no specific reason")
+if problems:
+    print("FAIL (" + "; ".join(problems) + ")")
+    raise SystemExit(1)
+print("OK (A=%d, B=%d, abs diff=%+d, skills=%d, skill history available=%s)" % (
+    data["a"]["activeListings"], data["b"]["activeListings"],
+    data["activeCountDifference"]["absoluteDifference"], len(data.get("skillDifferences", [])),
+    skill_history.get("available")))
+if skill_history.get("reason"):
+    print("  skill history: " + skill_history["reason"][:180])
+PY
+then
+  :
+else
+  fail=1
+fi
+rm -f "$compare_tmp"
 
 printf '%-28s ' "Round 14 metric consistency"
 # Round 14: the dashboard reads these payloads from different endpoints, so the

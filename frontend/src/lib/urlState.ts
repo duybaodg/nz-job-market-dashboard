@@ -448,8 +448,16 @@ export function parseComparisonState(search: string): ComparisonState {
   state.days = oneOf(TREND_PERIODS, days) ? days : defaultComparisonState.days
 
   for (const key of ['aRole', 'bRole'] as const) {
-    const value = safeFilterValue(params.get(key)) || defaultComparisonState[key]
-    state[key] = DATA_SUB_ROLE_KEYS.includes(value) ? value : defaultComparisonState[key]
+    const raw = safeFilterValue(params.get(key))
+    if (!raw) {
+      // No parameter at all means the documented default cohort. An explicit
+      // "all" token preserves a cleared sub-role through reload/Back.
+      state[key] = defaultComparisonState[key]
+    } else if (raw === 'all') {
+      state[key] = ''
+    } else {
+      state[key] = DATA_SUB_ROLE_KEYS.includes(raw) ? raw : defaultComparisonState[key]
+    }
   }
 
   return state
@@ -458,10 +466,16 @@ export function parseComparisonState(search: string): ComparisonState {
 export function serializeComparisonState(state: ComparisonState): string {
   const params = new URLSearchParams()
   for (const key of COMPARISON_KEYS) {
+    if (key === 'aRole' || key === 'bRole') {
+      const role = state[key]
+      if (role === defaultComparisonState[key]) continue
+      params.set(key, role || 'all')
+      continue
+    }
+
     const value = state[key]
     if (!value) continue
     if (key === 'days' && value === defaultComparisonState.days) continue
-    if ((key === 'aRole' || key === 'bRole') && value === defaultComparisonState[key]) continue
     params.set(key, value)
   }
   return params.toString()

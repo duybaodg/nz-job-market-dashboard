@@ -600,6 +600,7 @@ export const dataRoleExplorerFixture: DataRoleExplorer = {
 export const comparisonFixture: CohortComparison = {
   generatedAtUtc: '2026-11-06T08:40:29Z',
   days: 7,
+  taxonomyVersion: 'data-subrole-v1',
   interval: {
     startUtc: '2026-10-29T11:00:00Z',
     endUtc: '2026-11-05T11:00:00Z',

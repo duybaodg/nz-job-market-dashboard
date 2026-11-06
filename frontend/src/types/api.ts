@@ -498,6 +498,7 @@ export type SkillHistory = {
 export type CohortComparison = {
   generatedAtUtc: string
   days: number
+  taxonomyVersion: string
   interval: MetricInterval
   a: ComparisonCohort
   b: ComparisonCohort

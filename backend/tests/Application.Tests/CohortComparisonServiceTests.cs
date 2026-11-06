@@ -144,6 +144,31 @@ public sealed class CohortComparisonServiceTests
     }
 
     [Fact]
+    public async Task No_captured_skill_day_inside_the_window_names_the_first_capture_date()
+    {
+        await using var db = CreateDbContext();
+        var firstSeen = new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc);
+        var jobId = AddJob(db, "Data Engineer", "Auckland", 120000, 140000, ["SQL"], firstSeen: firstSeen);
+        // The first skill-captured snapshot is the in-progress 2026-11-06 local
+        // day, which the complete window [2026-10-23, 2026-11-06) excludes.
+        AddSnapshot(db, new DateOnly(2026, 11, 6), jobId, firstSeen, "A1", "Auckland", "Data Engineer", true, ["SQL"]);
+        await db.SaveChangesAsync();
+
+        var service = new CohortComparisonService(db, new HistoryService(db, new TestClock(Now)), new TestClock(Now));
+        var result = await service.CompareAsync(
+            new CohortComparisonQuery(7, new ComparisonCohortQuery(), new ComparisonCohortQuery()),
+            CancellationToken.None);
+
+        result.SkillHistory.Available.Should().BeFalse();
+        result.SkillHistory.SkillsCapturedSnapshotDays.Should().Be(0);
+        result.SkillHistory.RequiredCompleteDays.Should().Be(14);
+        result.SkillHistory.FirstSkillsCapturedDate.Should().Be("2026-11-06");
+        result.SkillHistory.Reason.Should().Contain("inside the 14-day comparison window");
+        result.SkillHistory.Reason.Should().Contain("begins 2026-11-06");
+        result.SkillHistory.Reason.Should().Contain("complete window ends 2026-11-05");
+    }
+
+    [Fact]
     public async Task Skill_history_is_computed_when_both_complete_windows_captured_skills()
     {
         await using var db = CreateDbContext();
