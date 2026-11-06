@@ -1,0 +1,292 @@
+{
+  "purpose": "Round 22 P0/C1 fixture: representative titles traced from the active 2026-11-06 feed plus documented ambiguous/multiple-role titles. The currentRoleFamily field records the role-family-v1 result at P0; it is asserted, not guessed.",
+  "capturedOn": "2026-11-06",
+  "familyRuleVersion": "role-family-v1",
+  "items": [
+    {
+      "title": "Data Analyst",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-analyst",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Senior Data Engineer",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-engineer",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Senior Analytics Engineer",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "analytics-engineer",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Business Intelligence Analyst",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "bi-analyst-developer",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Senior Business Intelligence Developer",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "bi-analyst-developer",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Data Scientist",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-scientist",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Senior Machine Learning Engineer",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-scientist",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Lead Machine Learning Engineer",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-scientist",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known",
+      "note": "Lead describes seniority here, not data leadership; it must not be forced into the leadership bucket."
+    },
+    {
+      "title": "Data & Analytics Technical Lead",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "leadership",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Line 1 Financial Crime Risk Analytics Senior Manager",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "leadership",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Data Warehouse & BI Specialist",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "bi-analyst-developer",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Senior Power BI Developer",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "bi-analyst-developer",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Workforce Data Analyst",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-analyst",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Principal Data Analyst",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-analyst",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Senior Voice of Customer Data Analyst",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-analyst",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Data Engineer (SQL, SSIS)",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-engineer",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Software Engineer (Data Engineer)",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": "data-engineer",
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "known"
+    },
+    {
+      "title": "Lead Advisor Business Intelligence",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": true,
+      "expectedCandidates": ["leadership", "bi-analyst-developer"],
+      "case": "ambiguous",
+      "note": "Advisory/leadership and BI signals coexist; no label is forced."
+    },
+    {
+      "title": "Data Analyst / Data Engineer",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": true,
+      "expectedCandidates": ["data-analyst", "data-engineer"],
+      "case": "multiple"
+    },
+    {
+      "title": "Analytics Engineer / Data Engineer",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": true,
+      "expectedCandidates": ["analytics-engineer", "data-engineer"],
+      "case": "multiple"
+    },
+    {
+      "title": "Lead Data Analyst",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": true,
+      "expectedCandidates": ["leadership", "data-analyst"],
+      "case": "ambiguous",
+      "note": "A lead-level individual contributor and a people leader are both plausible; the state stays explicit."
+    },
+    {
+      "title": "Data Architect",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": true,
+      "expectedCandidates": [],
+      "case": "unspecified",
+      "note": "Architecture is not one of the six target sub-roles, so no label is forced."
+    },
+    {
+      "title": "Data and Analytics Specialist",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": true,
+      "expectedCandidates": [],
+      "case": "unspecified"
+    },
+    {
+      "title": "Campaign Analytics Specialist",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": true,
+      "expectedCandidates": [],
+      "case": "unspecified"
+    },
+    {
+      "title": "Dairy Scientist - AI & Machine Learning",
+      "currentRoleFamily": "Data & Analytics",
+      "subRoleApplicable": true,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": true,
+      "expectedCandidates": [],
+      "case": "unspecified",
+      "note": "Machine learning appears as a context phrase in a dairy science title; forcing Data Scientist would be a false positive."
+    },
+    {
+      "title": "Head of Data, Digital & Information Services",
+      "currentRoleFamily": "Management & Leadership",
+      "subRoleApplicable": false,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "outside-family",
+      "note": "Role-family-v1 assigns this to Management & Leadership; the sub-role taxonomy is scoped to the Data & Analytics family and does not override it."
+    },
+    {
+      "title": "Manager Data and Insights",
+      "currentRoleFamily": "Other / Unknown",
+      "subRoleApplicable": false,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "outside-family"
+    },
+    {
+      "title": "Digital, Data & ICT Manager",
+      "currentRoleFamily": "Other / Unknown",
+      "subRoleApplicable": false,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "outside-family"
+    },
+    {
+      "title": "Data & Systems Analyst",
+      "currentRoleFamily": "Business Analysis",
+      "subRoleApplicable": false,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "outside-family"
+    },
+    {
+      "title": "Engineer - Data Platform",
+      "currentRoleFamily": "Software Engineering",
+      "subRoleApplicable": false,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "outside-family"
+    },
+    {
+      "title": "Senior Software Engineer - Data Engineering",
+      "currentRoleFamily": "Software Engineering",
+      "subRoleApplicable": false,
+      "expectedSubRoleKey": null,
+      "expectedUncertain": false,
+      "expectedCandidates": [],
+      "case": "outside-family"
+    }
+  ]
+}
