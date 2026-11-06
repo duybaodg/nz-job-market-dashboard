@@ -303,23 +303,6 @@
       "notes": "public JSON feed /api/jobs (97 roles) with job URLs /find-a-job/job-listings/{id}"
     },
     {
-      "name": "Younity",
-      "tier": 2,
-      "category": "recruiter",
-      "homepage": "https://www.younity.co.nz/",
-      "jobs_url": "https://younity.co.nz/jobseekers/",
-      "platform": null,
-      "enabled": false,
-      "frequency_minutes": 1440,
-      "strategy": "dynamic",
-      "httpStatus": 200,
-      "parser": "generic",
-      "sitemapJobUrls": 28,
-      "fetcher": "dynamic",
-      "robotsAllows": true,
-      "notes": "DISABLED 2026-10-12 (Round 3): younity.co.nz/it-jobs/ is a content hub; its listings are embedded LinkedIn/SEEK widgets (\"Listed by: LinkedIn Seek\") and the site exposes no own job data or public API. Round 4 re-probe: unchanged."
-    },
-    {
       "name": "Younity IT Jobs",
       "tier": 2,
       "category": "recruiter",

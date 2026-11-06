@@ -54,7 +54,7 @@ class SourceRegistryTests(unittest.TestCase):
     def test_registry_covers_the_full_nz_site_list(self) -> None:
         registry = load_registry()
 
-        self.assertGreaterEqual(len(registry), 54)
+        self.assertGreaterEqual(len(registry), 53)
         # Every entry must carry a crawl strategy so the worker can route it.
         self.assertTrue(all(site.get("strategy") for site in registry.values()))
 
@@ -99,7 +99,9 @@ class SourceRegistryTests(unittest.TestCase):
         )
 
     def test_round3_disables_sources_with_no_crawlable_listings(self) -> None:
-        for name in ("Younity", "Orion Health", "MyJobSpace"):
+        # "Younity" (content hub) was removed entirely in Round 23 follow-up;
+        # "Younity IT Jobs" is the live JobAdder board.
+        for name in ("Orion Health", "MyJobSpace"):
             site = lookup_source(name)
             self.assertFalse(site["enabled"], name)
             self.assertIn("Round 3", site.get("notes", ""), name)
@@ -126,8 +128,10 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertEqual(1, younity["delaySeconds"])
         self.assertIn("Allow: /widgets/v1/*", younity["notes"])
         self.assertIn("Allow: /widgets/V1/*", younity["notes"])
-        # The old content-hub entry remains disabled and is not the crawl path.
-        self.assertFalse(lookup_source("Younity")["enabled"])
+        # Follow-up 2026-11-07: the legacy content-hub entry was deleted from
+        # the registry entirely (operator decision), so only the JobAdder
+        # board remains.
+        self.assertIsNone(lookup_source("Younity"))
 
     def test_round12_removes_retired_sources(self) -> None:
         # User decision: these eight are not coming back, so they are deleted
