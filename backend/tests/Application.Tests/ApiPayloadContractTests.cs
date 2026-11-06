@@ -147,6 +147,84 @@ public sealed class ApiPayloadContractTests
         json.GetProperty("cohortCount").GetInt32().Should().Be(2);
     }
 
+    // --- Round 22 (C2): two-cohort comparison ------------------------------
+
+    [Fact]
+    public async Task Cohort_comparison_payload_exposes_counts_skill_points_salary_and_history_eligibility()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedAsync(db);
+        var engineer = await db.Jobs.FindAsync(seed.JobAId);
+        var analyst = await db.Jobs.FindAsync(seed.JobBId);
+        engineer!.Title = "Senior Data Engineer";
+        analyst!.Title = "Data Analyst";
+        await db.SaveChangesAsync();
+
+        var history = new HistoryService(db, new FixedTimeProvider(Now));
+        var comparison = await new CohortComparisonService(db, history, new FixedTimeProvider(Now))
+            .CompareAsync(
+                new CohortComparisonQuery(
+                    7,
+                    new ComparisonCohortQuery(DataSubRole: "data-engineer"),
+                    new ComparisonCohortQuery(DataSubRole: "data-analyst")),
+                CancellationToken.None);
+        var json = Json(comparison);
+
+        Require(json,
+            "generatedAtUtc", "days", "interval", "a", "b", "activeCountDifference",
+            "skillDifferences", "skillHistory", "dateRule", "scopeNote", "notes");
+        Require(json,
+            "a.key", "a.label", "a.definition", "a.activeListings", "a.listingsWithSkills",
+            "a.skillCoveragePercent", "a.salary", "a.newListings",
+            "b.key", "b.label", "b.definition", "b.activeListings", "b.listingsWithSkills",
+            "b.skillCoveragePercent", "b.salary", "b.newListings");
+        Require(json,
+            "a.definition.region", "a.definition.roleFamily", "a.definition.dataSubRole",
+            "a.definition.seniority", "a.definition.workMode", "a.definition.skill",
+            "a.definition.hasFilters",
+            "a.salary.medianAnnualNzd", "a.salary.eligibleCount", "a.salary.cohortCount",
+            "a.salary.coveragePercent", "a.salary.suppressed", "a.salary.smallSample",
+            "a.salary.currency", "a.salary.payPeriod", "a.salary.basis",
+            "a.newListings.available", "a.newListings.unavailableReason", "a.newListings.interval",
+            "a.newListings.currentNewListings", "a.newListings.previousNewListings",
+            "a.newListings.change", "a.newListings.currentPeriodCovered",
+            "a.newListings.dateBasis", "a.newListings.note");
+        Require(json,
+            "activeCountDifference.aCount", "activeCountDifference.bCount",
+            "activeCountDifference.absoluteDifference", "activeCountDifference.relativeDifferencePercent",
+            "activeCountDifference.baselineAvailable", "activeCountDifference.baseline",
+            "activeCountDifference.note");
+        Require(json,
+            "skillDifferences[0].skillName", "skillDifferences[0].aCount",
+            "skillDifferences[0].aSharePercent", "skillDifferences[0].bCount",
+            "skillDifferences[0].bSharePercent", "skillDifferences[0].differencePercentagePoints",
+            "skillDifferences[0].aListingDenominator", "skillDifferences[0].bListingDenominator");
+        Require(json,
+            "skillHistory.available", "skillHistory.reason", "skillHistory.skillsCapturedSnapshotDays",
+            "skillHistory.requiredCompleteDays", "skillHistory.firstSkillsCapturedDate",
+            "skillHistory.lastSkillsCapturedDate", "skillHistory.periodDays",
+            "skillHistory.currentPeriodLabel", "skillHistory.previousPeriodLabel",
+            "skillHistory.basis", "skillHistory.aCurrentListings", "skillHistory.aPreviousListings",
+            "skillHistory.bCurrentListings", "skillHistory.bPreviousListings", "skillHistory.skills");
+        RequireNonNull(json,
+            "generatedAtUtc", "days", "interval.label", "dateRule", "scopeNote", "notes",
+            "a.key", "a.label", "a.activeListings", "a.listingsWithSkills",
+            "a.skillCoveragePercent", "a.salary.eligibleCount", "a.salary.cohortCount",
+            "a.salary.coveragePercent", "a.salary.suppressed", "a.salary.currency",
+            "a.salary.payPeriod", "a.salary.basis", "a.newListings.available",
+            "a.newListings.currentPeriodCovered", "a.newListings.dateBasis",
+            "activeCountDifference.aCount", "activeCountDifference.bCount",
+            "activeCountDifference.absoluteDifference", "activeCountDifference.baselineAvailable",
+            "activeCountDifference.baseline", "activeCountDifference.note",
+            "skillHistory.available", "skillHistory.skillsCapturedSnapshotDays",
+            "skillHistory.requiredCompleteDays", "skillHistory.periodDays", "skillHistory.skills");
+        json.GetProperty("a").GetProperty("definition").GetProperty("dataSubRole").GetString()
+            .Should().Be("data-engineer");
+        json.GetProperty("b").GetProperty("definition").GetProperty("dataSubRole").GetString()
+            .Should().Be("data-analyst");
+        json.GetProperty("skillDifferences").GetArrayLength().Should().BeGreaterThan(0);
+    }
+
     // --- Overview stat cards and freshness pill ------------------------------
 
     [Fact]

@@ -158,6 +158,60 @@ app.MapGet("/api/analytics/quality", async (
     Results.Ok(await qualityService.GetQualitySummaryAsync(cancellationToken)))
     .WithName("GetQualitySummary");
 
+// Round 22 (C2): one two-cohort comparison over the existing filter
+// vocabulary, with identical date rules and a shared eligibility gate.
+app.MapGet("/api/analytics/compare", async (
+        int? days,
+        string? aRegion,
+        string? aRoleFamily,
+        string? aDataSubRole,
+        string? aSeniority,
+        string? aWorkMode,
+        string? aSkill,
+        string? bRegion,
+        string? bRoleFamily,
+        string? bDataSubRole,
+        string? bSeniority,
+        string? bWorkMode,
+        string? bSkill,
+        ICohortComparisonService comparisonService,
+        CancellationToken cancellationToken) =>
+    {
+        if (days is < 1 or > 365)
+        {
+            return Results.BadRequest(new { error = "days must be between 1 and 365" });
+        }
+
+        var filters = new[]
+        {
+            aRegion, aRoleFamily, aDataSubRole, aSeniority, aWorkMode, aSkill,
+            bRegion, bRoleFamily, bDataSubRole, bSeniority, bWorkMode, bSkill
+        };
+        if (filters.Any(value => value is { Length: > 120 }))
+        {
+            return Results.BadRequest(new { error = "comparison filters must be 120 characters or fewer" });
+        }
+
+        var query = new CohortComparisonQuery(
+            days ?? 7,
+            new ComparisonCohortQuery(
+                CleanHistoryFilter(aRegion),
+                CleanHistoryFilter(aRoleFamily),
+                CleanHistoryFilter(aDataSubRole),
+                CleanHistoryFilter(aSeniority),
+                CleanHistoryFilter(aWorkMode),
+                CleanHistoryFilter(aSkill)),
+            new ComparisonCohortQuery(
+                CleanHistoryFilter(bRegion),
+                CleanHistoryFilter(bRoleFamily),
+                CleanHistoryFilter(bDataSubRole),
+                CleanHistoryFilter(bSeniority),
+                CleanHistoryFilter(bWorkMode),
+                CleanHistoryFilter(bSkill)));
+        return Results.Ok(await comparisonService.CompareAsync(query, cancellationToken));
+    })
+    .WithName("CompareCohorts");
+
 // Round 22 (C1): versioned Data & Analytics sub-role breakdown. The response
 // carries the taxonomy version beside every count and salary sample.
 app.MapGet("/api/analytics/data-roles", async (

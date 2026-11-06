@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAnalyticsService, AnalyticsService>();
         services.AddScoped<IQualitySummaryService, QualitySummaryService>();
         services.AddScoped<IDataRoleExplorerService, DataRoleExplorerService>();
+        services.AddScoped<ICohortComparisonService, CohortComparisonService>();
         services.AddScoped<IClassificationReviewService, ClassificationReviewService>();
         services.AddSingleton<IClassificationEvaluationProvider, EmbeddedClassificationEvaluationProvider>();
         services.AddScoped<IHistoryService, HistoryService>();
