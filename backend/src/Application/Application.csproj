@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Domain\Domain.csproj" />
@@ -13,6 +13,9 @@
          the public accuracy measure is backed by committed evidence, never a
          hardcoded number. -->
     <EmbeddedResource Include="Quality/Data/classification-evaluation-2026-11-05.json" />
+    <!-- Round 22 (C1): the versioned Data & Analytics sub-role taxonomy travels
+         with the image so API results and UI disclosure cannot drift. -->
+    <EmbeddedResource Include="Jobs/Data/data-subrole-taxonomy.json" />
   </ItemGroup>
 
   <PropertyGroup>

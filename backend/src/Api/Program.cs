@@ -158,6 +158,30 @@ app.MapGet("/api/analytics/quality", async (
     Results.Ok(await qualityService.GetQualitySummaryAsync(cancellationToken)))
     .WithName("GetQualitySummary");
 
+// Round 22 (C1): versioned Data & Analytics sub-role breakdown. The response
+// carries the taxonomy version beside every count and salary sample.
+app.MapGet("/api/analytics/data-roles", async (
+        string? region,
+        string? seniority,
+        string? workMode,
+        string? skill,
+        IDataRoleExplorerService explorerService,
+        CancellationToken cancellationToken) =>
+    {
+        if (new[] { region, seniority, workMode, skill }.Any(value => value is { Length: > 120 }))
+        {
+            return Results.BadRequest(new { error = "role explorer filters must be 120 characters or fewer" });
+        }
+
+        var query = new DataRoleExplorerQuery(
+            CleanHistoryFilter(region),
+            CleanHistoryFilter(seniority),
+            CleanHistoryFilter(workMode),
+            CleanHistoryFilter(skill));
+        return Results.Ok(await explorerService.GetDataRolesAsync(query, cancellationToken));
+    })
+    .WithName("GetDataRoles");
+
 app.MapGet("/api/analytics/history", async (
         int? days,
         string? region,

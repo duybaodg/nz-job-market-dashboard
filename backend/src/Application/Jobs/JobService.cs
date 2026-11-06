@@ -171,6 +171,7 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
         sourceCategories.TryGetValue(job.Source, out var category);
         var employer = EmployerClassifier.Classify(job.Source, category, job.Company);
         var roleFamily = RoleFamilyClassifier.Classify(job.Title);
+        var dataSubRole = DataSubRoleClassifier.Classify(job.Title, roleFamily.Family);
         var memberCount = duplicateInfo?.MemberCount ?? 1;
         var alsoOn = duplicateInfo is null
             ? []
@@ -214,6 +215,12 @@ public sealed class JobService(IApplicationDbContext dbContext) : IJobService
             employer.Disclosure.ToString(),
             roleFamily.Family,
             roleFamily.Inferred,
+            dataSubRole.Key,
+            dataSubRole.Label,
+            dataSubRole.Uncertain,
+            dataSubRole.CandidateLabels,
+            dataSubRole.UncertainReason,
+            dataSubRole.TaxonomyVersion,
             job.DuplicateGroupId,
             Math.Max(0, memberCount - 1),
             alsoOn,

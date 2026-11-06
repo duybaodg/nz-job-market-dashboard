@@ -38,6 +38,15 @@ public sealed record JobDto(
     // Deterministic title classification; the original title is always retained.
     string RoleFamily,
     bool RoleFamilyInferred,
+    // Round 22 (C1): versioned Data & Analytics sub-role. Family members that
+    // are ambiguous or unspecified keep an explicit uncertain state and a null
+    // key; they are never forced into a label. Non-family rows have no sub-role.
+    string? DataSubRoleKey,
+    string? DataSubRole,
+    bool DataSubRoleUncertain,
+    IReadOnlyList<string> DataSubRoleCandidates,
+    string? DataSubRoleUncertainReason,
+    string DataSubRoleVersion,
     // Soft duplicate grouping; null when the listing is standalone.
     Guid? DuplicateGroupId,
     int DuplicateCount,

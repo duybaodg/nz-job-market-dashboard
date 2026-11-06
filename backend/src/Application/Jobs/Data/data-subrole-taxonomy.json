@@ -1,0 +1,73 @@
+{
+  "version": "data-subrole-v1",
+  "effectiveDate": "2026-11-06",
+  "family": "Data & Analytics",
+  "description": "Versioned, title-only sub-role taxonomy for the Data & Analytics role family. It narrows the existing role-family-v1 result; it never changes which listings belong to the family. Ambiguous or multiple-role titles remain explicitly uncertain and are not forced into one sub-role.",
+  "scope": "Applied only when the deterministic role-family classifier returns Data & Analytics. Titles outside that family keep no sub-role, even when a pattern below would match, so this taxonomy cannot silently shift the existing family metric or its historical snapshots.",
+  "uncertainLabel": "Uncertain / multiple or unspecified",
+  "uncertainReasonMultiple": "Multiple sub-role signals were found, so no single label is forced.",
+  "uncertainReasonNone": "This title belongs to the Data & Analytics family but matches no specific sub-role definition; it stays unspecified rather than being forced.",
+  "roles": [
+    {
+      "key": "leadership",
+      "label": "Data & Analytics Leadership",
+      "definition": "A leadership or people-management role over data, analytics, insights or business-intelligence work. A 'Lead' seniority word alone does not qualify; the title must pair a leadership word with a data/analytics function, or name a data leadership post.",
+      "patterns": [
+        "\\b(?:head|director|chief|vp|vice\\s+president)\\b[^,|/;]{0,60}\\b(?:data|analytics|insights|business\\s+intelligence|information)\\b",
+        "\\b(?:data|analytics|insights|business\\s+intelligence|information)\\b[^,|/;]{0,70}\\b(?:head|director|chief|manager|lead|leader)\\b",
+        "\\b(?:manager|lead|leader|director|head)\\b[^,|/;]{0,70}\\b(?:data|analytics|insights|business\\s+intelligence)\\b",
+        "\\b(?:data|analytics)\\s*(?:and|&)\\s*(?:analytics|insights|information)\\b[^,|/;]{0,50}\\b(?:lead|leader|manager|head|director)\\b"
+      ]
+    },
+    {
+      "key": "data-analyst",
+      "label": "Data Analyst",
+      "definition": "A role whose primary work is analysing, interpreting or reporting data (including insights and reporting analysts).",
+      "patterns": [
+        "\\bdata\\b[^,|/;]{0,30}\\banalyst\\b",
+        "\\b(?:analytics|insights|reporting)\\s+analyst\\b"
+      ]
+    },
+    {
+      "key": "bi-analyst-developer",
+      "label": "BI Analyst/Developer",
+      "definition": "A business-intelligence or BI-platform role: BI analyst/developer/specialist, business-intelligence analyst/developer, or a named BI platform role such as Power BI or Tableau.",
+      "patterns": [
+        "\\bbusiness\\s+intelligence\\b",
+        "\\bbi\\s+(?:analyst|developer|specialist|consultant|engineer)\\b",
+        "\\b(?:power\\s*bi|tableau|qlik|looker)\\s+(?:analyst|developer|specialist|consultant)\\b"
+      ]
+    },
+    {
+      "key": "analytics-engineer",
+      "label": "Analytics Engineer",
+      "definition": "A role that engineers analytics data models and transformations, explicitly titled analytics engineer or analytics engineering.",
+      "patterns": [
+        "\\banalytics?\\s+engineer\\b",
+        "\\banalytics\\s+engineering\\b"
+      ]
+    },
+    {
+      "key": "data-engineer",
+      "label": "Data Engineer",
+      "definition": "A role that builds or operates data pipelines, platforms, warehouses or ETL, explicitly titled data engineer/engineering or equivalent.",
+      "patterns": [
+        "\\bdata\\s+(?:engineer|engineering)\\b",
+        "\\bdata\\b[^,|/;]{0,25}\\bengineer\\b",
+        "\\b(?:big\\s+data|etl|data\\s+platform|data\\s+pipeline|data\\s+warehouse)\\s+(?:engineer|developer|specialist)\\b",
+        "\\bengineer\\b[^,|/;]{0,30}\\bdata\\b"
+      ]
+    },
+    {
+      "key": "data-scientist",
+      "label": "Data Scientist",
+      "definition": "A role explicitly titled data scientist/data science, or a machine-learning/deep-learning engineer, scientist or specialist. A bare AI context phrase is not enough.",
+      "patterns": [
+        "\\bdata\\s+scientist\\b",
+        "\\bdata\\s+science\\b",
+        "\\b(?:machine|deep)\\s+learning\\s+(?:engineer|scientist|specialist|developer)\\b",
+        "\\bml\\s+(?:engineer|scientist)\\b"
+      ]
+    }
+  ]
+}

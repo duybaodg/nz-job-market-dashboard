@@ -68,6 +68,85 @@ public sealed class ApiPayloadContractTests
         RequireNonNull(job, "salaryMin", "salaryMax", "salaryText");
     }
 
+    // --- Round 22 (C1): versioned Data & Analytics sub-role -----------------
+
+    [Fact]
+    public async Task Job_card_payload_exposes_the_versioned_data_sub_role_state()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedAsync(db);
+        var engineer = await db.Jobs.FindAsync(seed.JobAId);
+        var ambiguous = await db.Jobs.FindAsync(seed.JobBId);
+        engineer!.Title = "Senior Data Engineer";
+        ambiguous!.Title = "Data Analyst / Data Engineer";
+        await db.SaveChangesAsync();
+
+        var jobs = await new JobService(db).GetJobsAsync(
+            new JobListQuery(null, null, null, "all", null),
+            CancellationToken.None);
+
+        var engineerJson = Json(jobs.Single(entry => entry.Id == seed.JobAId));
+        Require(engineerJson,
+            "dataSubRoleKey", "dataSubRole", "dataSubRoleUncertain",
+            "dataSubRoleCandidates", "dataSubRoleUncertainReason", "dataSubRoleVersion");
+        RequireNonNull(engineerJson, "dataSubRoleKey", "dataSubRole", "dataSubRoleUncertain",
+            "dataSubRoleCandidates", "dataSubRoleVersion");
+        engineerJson.GetProperty("dataSubRoleKey").GetString().Should().Be("data-engineer");
+        engineerJson.GetProperty("dataSubRoleVersion").GetString().Should().Be("data-subrole-v1");
+        engineerJson.GetProperty("dataSubRoleUncertain").GetBoolean().Should().BeFalse();
+
+        var ambiguousJson = Json(jobs.Single(entry => entry.Id == seed.JobBId));
+        ambiguousJson.GetProperty("dataSubRoleKey").ValueKind.Should().Be(JsonValueKind.Null);
+        ambiguousJson.GetProperty("dataSubRoleUncertain").GetBoolean().Should().BeTrue();
+        ambiguousJson.GetProperty("dataSubRoleCandidates").GetArrayLength().Should().Be(2);
+        RequireNonNull(ambiguousJson, "dataSubRoleUncertainReason", "dataSubRoleVersion");
+    }
+
+    // --- Round 22 (C1): Data & Analytics explorer ---------------------------
+
+    [Fact]
+    public async Task Data_role_explorer_payload_carries_version_counts_and_salary_samples()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedAsync(db);
+        var engineer = await db.Jobs.FindAsync(seed.JobAId);
+        var analyst = await db.Jobs.FindAsync(seed.JobBId);
+        engineer!.Title = "Senior Data Engineer";
+        analyst!.Title = "Data Analyst";
+        await db.SaveChangesAsync();
+
+        var explorer = await new DataRoleExplorerService(db, new FixedTimeProvider(Now))
+            .GetDataRolesAsync(new DataRoleExplorerQuery(), CancellationToken.None);
+        var json = Json(explorer);
+
+        Require(json,
+            "generatedAtUtc", "family", "taxonomyVersion", "taxonomyEffectiveDate",
+            "taxonomyDescription", "taxonomyScope", "uncertainLabel", "cohortCount",
+            "classifiedCount", "uncertainCount", "classifiedSharePercent", "filters",
+            "roles", "salaryBasis", "skillBasis", "scopeNote");
+        Require(json,
+            "filters.region", "filters.seniority", "filters.workMode", "filters.skill",
+            "filters.hasFilters", "filters.note",
+            "roles[0].key", "roles[0].label", "roles[0].uncertain", "roles[0].candidateLabels",
+            "roles[0].listingCount", "roles[0].sharePercent", "roles[0].salary",
+            "roles[0].listingsWithSkills", "roles[0].skillCoveragePercent", "roles[0].topSkills");
+        Require(json,
+            "roles[0].salary.medianAnnualNzd", "roles[0].salary.eligibleCount",
+            "roles[0].salary.cohortCount", "roles[0].salary.coveragePercent",
+            "roles[0].salary.suppressed", "roles[0].salary.smallSample",
+            "roles[0].salary.currency", "roles[0].salary.payPeriod", "roles[0].salary.basis");
+        RequireNonNull(json,
+            "generatedAtUtc", "family", "taxonomyVersion", "taxonomyEffectiveDate",
+            "uncertainLabel", "cohortCount", "classifiedCount", "uncertainCount",
+            "classifiedSharePercent", "salaryBasis", "skillBasis", "scopeNote",
+            "roles[0].key", "roles[0].label", "roles[0].uncertain", "roles[0].listingCount",
+            "roles[0].salary.eligibleCount", "roles[0].salary.cohortCount",
+            "roles[0].salary.suppressed", "roles[0].listingsWithSkills",
+            "roles[0].skillCoveragePercent", "roles[0].topSkills");
+        json.GetProperty("taxonomyVersion").GetString().Should().Be("data-subrole-v1");
+        json.GetProperty("cohortCount").GetInt32().Should().Be(2);
+    }
+
     // --- Overview stat cards and freshness pill ------------------------------
 
     [Fact]
