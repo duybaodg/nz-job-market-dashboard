@@ -1,4 +1,5 @@
 import { useAppLocation } from './hooks/useAppLocation'
+import { CompareCohortsPage } from './pages/CompareCohortsPage'
 import { FindJobsPage } from './pages/FindJobsPage'
 import { HealthPage } from './pages/HealthPage'
 import { MarketTrendsPage } from './pages/MarketTrendsPage'
@@ -12,9 +13,11 @@ function App() {
 
   const page = pathname.startsWith('/health')
     ? <HealthPage />
-    : pathname.startsWith('/trends')
-      ? <MarketTrendsPage />
-      : <FindJobsPage />
+    : pathname.startsWith('/compare')
+      ? <CompareCohortsPage />
+      : pathname.startsWith('/trends')
+        ? <MarketTrendsPage />
+        : <FindJobsPage />
 
   return (
     <>

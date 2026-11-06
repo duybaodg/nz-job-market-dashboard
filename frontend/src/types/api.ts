@@ -408,3 +408,103 @@ export type DataRoleExplorer = {
   skillBasis: string
   scopeNote: string
 }
+
+export type ComparisonCohortDefinition = {
+  region: string | null
+  roleFamily: string | null
+  dataSubRole: string | null
+  seniority: string | null
+  workMode: string | null
+  skill: string | null
+  hasFilters: boolean
+}
+
+export type ComparisonPeriod = {
+  available: boolean
+  unavailableReason: string | null
+  interval: MetricInterval | null
+  currentNewListings: number | null
+  previousNewListings: number | null
+  change: Change | null
+  currentPeriodCovered: boolean
+  dateBasis: string
+  note: string | null
+}
+
+export type ComparisonCohort = {
+  key: 'A' | 'B' | string
+  label: string
+  definition: ComparisonCohortDefinition
+  activeListings: number
+  listingsWithSkills: number
+  skillCoveragePercent: number
+  salary: SalarySummary
+  newListings: ComparisonPeriod
+}
+
+export type ComparisonCountDifference = {
+  aCount: number
+  bCount: number
+  absoluteDifference: number
+  relativeDifferencePercent: number | null
+  baselineAvailable: boolean
+  baseline: string
+  note: string
+}
+
+export type ComparisonSkillDifference = {
+  skillName: string
+  aCount: number
+  aSharePercent: number
+  bCount: number
+  bSharePercent: number
+  differencePercentagePoints: number
+  aListingDenominator: number
+  bListingDenominator: number
+}
+
+export type SkillHistorySkill = {
+  skillName: string
+  aCurrentCount: number
+  aCurrentSharePercent: number
+  aPreviousCount: number | null
+  aPreviousSharePercent: number | null
+  aChangePoints: number | null
+  bCurrentCount: number
+  bCurrentSharePercent: number
+  bPreviousCount: number | null
+  bPreviousSharePercent: number | null
+  bChangePoints: number | null
+}
+
+export type SkillHistory = {
+  available: boolean
+  reason: string | null
+  skillsCapturedSnapshotDays: number
+  requiredCompleteDays: number
+  firstSkillsCapturedDate: string | null
+  lastSkillsCapturedDate: string | null
+  periodDays: number
+  currentPeriodLabel: string | null
+  previousPeriodLabel: string | null
+  basis: string | null
+  aCurrentListings: number | null
+  aPreviousListings: number | null
+  bCurrentListings: number | null
+  bPreviousListings: number | null
+  skills: SkillHistorySkill[]
+}
+
+export type CohortComparison = {
+  generatedAtUtc: string
+  days: number
+  interval: MetricInterval
+  a: ComparisonCohort
+  b: ComparisonCohort
+  activeCountDifference: ComparisonCountDifference
+  skillDifferences: ComparisonSkillDifference[]
+  skillHistory: SkillHistory
+  dateRule: string
+  scopeNote: string
+  notes: string[]
+}

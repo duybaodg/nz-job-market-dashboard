@@ -464,3 +464,55 @@ button.ranked-bar:hover, .ranked-bar.selected { background: #f0f7f5; }
   .explorer-table th, .explorer-table td { display: table-cell; padding: 6px; }
   .explorer-table td::before { content: none; }
 }
+
+/* ---- Round 22 (C2): two-cohort comparison ---- */
+.compare-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+.compare-cohort-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--soft); min-width: 0; }
+.compare-cohort-card h3 { margin: 0 0 4px; font-size: 14px; }
+.compare-cohort-card p { color: var(--muted); font-size: 12px; }
+.compare-cohort-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.compare-cohort-fields label { display: grid; gap: 5px; min-width: 0; color: #52645f; font-size: 11px; font-weight: 800; }
+.compare-cohort-fields select { width: 100%; min-height: 38px; border: 1px solid #cbd8d3; border-radius: 9px; padding: 7px 9px; background: #fff; }
+.compare-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.compare-summary-card { min-width: 0; border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.compare-summary-card h3 { margin: 0 0 8px; font-size: 15px; overflow-wrap: anywhere; }
+.compare-summary-card dl { margin: 0; display: grid; gap: 8px; }
+.compare-summary-card dl > div { border-top: 1px solid #e7eeeb; padding-top: 7px; }
+.compare-summary-card dl > div:first-child { border-top: 0; padding-top: 0; }
+.compare-summary-card dt { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.compare-summary-card dd { margin: 2px 0 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.compare-summary-card .refresh-button { margin-top: 10px; }
+.comparison-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.comparison-bars > li { border-top: 1px solid #e7eeeb; padding-top: 10px; }
+.comparison-bars > li:first-child { border-top: 0; padding-top: 0; }
+.comparison-bar-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 5px; }
+.comparison-bar-label { font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }
+.comparison-bar-head small { color: var(--muted); font-size: 11px; }
+.comparison-bar-row { display: grid; grid-template-columns: 64px minmax(40px, 1fr) 74px; align-items: center; gap: 8px; margin-top: 4px; }
+.comparison-bar-cohort { color: var(--muted); font-size: 11px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comparison-bar-track { height: 12px; border-radius: 999px; background: #eef3f1; overflow: hidden; }
+.comparison-bar-fill { display: block; height: 100%; border-radius: 999px; }
+.comparison-bar-a { background: var(--brand); }
+.comparison-bar-b { background: #b7791f; }
+.comparison-bar-value { text-align: right; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.compare-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.compare-table { min-width: 0; }
+.compare-table th, .compare-table td { padding: 8px; font-size: 13px; vertical-align: top; }
+.compare-table caption { caption-side: top; text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 6px; }
+.compare-history-unavailable { border: 1px solid #dfbd72; border-radius: 12px; padding: 12px; background: #fff8e9; font-size: 13px; line-height: 1.5; }
+.compare-history-unavailable strong { display: block; margin-bottom: 4px; }
+.compare-notes { margin: 10px 0 0; padding-left: 18px; color: #3e514c; font-size: 13px; line-height: 1.5; }
+
+@media (max-width: 1080px) {
+  .compare-controls, .compare-summary, .compare-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+  .compare-cohort-fields { grid-template-columns: 1fr; }
+  .comparison-bar-row { grid-template-columns: 52px minmax(30px, 1fr) 64px; gap: 6px; }
+  .compare-table thead { display: table-header-group; }
+  .compare-table tbody { display: table-row-group; }
+  .compare-table tr { display: table-row; border: 0; padding: 0; }
+  .compare-table th, .compare-table td { display: table-cell; padding: 6px; }
+  .compare-table td::before { content: none; }
+}

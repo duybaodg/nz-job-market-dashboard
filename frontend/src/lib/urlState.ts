@@ -381,3 +381,97 @@ export function buildJobsHref(overrides: Partial<JobFilterState>): string {
   const query = serializeJobViewState(state)
   return query ? `/jobs?${query}` : '/jobs'
 }
+
+// ---- Round 22 (C2): two-cohort comparison URL state ----------------------
+
+export type ComparisonState = {
+  days: string
+  aRole: string
+  aRegion: string
+  aSeniority: string
+  aWorkMode: string
+  aSkill: string
+  bRole: string
+  bRegion: string
+  bSeniority: string
+  bWorkMode: string
+  bSkill: string
+}
+
+export const defaultComparisonState: ComparisonState = {
+  days: '7',
+  aRole: 'data-analyst',
+  aRegion: '',
+  aSeniority: '',
+  aWorkMode: '',
+  aSkill: '',
+  bRole: 'data-engineer',
+  bRegion: '',
+  bSeniority: '',
+  bWorkMode: '',
+  bSkill: '',
+}
+
+const COMPARISON_KEYS: Array<keyof ComparisonState> = [
+  'days',
+  'aRole',
+  'aRegion',
+  'aSeniority',
+  'aWorkMode',
+  'aSkill',
+  'bRole',
+  'bRegion',
+  'bSeniority',
+  'bWorkMode',
+  'bSkill',
+]
+const COMPARISON_TEXT_KEYS: Array<Exclude<keyof ComparisonState, 'days' | 'aRole' | 'bRole'>> = [
+  'aRegion',
+  'aSeniority',
+  'aWorkMode',
+  'aSkill',
+  'bRegion',
+  'bSeniority',
+  'bWorkMode',
+  'bSkill',
+]
+
+/** Parse the comparison workflow state, falling back safely on invalid input. */
+export function parseComparisonState(search: string): ComparisonState {
+  const params = new URLSearchParams(search)
+  const state: ComparisonState = { ...defaultComparisonState }
+  for (const key of COMPARISON_TEXT_KEYS) {
+    state[key] = safeFilterValue(params.get(key))
+  }
+
+  const days = params.get('days')
+  state.days = oneOf(TREND_PERIODS, days) ? days : defaultComparisonState.days
+
+  for (const key of ['aRole', 'bRole'] as const) {
+    const value = safeFilterValue(params.get(key)) || defaultComparisonState[key]
+    state[key] = DATA_SUB_ROLE_KEYS.includes(value) ? value : defaultComparisonState[key]
+  }
+
+  return state
+}
+
+export function serializeComparisonState(state: ComparisonState): string {
+  const params = new URLSearchParams()
+  for (const key of COMPARISON_KEYS) {
+    const value = state[key]
+    if (!value) continue
+    if (key === 'days' && value === defaultComparisonState.days) continue
+    if ((key === 'aRole' || key === 'bRole') && value === defaultComparisonState[key]) continue
+    params.set(key, value)
+  }
+  return params.toString()
+}
+
+export function setComparisonFilter(state: ComparisonState, name: keyof ComparisonState, value: string): ComparisonState {
+  const next = { ...state, [name]: value }
+  if (name === 'days' && !oneOf(TREND_PERIODS, next.days)) next.days = defaultComparisonState.days
+  if ((name === 'aRole' || name === 'bRole') && next[name] && !DATA_SUB_ROLE_KEYS.includes(next[name])) {
+    next[name] = defaultComparisonState[name]
+  }
+  return next
+}

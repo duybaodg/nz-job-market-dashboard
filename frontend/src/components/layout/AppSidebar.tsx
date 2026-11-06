@@ -1,4 +1,4 @@
-import { Activity, BriefcaseBusiness, HeartPulse } from 'lucide-react'
+import { Activity, BriefcaseBusiness, GitCompareArrows, HeartPulse } from 'lucide-react'
 
 type AppSidebarProps = {
   currentPath?: string
@@ -13,11 +13,13 @@ export function AppSidebar({ currentPath }: AppSidebarProps) {
   const path = resolvePath(currentPath)
   const isJobs = path.startsWith('/jobs') || path === '/'
   const isTrends = path.startsWith('/trends')
+  const isCompare = path.startsWith('/compare')
   const isHealth = path.startsWith('/health')
 
   const navItems = [
     { label: 'Find jobs', icon: BriefcaseBusiness, href: '/jobs', active: isJobs },
     { label: 'Market trends', icon: Activity, href: '/trends', active: isTrends },
+    { label: 'Compare cohorts', icon: GitCompareArrows, href: '/compare', active: isCompare },
     { label: 'Crawler health', icon: HeartPulse, href: '/health', active: isHealth },
   ]
 

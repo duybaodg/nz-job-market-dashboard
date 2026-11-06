@@ -114,6 +114,9 @@ export function DataRoleExplorer({ jobs, filters, onChange, onClear }: DataRoleE
         <a className="refresh-button" href={matchingHref}>
           View matching jobs <ArrowRight aria-hidden="true" />
         </a>
+        <a className="clear-all" href="/compare">
+          Compare two cohorts
+        </a>
       </div>
 
       <div className="explorer-filters" aria-label="Data role explorer filters">

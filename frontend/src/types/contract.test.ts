@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dataRoleExplorerFixture, freshnessFixture, healthFixture, historyFixture, jobFixture, overviewFixture, qualityFixture } from './contract.fixtures'
+import { comparisonFixture, dataRoleExplorerFixture, freshnessFixture, healthFixture, historyFixture, jobFixture, overviewFixture, qualityFixture } from './contract.fixtures'
 
 /**
  * Round 14 consistency contract. One focused check per widget group: every API
@@ -234,5 +234,58 @@ describe('Data & Analytics explorer contract', () => {
     expect(dataRoleExplorerFixture.taxonomyVersion).toBe('data-subrole-v1')
     expect(dataRoleExplorerFixture.roles.some((role) => role.uncertain)).toBe(true)
     expect(dataRoleExplorerFixture.roles.some((role) => role.salary.suppressed)).toBe(true)
+  })
+})
+
+describe('Two-cohort comparison contract', () => {
+  it('carries both cohort definitions, counts, skill points, salary samples and history eligibility', () => {
+    requireFields(comparisonFixture, [
+      'generatedAtUtc', 'days', 'interval', 'a', 'b', 'activeCountDifference',
+      'skillDifferences', 'skillHistory', 'dateRule', 'scopeNote', 'notes',
+      'a.key', 'a.label', 'a.definition', 'a.activeListings', 'a.listingsWithSkills',
+      'a.skillCoveragePercent', 'a.salary', 'a.newListings',
+      'b.key', 'b.label', 'b.definition', 'b.activeListings', 'b.listingsWithSkills',
+      'b.skillCoveragePercent', 'b.salary', 'b.newListings',
+      'a.definition.dataSubRole', 'a.definition.region', 'a.definition.seniority',
+      'a.definition.workMode', 'a.definition.skill', 'a.definition.hasFilters',
+      'a.salary.medianAnnualNzd', 'a.salary.eligibleCount', 'a.salary.cohortCount',
+      'a.salary.coveragePercent', 'a.salary.suppressed', 'a.salary.smallSample',
+      'a.salary.currency', 'a.salary.payPeriod', 'a.salary.basis',
+      'a.newListings.available', 'a.newListings.unavailableReason', 'a.newListings.interval',
+      'a.newListings.currentNewListings', 'a.newListings.previousNewListings',
+      'a.newListings.change', 'a.newListings.currentPeriodCovered', 'a.newListings.dateBasis',
+      'a.newListings.note',
+      'activeCountDifference.aCount', 'activeCountDifference.bCount',
+      'activeCountDifference.absoluteDifference', 'activeCountDifference.relativeDifferencePercent',
+      'activeCountDifference.baselineAvailable', 'activeCountDifference.baseline',
+      'activeCountDifference.note',
+      'skillDifferences[0].skillName', 'skillDifferences[0].aCount',
+      'skillDifferences[0].aSharePercent', 'skillDifferences[0].bCount',
+      'skillDifferences[0].bSharePercent', 'skillDifferences[0].differencePercentagePoints',
+      'skillDifferences[0].aListingDenominator', 'skillDifferences[0].bListingDenominator',
+      'skillHistory.available', 'skillHistory.reason', 'skillHistory.skillsCapturedSnapshotDays',
+      'skillHistory.requiredCompleteDays', 'skillHistory.firstSkillsCapturedDate',
+      'skillHistory.lastSkillsCapturedDate', 'skillHistory.periodDays',
+      'skillHistory.currentPeriodLabel', 'skillHistory.previousPeriodLabel',
+      'skillHistory.basis', 'skillHistory.aCurrentListings', 'skillHistory.aPreviousListings',
+      'skillHistory.bCurrentListings', 'skillHistory.bPreviousListings', 'skillHistory.skills',
+    ])
+    requireNonNull(comparisonFixture, [
+      'generatedAtUtc', 'days', 'interval.label', 'dateRule', 'scopeNote', 'notes',
+      'a.key', 'a.label', 'a.activeListings', 'a.listingsWithSkills', 'a.skillCoveragePercent',
+      'a.salary.eligibleCount', 'a.salary.cohortCount', 'a.salary.coveragePercent',
+      'a.salary.suppressed', 'a.salary.currency', 'a.salary.payPeriod', 'a.salary.basis',
+      'a.newListings.available', 'a.newListings.currentPeriodCovered', 'a.newListings.dateBasis',
+      'activeCountDifference.aCount', 'activeCountDifference.bCount',
+      'activeCountDifference.absoluteDifference', 'activeCountDifference.baselineAvailable',
+      'activeCountDifference.baseline', 'activeCountDifference.note',
+      'skillHistory.available', 'skillHistory.skillsCapturedSnapshotDays',
+      'skillHistory.requiredCompleteDays', 'skillHistory.periodDays', 'skillHistory.skills',
+    ])
+    expect(comparisonFixture.skillDifferences[0].differencePercentagePoints).toBe(-9.2)
+    expect(comparisonFixture.skillHistory.available).toBe(false)
+    expect(comparisonFixture.skillHistory.reason).toContain('14 complete skill-captured days')
+    expect(comparisonFixture.a.salary.suppressed).toBe(true)
+    expect(comparisonFixture.b.salary.smallSample).toBe(true)
   })
 })

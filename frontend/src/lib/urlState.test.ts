@@ -15,6 +15,10 @@ import {
   trendsFilterChips,
   dataExplorerFilterChips,
   defaultTrendsFilters,
+  defaultComparisonState,
+  parseComparisonState,
+  serializeComparisonState,
+  setComparisonFilter,
   type JobViewState,
 } from './urlState'
 
@@ -187,5 +191,31 @@ describe('trends URL state', () => {
 
     expect(chips.map((chip) => chip.name)).toEqual(['region', 'roleFamily', 'seniority'])
     expect(chips.find((chip) => chip.name === 'roleFamily')?.display).toBe('Data & Analytics')
+  })
+})
+
+describe('comparison URL state', () => {
+  it('round-trips both cohort definitions and falls back safely', () => {
+    const state = {
+      ...defaultComparisonState,
+      days: '15',
+      aRole: 'data-analyst',
+      aRegion: 'Auckland',
+      aSeniority: 'Senior',
+      aWorkMode: 'Hybrid',
+      aSkill: 'SQL',
+      bRole: 'data-engineer',
+      bRegion: 'Wellington',
+    }
+    expect(parseComparisonState(serializeComparisonState(state))).toEqual(state)
+    expect(serializeComparisonState(defaultComparisonState)).toBe('')
+    expect(parseComparisonState('?days=99&aRole=nope&bRole=%00bad').days).toBe('7')
+    expect(parseComparisonState('?days=99&aRole=nope&bRole=%00bad').aRole).toBe('data-analyst')
+    expect(parseComparisonState('?days=99&aRole=nope&bRole=%00bad').bRole).toBe('data-engineer')
+  })
+
+  it('resets an invalid role selection', () => {
+    expect(setComparisonFilter(defaultComparisonState, 'aRole', 'unknown').aRole).toBe('data-analyst')
+    expect(setComparisonFilter(defaultComparisonState, 'aRole', 'data-scientist').aRole).toBe('data-scientist')
   })
 })

@@ -1,4 +1,4 @@
-import type { DataRoleExplorer, Freshness, HealthReport, History, Job, JobsByRegion, Overview, QualitySummary, SkillDemand } from '../types/api'
+import type { CohortComparison, DataRoleExplorer, Freshness, HealthReport, History, Job, JobsByRegion, Overview, QualitySummary, SkillDemand } from '../types/api'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5050'
 
@@ -135,4 +135,28 @@ export function getHealth(password: string) {
   return getJson<HealthReport>('/api/admin/health', {
     headers: { Authorization: `Bearer ${password}` },
   })
+}
+
+/** Two-cohort comparison over the existing filter vocabulary (Release C2). */
+export function getComparison(params: {
+  days?: number | string
+  a: { region?: string; roleFamily?: string; dataSubRole?: string; seniority?: string; workMode?: string; skill?: string }
+  b: { region?: string; roleFamily?: string; dataSubRole?: string; seniority?: string; workMode?: string; skill?: string }
+}) {
+  const query = new URLSearchParams()
+  if (params.days) query.set('days', String(params.days))
+  const prefixes = [
+    ['a', params.a],
+    ['b', params.b],
+  ] as const
+  for (const [prefix, cohort] of prefixes) {
+    if (cohort.region) query.set(`${prefix}Region`, cohort.region)
+    if (cohort.roleFamily) query.set(`${prefix}RoleFamily`, cohort.roleFamily)
+    if (cohort.dataSubRole) query.set(`${prefix}DataSubRole`, cohort.dataSubRole)
+    if (cohort.seniority) query.set(`${prefix}Seniority`, cohort.seniority)
+    if (cohort.workMode) query.set(`${prefix}WorkMode`, cohort.workMode)
+    if (cohort.skill) query.set(`${prefix}Skill`, cohort.skill)
+  }
+
+  return getJson<CohortComparison>(`/api/analytics/compare?${query.toString()}`)
 }
