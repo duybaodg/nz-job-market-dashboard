@@ -1,4 +1,5 @@
 import { isComparableAnnual, salaryMidpoint } from './salary'
+import { DATA_SUB_ROLE_FAMILY } from './dataRoles'
 import type { Job } from '../types/api'
 import type { JobFilterState, JobSort } from './urlState'
 
@@ -49,6 +50,10 @@ export function filterJobs(jobs: Job[], filters: JobFilterState, now: number = D
       (!filters.location || job.location === filters.location || job.region === filters.location) &&
       (!filters.skill || job.skills.includes(filters.skill)) &&
       (!filters.roleFamily || job.roleFamily === filters.roleFamily) &&
+      (!filters.dataSubRole ||
+        (filters.dataSubRole === 'uncertain'
+          ? job.roleFamily === DATA_SUB_ROLE_FAMILY && job.dataSubRoleUncertain
+          : job.dataSubRoleKey === filters.dataSubRole)) &&
       (!filters.company || job.company === filters.company) &&
       (!filters.source || job.source === filters.source) &&
       (!filters.workMode || job.workMode === filters.workMode) &&

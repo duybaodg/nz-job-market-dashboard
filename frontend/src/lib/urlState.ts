@@ -5,6 +5,8 @@
  * value and silently falls back to the documented default for anything unknown.
  */
 
+import { DATA_SUB_ROLE_KEYS, dataSubRoleLabel } from './dataRoles'
+
 export const JOB_SORTS = ['newest', 'salary-desc', 'salary-asc', 'closing'] as const
 export type JobSort = (typeof JOB_SORTS)[number]
 
@@ -29,6 +31,7 @@ export type JobFilterState = {
   skill: string
   experienceBand: string
   programmingLanguage: string
+  dataSubRole: string
   status: JobStatus
 }
 
@@ -52,6 +55,7 @@ export const defaultJobFilters: JobFilterState = {
   skill: '',
   experienceBand: '',
   programmingLanguage: '',
+  dataSubRole: '',
   status: 'active',
 }
 
@@ -75,6 +79,7 @@ const JOB_FILTER_KEYS: Array<keyof JobFilterState> = [
   'skill',
   'experienceBand',
   'programmingLanguage',
+  'dataSubRole',
   'status',
 ]
 
@@ -101,6 +106,7 @@ export function parseJobViewState(search: string): JobViewState {
   if (!oneOf(JOB_STATUSES, filters.status)) filters.status = defaultJobFilters.status
   if (filters.days && !oneOf(JOB_DAYS, filters.days)) filters.days = ''
   if (filters.salaryBand && !oneOf(SALARY_BANDS, filters.salaryBand)) filters.salaryBand = ''
+  if (filters.dataSubRole && !DATA_SUB_ROLE_KEYS.includes(filters.dataSubRole)) filters.dataSubRole = ''
 
   const sortValue = params.get('sort')
   const sort: JobSort = oneOf(JOB_SORTS, sortValue) ? sortValue : defaultJobViewState.sort
@@ -167,6 +173,7 @@ const CHIP_LABELS: Partial<Record<keyof JobFilterState, string>> = {
   skill: 'Skill',
   experienceBand: 'Experience',
   programmingLanguage: 'Language',
+  dataSubRole: 'Data sub-role',
   status: 'Status',
 }
 
@@ -196,6 +203,7 @@ export function jobFilterChips(state: JobFilterState): JobFilterChip[] {
     let display = value
     if (key === 'days') display = `Last ${value} days`
     if (key === 'salaryBand') display = SALARY_BAND_LABELS[value] ?? value
+    if (key === 'dataSubRole') display = dataSubRoleLabel(value)
     if (key === 'status') display = STATUS_LABELS[value] ?? value
 
     chips.push({ name: key, label: CHIP_LABELS[key] ?? key, display })
@@ -210,6 +218,13 @@ export type TrendsFilterState = {
   roleFamily: string
   skill: string
   seniority: string
+  // Round 22 (C1): the Data & Analytics explorer has its own URL-backed
+  // filters, so changing them does not silently move the market-trend panels.
+  exploreRole: string
+  exploreRegion: string
+  exploreSeniority: string
+  exploreWorkMode: string
+  exploreSkill: string
 }
 
 export const defaultTrendsFilters: TrendsFilterState = {
@@ -218,14 +233,45 @@ export const defaultTrendsFilters: TrendsFilterState = {
   roleFamily: '',
   skill: '',
   seniority: '',
+  exploreRole: '',
+  exploreRegion: '',
+  exploreSeniority: '',
+  exploreWorkMode: '',
+  exploreSkill: '',
 }
 
-const TRENDS_KEYS: Array<keyof TrendsFilterState> = ['period', 'region', 'roleFamily', 'skill', 'seniority']
-const TRENDS_FILTER_KEYS: Array<Exclude<keyof TrendsFilterState, 'period'>> = [
+const TRENDS_KEYS: Array<keyof TrendsFilterState> = [
+  'period',
   'region',
   'roleFamily',
   'skill',
   'seniority',
+  'exploreRole',
+  'exploreRegion',
+  'exploreSeniority',
+  'exploreWorkMode',
+  'exploreSkill',
+]
+type TrendsCohortKey = 'region' | 'roleFamily' | 'skill' | 'seniority'
+const TRENDS_FILTER_KEYS: TrendsCohortKey[] = [
+  'region',
+  'roleFamily',
+  'skill',
+  'seniority',
+]
+const EXPLORER_KEYS: Array<Exclude<keyof TrendsFilterState, 'period' | 'region' | 'roleFamily' | 'skill' | 'seniority'>> = [
+  'exploreRole',
+  'exploreRegion',
+  'exploreSeniority',
+  'exploreWorkMode',
+  'exploreSkill',
+]
+const TRENDS_SAFE_FILTER_KEYS: Array<Exclude<keyof TrendsFilterState, 'period'>> = [
+  'region',
+  'roleFamily',
+  'skill',
+  'seniority',
+  ...EXPLORER_KEYS,
 ]
 const MAX_FILTER_LENGTH = 120
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
@@ -248,12 +294,13 @@ export function parseTrendsFilterState(search: string): TrendsFilterState {
   const params = new URLSearchParams(search)
   const filters: TrendsFilterState = { ...defaultTrendsFilters }
 
-  for (const key of TRENDS_FILTER_KEYS) {
+  for (const key of TRENDS_SAFE_FILTER_KEYS) {
     filters[key] = safeFilterValue(params.get(key))
   }
 
   const period = params.get('period')
   filters.period = oneOf(TREND_PERIODS, period) ? period : defaultTrendsFilters.period
+  if (filters.exploreRole && !DATA_SUB_ROLE_KEYS.includes(filters.exploreRole)) filters.exploreRole = ''
   return filters
 }
 
@@ -273,16 +320,19 @@ export function serializeTrendsFilterState(state: TrendsFilterState): string {
 export function setTrendsFilter(state: TrendsFilterState, name: keyof TrendsFilterState, value: string): TrendsFilterState {
   const filters = { ...state, [name]: value }
   if (name === 'period' && !oneOf(TREND_PERIODS, filters.period)) filters.period = defaultTrendsFilters.period
+  if (name === 'exploreRole' && filters.exploreRole && !DATA_SUB_ROLE_KEYS.includes(filters.exploreRole)) {
+    filters.exploreRole = ''
+  }
   return filters
 }
 
 export type TrendsFilterChip = {
-  name: Exclude<keyof TrendsFilterState, 'period'>
+  name: TrendsCohortKey
   label: string
   display: string
 }
 
-const TRENDS_CHIP_LABELS: Record<Exclude<keyof TrendsFilterState, 'period'>, string> = {
+const TRENDS_CHIP_LABELS: Record<TrendsCohortKey, string> = {
   region: 'Region',
   roleFamily: 'Role family',
   skill: 'Skill',
@@ -294,6 +344,31 @@ export function trendsFilterChips(state: TrendsFilterState): TrendsFilterChip[] 
   return TRENDS_FILTER_KEYS
     .filter((key) => Boolean(state[key]))
     .map((key) => ({ name: key, label: TRENDS_CHIP_LABELS[key], display: state[key] }))
+}
+
+export type DataExplorerFilterChip = {
+  name: (typeof EXPLORER_KEYS)[number]
+  label: string
+  display: string
+}
+
+const EXPLORER_CHIP_LABELS: Record<DataExplorerFilterChip['name'], string> = {
+  exploreRole: 'Sub-role',
+  exploreRegion: 'Region',
+  exploreSeniority: 'Seniority',
+  exploreWorkMode: 'Work mode',
+  exploreSkill: 'Skill',
+}
+
+/** Visible chips for the Data & Analytics explorer only. */
+export function dataExplorerFilterChips(state: TrendsFilterState): DataExplorerFilterChip[] {
+  return EXPLORER_KEYS
+    .filter((key) => Boolean(state[key]))
+    .map((key) => ({
+      name: key,
+      label: EXPLORER_CHIP_LABELS[key],
+      display: key === 'exploreRole' ? dataSubRoleLabel(state[key]) : state[key],
+    }))
 }
 
 /** Builds a Find-jobs URL from the trends view so a chart click applies a visible filter. */

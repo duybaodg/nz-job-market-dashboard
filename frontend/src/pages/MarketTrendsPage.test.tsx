@@ -6,10 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { MarketTrendsPage } from './MarketTrendsPage'
 import { navigate } from '../hooks/useAppLocation'
-import { historyFixture, jobFixture, overviewFixture, qualityFixture } from '../types/contract.fixtures'
+import { dataRoleExplorerFixture, historyFixture, jobFixture, overviewFixture, qualityFixture } from '../types/contract.fixtures'
 import type { History } from '../types/api'
 
-const { getHistoryMock, getJobsMock, getOverviewMock, getQualityMock } = vi.hoisted(() => ({
+const { getDataRolesMock, getHistoryMock, getJobsMock, getOverviewMock, getQualityMock } = vi.hoisted(() => ({
+  getDataRolesMock: vi.fn(),
   getHistoryMock: vi.fn(),
   getJobsMock: vi.fn(),
   getOverviewMock: vi.fn(),
@@ -20,7 +21,14 @@ const { location } = vi.hoisted(() => ({ location: { pathname: '/trends', search
 
 vi.mock('../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api')>()
-  return { ...actual, getHistory: getHistoryMock, getJobs: getJobsMock, getOverview: getOverviewMock, getQuality: getQualityMock }
+  return {
+    ...actual,
+    getDataRoles: getDataRolesMock,
+    getHistory: getHistoryMock,
+    getJobs: getJobsMock,
+    getOverview: getOverviewMock,
+    getQuality: getQualityMock,
+  }
 })
 
 vi.mock('../hooks/useAppLocation', () => ({
@@ -46,6 +54,7 @@ describe('MarketTrendsPage reporting period', () => {
   beforeEach(() => {
     location.pathname = '/trends'
     location.search = '?period=15'
+    getDataRolesMock.mockReset().mockResolvedValue(dataRoleExplorerFixture)
     getHistoryMock.mockReset().mockResolvedValue(null)
     getJobsMock.mockReset().mockResolvedValue([])
     getOverviewMock.mockReset().mockResolvedValue(null)
@@ -201,6 +210,43 @@ describe('MarketTrendsPage reporting period', () => {
     )
 
     await waitFor(() => expect(getHistoryMock).toHaveBeenCalledWith(7, expect.objectContaining({})))
+  })
+
+  it('renders the versioned Data & Analytics explorer with counts, salary suppression and matching-jobs navigation', async () => {
+    location.search = '?period=7&exploreRole=data-engineer&exploreRegion=Auckland'
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockResolvedValue(historyFixture)
+
+    renderPage()
+
+    expect(await screen.findByText('Data & Analytics role explorer')).toBeInTheDocument()
+    expect((await screen.findAllByText('data-subrole-v1')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Listings by sub-role')).toBeInTheDocument()
+    expect((await screen.findAllByText('Suppressed (<5 samples)')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Uncertain / multiple or unspecified').length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: /View matching advertisements/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining('dataSubRole=data-engineer'),
+    )
+    expect(screen.getByRole('link', { name: /View matching advertisements/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining('location=Auckland'),
+    )
+    expect(getDataRolesMock).toHaveBeenCalledWith({ region: 'Auckland', seniority: undefined, workMode: undefined, skill: undefined })
+  })
+
+  it('records the selected sub-role and explorer filters in the URL and shows removable chips', async () => {
+    location.search = '?period=7&exploreRegion=Auckland'
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockResolvedValue(historyFixture)
+
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: /Remove filter Region: Auckland/ })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Focus sub-role: Data Analyst' }))
+    expect(vi.mocked(navigate)).toHaveBeenCalledWith(expect.stringContaining('exploreRole=data-analyst'))
   })
 
   it('renders every public quality measure with its denominator and the reviewed accuracy scope', async () => {

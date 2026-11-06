@@ -1,4 +1,5 @@
 import { Search, SlidersHorizontal } from 'lucide-react'
+import { DATA_SUB_ROLE_OPTIONS } from '../../lib/dataRoles'
 import type { JobFilterState } from '../../lib/urlState'
 
 export type FilterOptions = {
@@ -27,6 +28,7 @@ const SECONDARY_KEYS: Array<keyof JobFilterState> = [
   'days',
   'skill',
   'roleFamily',
+  'dataSubRole',
   'experienceBand',
   'programmingLanguage',
 ]
@@ -118,6 +120,17 @@ export function JobFilters({ options, filters, onChange }: JobFiltersProps) {
               {options.roleFamilies.map((family) => (
                 <option key={family} value={family}>
                   {family}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Data sub-role</span>
+            <select value={filters.dataSubRole} onChange={(event) => onChange('dataSubRole', event.target.value)}>
+              <option value="">All data sub-roles</option>
+              {DATA_SUB_ROLE_OPTIONS.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
                 </option>
               ))}
             </select>

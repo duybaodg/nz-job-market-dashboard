@@ -1,4 +1,4 @@
-import type { Freshness, HealthReport, History, Job, JobsByRegion, Overview, QualitySummary, SkillDemand } from '../types/api'
+import type { DataRoleExplorer, Freshness, HealthReport, History, Job, JobsByRegion, Overview, QualitySummary, SkillDemand } from '../types/api'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5050'
 
@@ -63,6 +63,23 @@ export function getFreshness() {
 /** Public, intentionally limited quality summary (Release B1). */
 export function getQuality() {
   return getJson<QualitySummary>('/api/analytics/quality')
+}
+
+/** Versioned Data & Analytics sub-role breakdown (Release C1). */
+export function getDataRoles(params: {
+  region?: string
+  seniority?: string
+  workMode?: string
+  skill?: string
+} = {}) {
+  const query = new URLSearchParams()
+  if (params.region) query.set('region', params.region)
+  if (params.seniority) query.set('seniority', params.seniority)
+  if (params.workMode) query.set('workMode', params.workMode)
+  if (params.skill) query.set('skill', params.skill)
+
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return getJson<DataRoleExplorer>(`/api/analytics/data-roles${suffix}`)
 }
 
 export function getHistory(

@@ -43,6 +43,7 @@ const CSV_DEFINITIONS = [
   'Advertised salary is shown with its own currency and pay period; "Salary not advertised" means no figure was confirmed.',
   'Hiring employer is the admin-reviewed canonical client where disclosed; agency-only and unknown-employer listings are labelled and never guessed. "Advertised company" preserves the raw company text.',
   'Role family is inferred deterministically from the job title; the original title is retained.',
+  'Data sub-role is inferred by the versioned data-subrole-v1 taxonomy for the Data & Analytics family only. Ambiguous or multiple-role titles keep an explicit uncertain flag and are never forced into one label; the taxonomy version is exported beside every row.',
   'Listing ID is the stable source-listing id. Duplicate group ID, duplicate rows removed, also-on sources and canonical listing expose deduplication provenance; source rows are never deleted.',
   'Cells beginning with =, +, -, @, tab or carriage return are prefixed with an apostrophe to prevent spreadsheet formula execution. The original value follows the marker.',
   'This export contains every row matching the current filters, not only the visible page. The filter list, sort and reporting period are stated in the comment preamble.',

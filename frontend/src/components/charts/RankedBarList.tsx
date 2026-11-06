@@ -62,6 +62,7 @@ export function RankedBarList({
                 type="button"
                 className={`ranked-bar${isSelected ? ' selected' : ''}`}
                 aria-pressed={isSelected}
+                aria-label={selectLabel ? `${selectLabel}: ${item.label}` : undefined}
                 title={selectLabel ? `${selectLabel}: ${item.label}` : undefined}
                 onClick={() => onSelect(item.label)}
               >

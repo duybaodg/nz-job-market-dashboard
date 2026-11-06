@@ -78,6 +78,15 @@ export function JobCard({ job }: JobCardProps) {
           <dt>Source</dt>
           <dd>
             {job.source} · {job.roleFamily}
+            {job.dataSubRole ? (
+              <>
+                {' '}· {job.dataSubRole} <small>(taxonomy {job.dataSubRoleVersion})</small>
+              </>
+            ) : job.dataSubRoleUncertain ? (
+              <>
+                {' '}· Data sub-role uncertain <small>(taxonomy {job.dataSubRoleVersion})</small>
+              </>
+            ) : null}
           </dd>
         </div>
       </dl>

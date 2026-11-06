@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { freshnessFixture, healthFixture, historyFixture, jobFixture, overviewFixture, qualityFixture } from './contract.fixtures'
+import { dataRoleExplorerFixture, freshnessFixture, healthFixture, historyFixture, jobFixture, overviewFixture, qualityFixture } from './contract.fixtures'
 
 /**
  * Round 14 consistency contract. One focused check per widget group: every API
@@ -67,7 +67,10 @@ describe('API payload contract', () => {
       'descriptionSummary', 'url', 'postedDate', 'closingDate', 'firstSeenAt',
       'lastSeenAt', 'isActive', 'expiredAt', 'skills', 'programmingLanguages',
       'sourceCategory', 'advertiser', 'advertiserType', 'hiringEmployer',
-      'employerDisclosure', 'roleFamily', 'roleFamilyInferred', 'duplicateGroupId',
+      'employerDisclosure', 'roleFamily', 'roleFamilyInferred',
+      'dataSubRoleKey', 'dataSubRole', 'dataSubRoleUncertain', 'dataSubRoleCandidates',
+      'dataSubRoleUncertainReason', 'dataSubRoleVersion',
+      'duplicateGroupId',
       'duplicateCount', 'alsoOnSources', 'isCanonicalListing',
       'employerCanonicalId', 'employerCanonicalName',
     ])
@@ -76,8 +79,9 @@ describe('API payload contract', () => {
       'employmentType', 'seniority', 'workMode', 'experienceBand',
       'firstSeenAt', 'lastSeenAt', 'isActive', 'skills', 'programmingLanguages',
       'sourceCategory', 'advertiser', 'advertiserType', 'employerDisclosure',
-      'roleFamily', 'roleFamilyInferred', 'duplicateCount', 'alsoOnSources',
-      'isCanonicalListing',
+      'roleFamily', 'roleFamilyInferred', 'dataSubRoleUncertain',
+      'dataSubRoleCandidates', 'dataSubRoleVersion',
+      'duplicateCount', 'alsoOnSources', 'isCanonicalListing',
     ])
     requireType(jobFixture, 'id', 'string')
     requireType(jobFixture, 'title', 'string')
@@ -204,5 +208,31 @@ describe('API payload contract', () => {
     const nulled = JSON.parse(JSON.stringify(jobFixture)) as Record<string, unknown>
     nulled.url = null
     expect(() => requireNonNull(nulled, ['url'])).toThrow()
+  })
+})
+
+describe('Data & Analytics explorer contract', () => {
+  it('carries the taxonomy version, counts, salary samples and skill coverage', () => {
+    requireFields(dataRoleExplorerFixture, [
+      'generatedAtUtc', 'family', 'taxonomyVersion', 'taxonomyEffectiveDate',
+      'taxonomyDescription', 'taxonomyScope', 'uncertainLabel', 'cohortCount',
+      'classifiedCount', 'uncertainCount', 'classifiedSharePercent', 'filters',
+      'roles', 'salaryBasis', 'skillBasis', 'scopeNote',
+      'roles[0].key', 'roles[0].label', 'roles[0].uncertain', 'roles[0].candidateLabels',
+      'roles[0].listingCount', 'roles[0].sharePercent', 'roles[0].salary.medianAnnualNzd',
+      'roles[0].salary.eligibleCount', 'roles[0].salary.cohortCount',
+      'roles[0].salary.coveragePercent', 'roles[0].salary.suppressed',
+      'roles[0].salary.smallSample', 'roles[0].salary.currency', 'roles[0].salary.payPeriod',
+      'roles[0].salary.basis', 'roles[0].listingsWithSkills', 'roles[0].skillCoveragePercent',
+      'roles[0].topSkills',
+    ])
+    requireNonNull(dataRoleExplorerFixture, [
+      'taxonomyVersion', 'taxonomyEffectiveDate', 'family', 'uncertainLabel',
+      'cohortCount', 'classifiedCount', 'uncertainCount', 'classifiedSharePercent',
+      'salaryBasis', 'skillBasis', 'scopeNote',
+    ])
+    expect(dataRoleExplorerFixture.taxonomyVersion).toBe('data-subrole-v1')
+    expect(dataRoleExplorerFixture.roles.some((role) => role.uncertain)).toBe(true)
+    expect(dataRoleExplorerFixture.roles.some((role) => role.salary.suppressed)).toBe(true)
   })
 })

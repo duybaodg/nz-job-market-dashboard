@@ -13,6 +13,8 @@ import {
   setJobPage,
   setJobSort,
   trendsFilterChips,
+  dataExplorerFilterChips,
+  defaultTrendsFilters,
   type JobViewState,
 } from './urlState'
 
@@ -33,6 +35,7 @@ describe('job URL state', () => {
         skill: 'Python',
         experienceBand: '2-5 years',
         programmingLanguage: 'SQL',
+        dataSubRole: 'data-engineer',
         status: 'all',
       },
       sort: 'salary-desc',
@@ -50,12 +53,23 @@ describe('job URL state', () => {
   })
 
   it('ignores invalid values gracefully', () => {
-    const parsed = parseJobViewState('?status=bogus&sort=sideways&page=-4&days=99')
+    const parsed = parseJobViewState('?status=bogus&sort=sideways&page=-4&days=99&dataSubRole=not-a-role')
 
     expect(parsed.filters.status).toBe('active')
     expect(parsed.sort).toBe('newest')
     expect(parsed.page).toBe(1)
     expect(parsed.filters.days).toBe('')
+    expect(parsed.filters.dataSubRole).toBe('')
+  })
+
+  it('round-trips a versioned data sub-role filter and labels its chip', () => {
+    const state = setJobFilter(defaultJobViewState, 'dataSubRole', 'data-engineer')
+    expect(parseJobViewState(serializeJobViewState(state)).filters.dataSubRole).toBe('data-engineer')
+    expect(jobFilterChips(state.filters)).toContainEqual({
+      name: 'dataSubRole',
+      label: 'Data sub-role',
+      display: 'Data Engineer',
+    })
   })
 
   it('resets pagination when a filter or the sorting changes', () => {
@@ -95,11 +109,33 @@ describe('job URL state', () => {
 
 describe('trends URL state', () => {
   it('round-trips and defaults the period', () => {
-    const state = { period: '30', region: 'Canterbury', roleFamily: 'Security', skill: 'AWS', seniority: 'Lead' }
+    const state = {
+      period: '30',
+      region: 'Canterbury',
+      roleFamily: 'Security',
+      skill: 'AWS',
+      seniority: 'Lead',
+      exploreRole: 'data-engineer',
+      exploreRegion: 'Auckland',
+      exploreSeniority: 'Senior',
+      exploreWorkMode: 'Hybrid',
+      exploreSkill: 'SQL',
+    }
     const query = serializeTrendsFilterState(state)
 
     expect(parseTrendsFilterState(query)).toEqual(state)
-    expect(parseTrendsFilterState('')).toEqual({ period: '7', region: '', roleFamily: '', skill: '', seniority: '' })
+    expect(parseTrendsFilterState('')).toEqual({
+      period: '7',
+      region: '',
+      roleFamily: '',
+      skill: '',
+      seniority: '',
+      exploreRole: '',
+      exploreRegion: '',
+      exploreSeniority: '',
+      exploreWorkMode: '',
+      exploreSkill: '',
+    })
     expect(parseTrendsFilterState('?period=999').period).toBe('7')
   })
 
@@ -114,6 +150,27 @@ describe('trends URL state', () => {
     expect(parsed.seniority).toBe('Lead')
   })
 
+  it('round-trips the explorer role and filters without moving the market cohort', () => {
+    const state = {
+      ...defaultTrendsFilters,
+      exploreRole: 'data-analyst',
+      exploreRegion: 'Wellington',
+      exploreSeniority: 'Senior',
+      exploreWorkMode: 'Hybrid',
+      exploreSkill: 'SQL',
+    }
+    const parsed = parseTrendsFilterState(serializeTrendsFilterState(state))
+    expect(parsed).toEqual(state)
+    expect(parseTrendsFilterState('?exploreRole=not-a-role').exploreRole).toBe('')
+    expect(dataExplorerFilterChips(parsed).map((chip) => [chip.name, chip.display])).toEqual([
+      ['exploreRole', 'Data Analyst'],
+      ['exploreRegion', 'Wellington'],
+      ['exploreSeniority', 'Senior'],
+      ['exploreWorkMode', 'Hybrid'],
+      ['exploreSkill', 'SQL'],
+    ])
+  })
+
   it('lists visible trend filter chips without the reporting period', () => {
     const chips = trendsFilterChips({
       period: '15',
@@ -121,6 +178,11 @@ describe('trends URL state', () => {
       roleFamily: 'Data & Analytics',
       skill: '',
       seniority: 'Senior',
+      exploreRole: '',
+      exploreRegion: '',
+      exploreSeniority: '',
+      exploreWorkMode: '',
+      exploreSkill: '',
     })
 
     expect(chips.map((chip) => chip.name)).toEqual(['region', 'roleFamily', 'seniority'])

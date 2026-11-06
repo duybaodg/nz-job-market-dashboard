@@ -40,6 +40,12 @@ function job(overrides: Partial<Job> = {}): Job {
     employerDisclosure: 'Disclosed',
     roleFamily: 'Data & Analytics',
     roleFamilyInferred: true,
+    dataSubRoleKey: 'data-engineer',
+    dataSubRole: 'Data Engineer',
+    dataSubRoleUncertain: false,
+    dataSubRoleCandidates: [],
+    dataSubRoleUncertainReason: null,
+    dataSubRoleVersion: 'data-subrole-v1',
     duplicateGroupId: null,
     duplicateCount: 0,
     alsoOnSources: [],
@@ -72,6 +78,8 @@ describe('filtered CSV export', () => {
     expect(csv).toContain('"$120,000 – $140,000 per year"')
     expect(csv).toContain('"Posted"')
     expect(csv).toContain('"Xero"')
+    expect(csv).toContain('Data sub-role (inferred)')
+    expect(csv).toContain('Sub-role taxonomy version')
   })
 
   it('exports every matching row with ids, timestamps and provenance but no internal secrets', () => {

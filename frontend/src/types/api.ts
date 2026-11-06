@@ -39,6 +39,13 @@ export type Job = {
   employerDisclosure: EmployerDisclosure
   roleFamily: string
   roleFamilyInferred: boolean
+  /** Round 22 (C1): versioned Data & Analytics sub-role; null when outside the family or explicitly uncertain. */
+  dataSubRoleKey: string | null
+  dataSubRole: string | null
+  dataSubRoleUncertain: boolean
+  dataSubRoleCandidates: string[]
+  dataSubRoleUncertainReason: string | null
+  dataSubRoleVersion: string
   duplicateGroupId: string | null
   duplicateCount: number
   alsoOnSources: string[]
@@ -353,4 +360,51 @@ export type QualitySummary = {
   measures: QualityMeasure[]
   classification: QualityClassification
   methodologyNote: string
+}
+
+export type DataSubRoleSkill = {
+  skillName: string
+  listingCount: number
+  sharePercent: number
+}
+
+export type DataSubRoleBreakdown = {
+  key: string
+  label: string
+  uncertain: boolean
+  candidateLabels: string[]
+  listingCount: number
+  sharePercent: number
+  salary: SalarySummary
+  listingsWithSkills: number
+  skillCoveragePercent: number
+  topSkills: DataSubRoleSkill[]
+}
+
+export type DataRoleExplorerFilters = {
+  region: string | null
+  seniority: string | null
+  workMode: string | null
+  skill: string | null
+  hasFilters: boolean
+  note: string
+}
+
+export type DataRoleExplorer = {
+  generatedAtUtc: string
+  family: string
+  taxonomyVersion: string
+  taxonomyEffectiveDate: string
+  taxonomyDescription: string
+  taxonomyScope: string
+  uncertainLabel: string
+  cohortCount: number
+  classifiedCount: number
+  uncertainCount: number
+  classifiedSharePercent: number
+  filters: DataRoleExplorerFilters
+  roles: DataSubRoleBreakdown[]
+  salaryBasis: string
+  skillBasis: string
+  scopeNote: string
 }

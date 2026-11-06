@@ -49,6 +49,12 @@ function job(overrides: Partial<Job> = {}): Job {
     employerDisclosure: 'Disclosed',
     roleFamily: 'Software Engineering',
     roleFamilyInferred: true,
+    dataSubRoleKey: null,
+    dataSubRole: null,
+    dataSubRoleUncertain: false,
+    dataSubRoleCandidates: [],
+    dataSubRoleUncertainReason: null,
+    dataSubRoleVersion: 'data-subrole-v1',
     duplicateGroupId: null,
     duplicateCount: 0,
     alsoOnSources: [],
@@ -243,4 +249,24 @@ describe('salaryByRoleFamily', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ family: 'Security', sampleSize: 5, median: 140000, smallSample: true })
   })
+  it('filters by the versioned data sub-role and keeps uncertain separate', () => {
+    const jobs = [
+      job({ title: 'Data Engineer', roleFamily: 'Data & Analytics', dataSubRoleKey: 'data-engineer', dataSubRole: 'Data Engineer' }),
+      job({ title: 'Data Analyst', roleFamily: 'Data & Analytics', dataSubRoleKey: 'data-analyst', dataSubRole: 'Data Analyst' }),
+      job({
+        title: 'Data Analyst / Data Engineer',
+        roleFamily: 'Data & Analytics',
+        dataSubRoleKey: null,
+        dataSubRole: null,
+        dataSubRoleUncertain: true,
+        dataSubRoleCandidates: ['Data Analyst', 'Data Engineer'],
+      }),
+      job({ title: 'Software Engineer', roleFamily: 'Software Engineering' }),
+    ]
+
+    expect(filterJobs(jobs, { ...defaultJobFilters, dataSubRole: 'data-engineer' })).toHaveLength(1)
+    expect(filterJobs(jobs, { ...defaultJobFilters, dataSubRole: 'uncertain' })).toHaveLength(1)
+    expect(filterJobs(jobs, { ...defaultJobFilters, dataSubRole: '' })).toHaveLength(4)
+  })
+
 })

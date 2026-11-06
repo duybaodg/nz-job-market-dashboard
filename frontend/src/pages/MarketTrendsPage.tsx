@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Building2, CalendarPlus, Percent, WalletCards } from 'lucide-react'
 import { FilterChips } from '../components/jobs/FilterChips'
+import { DataRoleExplorer } from '../components/explore/DataRoleExplorer'
 import { AppSidebar } from '../components/layout/AppSidebar'
 import { DataStatusBanner } from '../components/dashboard/DataStatusBanner'
 import { RankedBarList } from '../components/charts/RankedBarList'
@@ -210,6 +211,19 @@ export function MarketTrendsPage() {
     skill: filters.skill,
     seniority: filters.seniority,
   })
+
+  const clearExplorerFilters = () => {
+    const next: TrendsFilterState = {
+      ...filters,
+      exploreRole: '',
+      exploreRegion: '',
+      exploreSeniority: '',
+      exploreWorkMode: '',
+      exploreSkill: '',
+    }
+    const query = serializeTrendsFilterState(next)
+    navigate(query ? `/trends?${query}` : '/trends')
+  }
 
   const coverage = history?.coverage
   const missingSnapshotDays = coverage?.missingDates.length ?? 0
@@ -583,6 +597,13 @@ export function MarketTrendsPage() {
             </>
           )}
         </section>
+
+        <DataRoleExplorer
+          jobs={allJobs}
+          filters={filters}
+          onChange={(name, value) => setFilter(name, value)}
+          onClear={clearExplorerFilters}
+        />
 
         <section className="panel trend-panel" id="weekly-trend">
           <div className="panel-header">
