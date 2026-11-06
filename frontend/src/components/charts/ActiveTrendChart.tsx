@@ -6,6 +6,15 @@ type ActiveTrendChartProps = {
   coverageChanges: SourceCoverageChange[]
 }
 
+/**
+ * Round 23 (2026-11-07): the operator asked for the classified
+ * "Source-coverage changes" list and the active-listing history table to be
+ * hidden on the trends view. Keep the rendering and its data prop intact and
+ * gate both elements behind this one flag so they can be restored without
+ * reconstructing the markup. The API keeps returning `coverageChanges`.
+ */
+const SHOW_SOURCE_COVERAGE_DETAILS = false
+
 function coverageNote(point: ActiveTrendPoint): string {
   if (!point.coverageChanged) return '—'
   const parts: string[] = []
@@ -16,8 +25,9 @@ function coverageNote(point: ActiveTrendPoint): string {
 
 /**
  * Historical active-listing counts from retained snapshots. Source-coverage
- * changes are annotated on the line and spelled out in the table, so a new
- * source can never be read as demand growth on its own.
+ * changes are annotated on the line (and classified in hidden detail markup
+ * disabled by Round 23), so a new source can never be read as demand growth
+ * on its own.
  */
 export function ActiveTrendChart({ points, coverageChanges }: ActiveTrendChartProps) {
   if (points.length < 2) {
@@ -70,7 +80,7 @@ export function ActiveTrendChart({ points, coverageChanges }: ActiveTrendChartPr
         <span className="legend-swatch partial" aria-hidden="true" /> Snapshot where source coverage changed
       </p>
 
-      {coverageChanges.length > 0 ? (
+      {SHOW_SOURCE_COVERAGE_DETAILS && coverageChanges.length > 0 ? (
         <div className="coverage-notes">
           <h3>Source-coverage changes, classified</h3>
           <ul>
@@ -99,29 +109,31 @@ export function ActiveTrendChart({ points, coverageChanges }: ActiveTrendChartPr
         </div>
       ) : null}
 
-      <details className="chart-table">
-        <summary>View active-listing history as a table</summary>
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Snapshot date (NZ)</th>
-              <th scope="col">Active listings</th>
-              <th scope="col">Sources</th>
-              <th scope="col">Coverage</th>
-            </tr>
-          </thead>
-          <tbody>
-            {points.map((point) => (
-              <tr key={point.snapshotDate}>
-                <th scope="row">{point.snapshotDate}</th>
-                <td>{point.activeCount}</td>
-                <td>{point.sourceCount}</td>
-                <td>{coverageNote(point)}</td>
+      {SHOW_SOURCE_COVERAGE_DETAILS ? (
+        <details className="chart-table">
+          <summary>View active-listing history as a table</summary>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Snapshot date (NZ)</th>
+                <th scope="col">Active listings</th>
+                <th scope="col">Sources</th>
+                <th scope="col">Coverage</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
+            </thead>
+            <tbody>
+              {points.map((point) => (
+                <tr key={point.snapshotDate}>
+                  <th scope="row">{point.snapshotDate}</th>
+                  <td>{point.activeCount}</td>
+                  <td>{point.sourceCount}</td>
+                  <td>{coverageNote(point)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      ) : null}
     </div>
   )
 }

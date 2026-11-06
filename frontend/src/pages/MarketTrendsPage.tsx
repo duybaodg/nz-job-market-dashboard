@@ -1011,12 +1011,6 @@ export function MarketTrendsPage() {
                   reporting-period selector.
                 </li>
                 <li>
-                  Source-coverage changes are classified from retained observations and crawl-run outcomes. A missing
-                  source can mean a refresh failure or an observation gap, never automatically zero demand or a closure.
-                  The constant-source comparison restricts both sides to sources observed every day and leaves the
-                  collection-associated residual explicit.
-                </li>
-                <li>
                   Historical panels follow the selected region, role family and seniority cohort when snapshots retain
                   those fields. Skills are not stored in snapshots, so a skill-filtered historical comparison is declared
                   unavailable rather than substituted.

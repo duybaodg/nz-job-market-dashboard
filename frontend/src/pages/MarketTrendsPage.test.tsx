@@ -263,4 +263,16 @@ describe('MarketTrendsPage reporting period', () => {
     expect(await screen.findByText(/128 reviewed/)).toBeInTheDocument()
     expect(screen.getByText(/133 of 133 sampled listings/)).toBeInTheDocument()
   })
+
+  it('hides the classified source-coverage methodology note (Round 23)', async () => {
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockResolvedValue(historyFixture)
+
+    renderPage()
+
+    fireEvent.click(await screen.findByText('Show methodology, coverage and known limitations'))
+    expect(screen.queryByText(/Source-coverage changes are classified from retained observations/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Historical active counts compare the latest snapshot/)).toBeInTheDocument()
+  })
 })
