@@ -54,7 +54,7 @@ class SourceRegistryTests(unittest.TestCase):
     def test_registry_covers_the_full_nz_site_list(self) -> None:
         registry = load_registry()
 
-        self.assertGreaterEqual(len(registry), 58)
+        self.assertGreaterEqual(len(registry), 53)
         # Every entry must carry a crawl strategy so the worker can route it.
         self.assertTrue(all(site.get("strategy") for site in registry.values()))
 
@@ -103,6 +103,15 @@ class SourceRegistryTests(unittest.TestCase):
             site = lookup_source(name)
             self.assertFalse(site["enabled"], name)
             self.assertIn("Round 3", site.get("notes", ""), name)
+
+    def test_round23_retires_the_six_government_sources(self) -> None:
+        # Operator decision 2026-11-07: remove every government board from the
+        # crawl registry. Removal is retirement (the startup sync stamps
+        # retired_at); parser code stays so a re-add is reversible.
+        for name in ("NZ Government Jobs", "NZ Defence Careers",
+                     "Inland Revenue Careers", "MPI Careers", "DOC Careers",
+                     "NZ Police"):
+            self.assertIsNone(lookup_source(name), name)
 
     def test_round12_removes_retired_sources(self) -> None:
         # User decision: these eight are not coming back, so they are deleted

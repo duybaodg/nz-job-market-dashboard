@@ -140,6 +140,24 @@ public sealed class ScraplingCliContractTests
         ScraplingCliContract.NormaliseParser(linkedin.Parser).Should().Be("linkedin-guest");
     }
 
+    [Fact]
+    public void Round23_government_sources_are_retired_from_the_registry()
+    {
+        // Operator decision 2026-11-07: all six government boards are removed
+        // from sites.json. Removal retires their DB rows at startup; the parser
+        // modules stay in place so the change is reversible.
+        var names = LoadRegistry().Select(site => site.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var retired in new[]
+                 {
+                     "NZ Government Jobs", "NZ Defence Careers", "Inland Revenue Careers",
+                     "MPI Careers", "DOC Careers", "NZ Police"
+                 })
+        {
+            names.Should().NotContain(retired);
+        }
+    }
+
     private static IReadOnlySet<string> PythonChoices(string name)
     {
         var source = File.ReadAllText(Path.Combine(RepoRoot(), "crawler", "adapters", "scrapling", "scrapling_worker.py"));
