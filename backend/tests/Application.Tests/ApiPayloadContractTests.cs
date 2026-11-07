@@ -405,6 +405,44 @@ public sealed class ApiPayloadContractTests
         RequireNonNull(regions, "[0].region", "[0].jobCount");
     }
 
+    // --- Round 24: type-aware skill demand -----------------------------------
+
+    [Fact]
+    public async Task Skill_demand_chart_payload_carries_type_counts_and_both_denominators()
+    {
+        await using var db = CreateDbContext();
+        await SeedAsync(db);
+
+        var demand = Json(await new AnalyticsService(db, new FixedTimeProvider(Now))
+            .GetSkillDemandAsync(new[] { "ProgrammingLanguage", "Framework" }, 10, CancellationToken.None));
+
+        Require(demand,
+            "generatedAtUtc", "taxonomyVersion", "activeListings", "listingsWithExtractedSkills",
+            "extractionCoveragePercent", "denominatorBasis", "types");
+        RequireNonNull(demand,
+            "generatedAtUtc", "taxonomyVersion", "activeListings", "listingsWithExtractedSkills",
+            "extractionCoveragePercent", "denominatorBasis", "types");
+        Require(demand,
+            "types[0].type", "types[0].listingDenominator", "types[0].listingsWithExtractedSkills",
+            "types[0].extractionCoveragePercent", "types[0].skills",
+            "types[0].skills[0].skillName", "types[0].skills[0].jobCount",
+            "types[0].skills[0].percentOfActiveListings", "types[0].skills[0].percentOfListingsWithSkills");
+        RequireNonNull(demand,
+            "types[0].type", "types[0].listingDenominator", "types[0].listingsWithExtractedSkills",
+            "types[0].extractionCoveragePercent", "types[0].skills",
+            "types[0].skills[0].skillName", "types[0].skills[0].jobCount",
+            "types[0].skills[0].percentOfActiveListings", "types[0].skills[0].percentOfListingsWithSkills");
+
+        demand.GetProperty("taxonomyVersion").GetString().Should().Be("2");
+        demand.GetProperty("activeListings").GetInt32().Should().Be(6);
+        demand.GetProperty("listingsWithExtractedSkills").GetInt32().Should().Be(2);
+        var types = demand.GetProperty("types").EnumerateArray().ToList();
+        types.Should().HaveCount(2);
+        types[0].GetProperty("type").GetString().Should().Be("ProgrammingLanguage");
+        types[0].GetProperty("skills").EnumerateArray().First().GetProperty("skillName").GetString()
+            .Should().Be("Python");
+    }
+
     // --- Freshness panel (2/7/15-day windows) --------------------------------
 
     [Fact]

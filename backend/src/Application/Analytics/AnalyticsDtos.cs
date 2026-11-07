@@ -4,6 +4,33 @@ namespace Application.Analytics;
 
 public sealed record SkillDemandDto(string SkillName, int JobCount);
 
+/// <summary>
+/// Round 24: type-aware skill demand. Every percentage carries the active-listing
+/// denominator and the number of listings with at least one extracted skill, so
+/// the chart can show extraction coverage instead of implying a full census.
+/// </summary>
+public sealed record RankedSkillDemandDto(
+    string SkillName,
+    int JobCount,
+    decimal PercentOfActiveListings,
+    decimal PercentOfListingsWithSkills);
+
+public sealed record SkillTypeDemandDto(
+    string Type,
+    int ListingDenominator,
+    int ListingsWithExtractedSkills,
+    decimal ExtractionCoveragePercent,
+    IReadOnlyList<RankedSkillDemandDto> Skills);
+
+public sealed record SkillDemandByTypeDto(
+    DateTime GeneratedAtUtc,
+    string TaxonomyVersion,
+    int ActiveListings,
+    int ListingsWithExtractedSkills,
+    decimal ExtractionCoveragePercent,
+    string DenominatorBasis,
+    IReadOnlyList<SkillTypeDemandDto> Types);
+
 public sealed record JobsByRegionDto(string Region, int JobCount);
 
 /// <summary>

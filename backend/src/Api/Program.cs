@@ -138,6 +138,29 @@ app.MapGet("/api/analytics/top-skills", async (
     Results.Ok(await analyticsService.GetTopSkillsAsync(cancellationToken)))
     .WithName("GetTopSkills");
 
+// Round 24: type-aware skill demand for the /trends language and framework
+// charts. The existing top-skills array remains unchanged for its consumers;
+// this endpoint adds type, denominators, coverage and the taxonomy version.
+app.MapGet("/api/analytics/skill-demand", async (
+        string? types,
+        int? limit,
+        IAnalyticsService analyticsService,
+        CancellationToken cancellationToken) =>
+    {
+        var take = limit ?? 10;
+        if (take is < 1 or > 50)
+        {
+            return Results.BadRequest(new { error = "limit must be between 1 and 50" });
+        }
+
+        var requestedTypes = (types ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return Results.Ok(await analyticsService.GetSkillDemandAsync(requestedTypes, take, cancellationToken));
+    })
+    .WithName("GetSkillDemand");
+
 app.MapGet("/api/analytics/jobs-by-region", async (
         IAnalyticsService analyticsService,
         CancellationToken cancellationToken) =>

@@ -18,14 +18,19 @@ public sealed class SkillsTaxonomy
     private static readonly Lazy<SkillsTaxonomy> LazyDefault = new(LoadDefault);
 
     public SkillsTaxonomy(
+        string version,
         int maxSkillsPerJob,
         IReadOnlyList<SkillRule> rules,
         IReadOnlyDictionary<string, (string Name, string Type)> byName)
     {
+        Version = version;
         MaxSkillsPerJob = maxSkillsPerJob;
         Rules = rules;
         ByName = byName;
     }
+
+    /// <summary>Version declared by the shared taxonomy file (Round 24: 2).</summary>
+    public string Version { get; }
 
     public int MaxSkillsPerJob { get; }
 
@@ -65,6 +70,11 @@ public sealed class SkillsTaxonomy
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         var root = document.RootElement;
         var maxSkills = root.TryGetProperty("maxSkillsPerJob", out var maxElement) ? maxElement.GetInt32() : 15;
+        var version = root.TryGetProperty("version", out var versionElement)
+            ? versionElement.ValueKind == JsonValueKind.String
+                ? versionElement.GetString() ?? "unknown"
+                : versionElement.GetRawText()
+            : "unknown";
 
         var rules = new List<SkillRule>();
         var byName = new Dictionary<string, (string Name, string Type)>(StringComparer.OrdinalIgnoreCase);
@@ -117,7 +127,7 @@ public sealed class SkillsTaxonomy
             }
         }
 
-        return new SkillsTaxonomy(Math.Max(maxSkills, 1), rules, byName);
+        return new SkillsTaxonomy(version, Math.Max(maxSkills, 1), rules, byName);
     }
 
     private static SkillAliasRule BuildAlias(string text, bool caseSensitive) => new(

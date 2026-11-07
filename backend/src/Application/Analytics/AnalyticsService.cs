@@ -2,6 +2,7 @@ using Application.Common;
 using Application.Crawling;
 using Application.Deduplication;
 using Application.Employers;
+using Application.Jobs;
 using Application.Metrics;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,10 @@ public interface IAnalyticsService
 {
     Task<OverviewDto> GetOverviewAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<SkillDemandDto>> GetTopSkillsAsync(CancellationToken cancellationToken);
+    Task<SkillDemandByTypeDto> GetSkillDemandAsync(
+        IReadOnlyCollection<string> types,
+        int limit,
+        CancellationToken cancellationToken);
     Task<IReadOnlyList<JobsByRegionDto>> GetJobsByRegionAsync(CancellationToken cancellationToken);
     Task<FreshnessDto> GetFreshnessAsync(CancellationToken cancellationToken);
 }
@@ -26,10 +31,12 @@ public sealed class AnalyticsService(
     IApplicationDbContext dbContext,
     TimeProvider? timeProvider = null,
     IListingDeduplicationService? deduplicationService = null,
-    CrawlerLifecycleOptions? lifecycleOptions = null) : IAnalyticsService
+    CrawlerLifecycleOptions? lifecycleOptions = null,
+    SkillExtractor? skillExtractor = null) : IAnalyticsService
 {
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private readonly CrawlerLifecycleOptions lifecycle = lifecycleOptions ?? CrawlerLifecycleOptions.Default;
+    private readonly SkillsTaxonomy taxonomy = skillExtractor?.Taxonomy ?? SkillsTaxonomy.Default;
 
     /// <summary>
     /// Explicit scope label for discovery/posted counts. The cohort includes
@@ -123,16 +130,115 @@ public sealed class AnalyticsService(
 
     public async Task<IReadOnlyList<SkillDemandDto>> GetTopSkillsAsync(CancellationToken cancellationToken)
     {
-        return await dbContext.JobSkills
+        var demand = await LoadActiveSkillDemandAsync(cancellationToken);
+        return demand
+            .OrderByDescending(item => item.JobCount)
+            .ThenBy(item => item.SkillName, StringComparer.Ordinal)
+            .Take(TopSkillsLimit)
+            .Select(item => new SkillDemandDto(item.SkillName, item.JobCount))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Round 24: type-aware skill demand for the languages/frameworks charts.
+    /// The same active-listing skill rows feed <see cref="GetTopSkillsAsync"/>,
+    /// so the two endpoints cannot disagree on what a skill counts. Every
+    /// percentage is returned with both denominators and the taxonomy version.
+    /// </summary>
+    public async Task<SkillDemandByTypeDto> GetSkillDemandAsync(
+        IReadOnlyCollection<string> types,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var generatedAt = clock.GetUtcNow().UtcDateTime;
+        var activeListings = await dbContext.Jobs
+            .AsNoTracking()
+            .CountAsync(job => job.IsActive, cancellationToken);
+        var listingsWithSkills = await dbContext.JobSkills
             .AsNoTracking()
             .Where(skill => skill.Job != null && skill.Job.IsActive)
-            .GroupBy(skill => skill.SkillName)
-            .OrderByDescending(group => group.Count())
-            .ThenBy(group => group.Key)
-            .Take(TopSkillsLimit)
-            .Select(group => new SkillDemandDto(group.Key, group.Select(skill => skill.JobId).Distinct().Count()))
-            .ToListAsync(cancellationToken);
+            .Select(skill => skill.JobId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+        var demand = await LoadActiveSkillDemandAsync(cancellationToken);
+        var coveragePercent = Percentage(listingsWithSkills, activeListings);
+        var requestedTypes = types.Count > 0
+            ? types.Select(CanonicalType).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+            : taxonomy.Rules.Select(rule => rule.Type).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        var typeDemand = requestedTypes
+            .Select(type =>
+            {
+                var skills = demand
+                    .Where(item => string.Equals(item.SkillType, type, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(item => item.JobCount)
+                    .ThenBy(item => item.SkillName, StringComparer.Ordinal)
+                    .Take(limit)
+                    .Select(item => new RankedSkillDemandDto(
+                        item.SkillName,
+                        item.JobCount,
+                        Percentage(item.JobCount, activeListings),
+                        Percentage(item.JobCount, listingsWithSkills)))
+                    .ToList();
+                return new SkillTypeDemandDto(
+                    type,
+                    activeListings,
+                    listingsWithSkills,
+                    coveragePercent,
+                    skills);
+            })
+            .ToList();
+
+        var basis =
+            $"Each skill is counted at most once per active listing. Percent of active listings uses all "
+            + $"{activeListings} active tracked listings; percent of listings with skills uses {listingsWithSkills} "
+            + $"active listings with at least one extracted skill. Taxonomy version {taxonomy.Version}.";
+
+        return new SkillDemandByTypeDto(
+            generatedAt,
+            taxonomy.Version,
+            activeListings,
+            listingsWithSkills,
+            coveragePercent,
+            basis,
+            typeDemand);
     }
+
+    private async Task<List<ActiveSkillDemand>> LoadActiveSkillDemandAsync(CancellationToken cancellationToken)
+    {
+        var rows = await dbContext.JobSkills
+            .AsNoTracking()
+            .Where(skill => skill.Job != null && skill.Job.IsActive)
+            .Select(skill => new { skill.SkillName, skill.SkillType, skill.JobId })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.SkillName, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var storedName = group.Key;
+                var storedType = group.First().SkillType ?? "Keyword";
+                var canonical = taxonomy.ByName.TryGetValue(storedName, out var known)
+                    ? known
+                    : (Name: storedName, Type: storedType);
+                return new ActiveSkillDemand(
+                    canonical.Name,
+                    canonical.Type,
+                    group.Select(row => row.JobId).Distinct().Count());
+            })
+            .ToList();
+    }
+
+    private string CanonicalType(string requested) =>
+        taxonomy.Rules
+            .Select(rule => rule.Type)
+            .FirstOrDefault(type => string.Equals(type, requested, StringComparison.OrdinalIgnoreCase))
+        ?? requested;
+
+    private static decimal Percentage(int numerator, int denominator) =>
+        denominator == 0
+            ? 0m
+            : Math.Round((decimal)numerator / denominator * 100m, 1, MidpointRounding.AwayFromZero);
 
     /// <summary>
     /// The Round 7 taxonomy produces a much richer mix than the original
@@ -422,6 +528,8 @@ public sealed class AnalyticsService(
         Enum.TryParse<SalaryPayPeriod>(value, ignoreCase: true, out var period)
             ? period
             : SalaryPayPeriod.Unknown;
+
+    private sealed record ActiveSkillDemand(string SkillName, string SkillType, int JobCount);
 
     private sealed record ActiveListing(
         string Source,

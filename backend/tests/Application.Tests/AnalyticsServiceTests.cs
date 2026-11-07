@@ -259,6 +259,46 @@ public sealed class AnalyticsServiceTests
         top.Select(skill => skill.SkillName).Should().Equal("API", "Azure");
     }
 
+    [Fact]
+    public async Task Skill_demand_by_type_counts_once_per_listing_and_reports_coverage_denominators()
+    {
+        await using var dbContext = CreateDbContext();
+        AddJob(dbContext, "A");
+        AddJob(dbContext, "B");
+        AddJob(dbContext, "C", active: false);
+        await dbContext.SaveChangesAsync();
+        var jobs = dbContext.Jobs.ToDictionary(job => job.Source, job => job);
+        dbContext.JobSkills.AddRange(
+            new JobSkill { Id = Guid.NewGuid(), JobId = jobs["A"].Id, SkillName = "Python", SkillType = "ProgrammingLanguage" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = jobs["A"].Id, SkillName = "SQL", SkillType = "ProgrammingLanguage" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = jobs["A"].Id, SkillName = "React", SkillType = "Framework" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = jobs["B"].Id, SkillName = "Python", SkillType = "ProgrammingLanguage" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = jobs["B"].Id, SkillName = "Python", SkillType = "ProgrammingLanguage" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = jobs["B"].Id, SkillName = "Go", SkillType = "ProgrammingLanguage" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = jobs["B"].Id, SkillName = "React", SkillType = "Framework" },
+            new JobSkill { Id = Guid.NewGuid(), JobId = jobs["C"].Id, SkillName = "Python", SkillType = "ProgrammingLanguage" });
+        await dbContext.SaveChangesAsync();
+
+        var demand = await new AnalyticsService(dbContext, new FixedTimeProvider(Now))
+            .GetSkillDemandAsync(new[] { "ProgrammingLanguage", "Framework" }, 10, CancellationToken.None);
+
+        demand.ActiveListings.Should().Be(2, "the inactive listing is outside the cohort");
+        demand.ListingsWithExtractedSkills.Should().Be(2);
+        demand.ExtractionCoveragePercent.Should().Be(100m);
+        demand.TaxonomyVersion.Should().Be("2");
+
+        var languages = demand.Types.Single(type => type.Type == "ProgrammingLanguage");
+        languages.ListingDenominator.Should().Be(2);
+        languages.Skills.Select(skill => skill.SkillName).Should().Equal("Python", "Go", "SQL");
+        languages.Skills.Single(skill => skill.SkillName == "Python").JobCount.Should().Be(2,
+            "Python is counted once per listing even when the row is duplicated");
+        languages.Skills.Single(skill => skill.SkillName == "Python").PercentOfActiveListings.Should().Be(100m);
+        languages.Skills.Single(skill => skill.SkillName == "SQL").PercentOfActiveListings.Should().Be(50m);
+
+        var frameworks = demand.Types.Single(type => type.Type == "Framework");
+        frameworks.Skills.Should().ContainSingle(skill => skill.SkillName == "React" && skill.JobCount == 2);
+    }
+
     private static void AddJob(
         ApplicationDbContext dbContext,
         string source,
