@@ -38,6 +38,42 @@ public sealed class SkillBackfillServiceTests
     }
 
     [Fact]
+    public async Task Backfill_applies_round24_go_and_r_guards_and_stays_idempotent()
+    {
+        // Round 24: re-extraction uses the shared taxonomy for every skill, so
+        // the corrected Go/R guards apply without a hard-coded special case.
+        await using var dbContext = CreateDbContext();
+        var goJob = CreateJob("https://example.com/jobs/go", summary: "Go-to-market strategy and R&D partnership.");
+        goJob.DescriptionText = "Backend development experience using technologies such as Go, TypeScript, Java, C#, or similar.";
+        var rJob = CreateJob("https://example.com/jobs/r", summary: "Data scientist role.");
+        rJob.DescriptionText = "Data scientist: R, Python and SQL for modelling.";
+        var falseGoJob = CreateJob("https://example.com/jobs/go-to-market", summary: "Own the go-to-market strategy and R&D roadmap.");
+        dbContext.Jobs.AddRange(goJob, rJob, falseGoJob);
+        await dbContext.SaveChangesAsync();
+
+        var service = new SkillBackfillService(dbContext, SkillExtractor.Default);
+
+        var first = await service.RunAsync(CancellationToken.None);
+
+        first.JobsUpdated.Should().Be(2);
+        dbContext.Jobs.Single(job => job.Id == goJob.Id).Skills.Select(skill => skill.SkillName)
+            .Should().Contain("Go");
+        dbContext.Jobs.Single(job => job.Id == rJob.Id).Skills.Select(skill => skill.SkillName)
+            .Should().Contain("R");
+        // The summary's "Go-to-market" and "R&D" must not create those skills.
+        dbContext.Jobs.Single(job => job.Id == goJob.Id).Skills.Select(skill => skill.SkillName)
+            .Should().NotContain("R");
+        dbContext.Jobs.Single(job => job.Id == falseGoJob.Id).Skills.Select(skill => skill.SkillName)
+            .Should().NotContain(new[] { "Go", "R" });
+
+        var second = await service.RunAsync(CancellationToken.None);
+
+        second.JobsUpdated.Should().Be(0);
+        second.SkillsAdded.Should().Be(0);
+        second.SkillsRemoved.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Backfill_keeps_valid_legacy_skills_and_adds_new_ones()
     {
         await using var dbContext = CreateDbContext();

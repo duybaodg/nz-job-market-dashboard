@@ -181,14 +181,26 @@ public sealed class SkillBackfillService(
             parts.Add(job.DescriptionSummary);
         }
 
+        // Round 24: the full stored description is the same text ingestion used
+        // at crawl time, so re-extraction must read it. Older rows frequently
+        // have no retained markdown and only a truncated summary here; omitting
+        // DescriptionText made the Go/R guard fixes invisible to the backfill.
+        if (!string.IsNullOrWhiteSpace(job.DescriptionText))
+        {
+            parts.Add(Truncate(job.DescriptionText, MaxMarkdownChars));
+        }
+
         if (markdowns is not null)
         {
             foreach (var markdown in markdowns)
             {
-                parts.Add(markdown.Length > MaxMarkdownChars ? markdown[..MaxMarkdownChars] : markdown);
+                parts.Add(Truncate(markdown, MaxMarkdownChars));
             }
         }
 
         return string.Join('\n', parts);
     }
+
+    private static string Truncate(string value, int maxChars) =>
+        value.Length > maxChars ? value[..maxChars] : value;
 }
