@@ -1,4 +1,4 @@
-import type { CohortComparison, DataRoleExplorer, Freshness, HealthReport, History, Job, JobsByRegion, Overview, QualitySummary, SkillDemand } from '../types/api'
+import type { CohortComparison, DataRoleExplorer, Freshness, HealthReport, History, Job, JobsByRegion, Overview, QualitySummary, SkillDemand, SkillDemandByType } from '../types/api'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5050'
 
@@ -50,6 +50,15 @@ export function getOverview() {
 
 export function getTopSkills() {
   return getJson<SkillDemand[]>('/api/analytics/top-skills')
+}
+
+/** Round 24: ranked demand per taxonomy type, with both denominators. */
+export function getSkillDemand(params: { types: string[]; limit?: number }) {
+  const query = new URLSearchParams()
+  if (params.types.length > 0) query.set('types', params.types.join(','))
+  if (params.limit) query.set('limit', String(params.limit))
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return getJson<SkillDemandByType>(`/api/analytics/skill-demand${suffix}`)
 }
 
 export function getJobsByRegion() {

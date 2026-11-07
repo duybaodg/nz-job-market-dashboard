@@ -24,6 +24,11 @@ const SalaryDistributionChart = lazy(() =>
     default: module.SalaryDistributionChart,
   })),
 )
+// Round 24: the two type-aware skill-demand charts are split out the same way,
+// so their table alternative and bar list only load when /trends renders.
+const SkillDemandChart = lazy(() =>
+  import('../components/charts/SkillDemandChart').then((module) => ({ default: module.SkillDemandChart })),
+)
 
 const chartFallback = (
   <div className="chart-empty" aria-busy="true">
@@ -49,7 +54,7 @@ import {
   trendsFilterChips,
   type TrendsFilterState,
 } from '../lib/urlState'
-import { getHistory, getJobs, getOverview, getQuality } from '../services/api'
+import { getHistory, getJobs, getOverview, getQuality, getSkillDemand } from '../services/api'
 import type { Job } from '../types/api'
 
 const emptyJobs: Job[] = []
@@ -92,6 +97,13 @@ export function MarketTrendsPage() {
   const jobsQuery = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs({ status: 'all', limit: 5000 }) })
   const overviewQuery = useQuery({ queryKey: ['overview'], queryFn: getOverview })
   const qualityQuery = useQuery({ queryKey: ['quality'], queryFn: getQuality })
+  // Round 24: server-side type-aware demand for languages/frameworks. The
+  // request is global (not narrowed by the cohort chips) and its response
+  // carries its own as-of time, denominator and taxonomy version.
+  const skillDemandQuery = useQuery({
+    queryKey: ['skill-demand', 'ProgrammingLanguage', 'Framework', 10],
+    queryFn: () => getSkillDemand({ types: ['ProgrammingLanguage', 'Framework'], limit: 10 }),
+  })
 
   // Round 20 (A2): history takes the same cohort as the current cards, and the
   // filter values are part of the query key so an old request can never land
@@ -844,6 +856,49 @@ export function MarketTrendsPage() {
             <p className="muted chart-caption">
               Skill extraction coverage: {skills.extractionCoverage}% of this cohort has at least one extracted skill.
             </p>
+          </section>
+
+          <section className="panel" id="top-languages">
+            <div className="panel-header">
+              <div>
+                <h2>Top programming languages</h2>
+                <p>
+                  Share of active tracked listings mentioning each programming language. Descriptive only: this is not a
+                  forecast, ranking of candidates, or employability score. Each skill counts at most once per listing.
+                </p>
+              </div>
+            </div>
+            <Suspense fallback={chartFallback}>
+              <SkillDemandChart
+                title="Top programming languages"
+                type="ProgrammingLanguage"
+                data={skillDemandQuery.data}
+                loading={skillDemandQuery.isLoading}
+                error={skillDemandQuery.isError}
+              />
+            </Suspense>
+          </section>
+
+          <section className="panel" id="top-frameworks">
+            <div className="panel-header">
+              <div>
+                <h2>Top frameworks</h2>
+                <p>
+                  Share of active tracked listings mentioning each framework. Descriptive only: this is not a forecast,
+                  ranking of candidates, or employability score. Each skill counts at most once per listing.
+                </p>
+              </div>
+            </div>
+            <Suspense fallback={chartFallback}>
+              <SkillDemandChart
+                title="Top frameworks"
+                type="Framework"
+                data={skillDemandQuery.data}
+                loading={skillDemandQuery.isLoading}
+                error={skillDemandQuery.isError}
+                note="Includes markup/styling skills (HTML, CSS)."
+              />
+            </Suspense>
           </section>
 
           <section className="panel">

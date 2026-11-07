@@ -1,20 +1,21 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { MarketTrendsPage } from './MarketTrendsPage'
 import { navigate } from '../hooks/useAppLocation'
-import { dataRoleExplorerFixture, historyFixture, jobFixture, overviewFixture, qualityFixture } from '../types/contract.fixtures'
+import { dataRoleExplorerFixture, historyFixture, jobFixture, overviewFixture, qualityFixture, skillDemandFixture } from '../types/contract.fixtures'
 import type { History } from '../types/api'
 
-const { getDataRolesMock, getHistoryMock, getJobsMock, getOverviewMock, getQualityMock } = vi.hoisted(() => ({
+const { getDataRolesMock, getHistoryMock, getJobsMock, getOverviewMock, getQualityMock, getSkillDemandMock } = vi.hoisted(() => ({
   getDataRolesMock: vi.fn(),
   getHistoryMock: vi.fn(),
   getJobsMock: vi.fn(),
   getOverviewMock: vi.fn(),
   getQualityMock: vi.fn(),
+  getSkillDemandMock: vi.fn(),
 }))
 
 const { location } = vi.hoisted(() => ({ location: { pathname: '/trends', search: '?period=15' } }))
@@ -28,6 +29,7 @@ vi.mock('../services/api', async (importOriginal) => {
     getJobs: getJobsMock,
     getOverview: getOverviewMock,
     getQuality: getQualityMock,
+    getSkillDemand: getSkillDemandMock,
   }
 })
 
@@ -59,6 +61,7 @@ describe('MarketTrendsPage reporting period', () => {
     getJobsMock.mockReset().mockResolvedValue([])
     getOverviewMock.mockReset().mockResolvedValue(null)
     getQualityMock.mockReset().mockResolvedValue(qualityFixture)
+    getSkillDemandMock.mockReset().mockResolvedValue(skillDemandFixture)
   })
 
   afterEach(cleanup)
@@ -262,6 +265,38 @@ describe('MarketTrendsPage reporting period', () => {
     expect(await screen.findByText(/87\.5%/)).toBeInTheDocument()
     expect(await screen.findByText(/128 reviewed/)).toBeInTheDocument()
     expect(screen.getByText(/133 of 133 sampled listings/)).toBeInTheDocument()
+  })
+
+  it('renders the language and framework charts with denominator context and table parity', async () => {
+    getJobsMock.mockResolvedValue([jobFixture])
+    getOverviewMock.mockResolvedValue(overviewFixture)
+    getHistoryMock.mockResolvedValue(historyFixture)
+
+    renderPage()
+
+    expect(await screen.findByRole('heading', { name: 'Top programming languages' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Top frameworks' })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(getSkillDemandMock).toHaveBeenCalledWith({
+        types: ['ProgrammingLanguage', 'Framework'],
+        limit: 10,
+      }),
+    )
+    expect((await screen.findAllByText(/68\.5% extraction coverage/)).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Includes markup\/styling skills \(HTML, CSS\)/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/taxonomy v2/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Descriptive only/).length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByText('View top programming languages as a table'))
+    const languages = screen.getByRole('table', { name: /Top programming languages, as of/i })
+    expect(within(languages).getByText('79')).toBeInTheDocument()
+    expect(within(languages).getByText('10.5%')).toBeInTheDocument()
+    expect(within(languages).getByText('15.4%')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('View top frameworks as a table'))
+    const frameworks = screen.getByRole('table', { name: /Top frameworks, as of/i })
+    expect(within(frameworks).getByText('53')).toBeInTheDocument()
+    expect(within(frameworks).getByText('7.1%')).toBeInTheDocument()
   })
 
   it('hides the classified source-coverage methodology note (Round 23)', async () => {

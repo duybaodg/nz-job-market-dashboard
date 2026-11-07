@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getHealth, getHistory, getJobs } from './api'
+import { getHealth, getHistory, getJobs, getSkillDemand } from './api'
 
 describe('getJobs', () => {
   afterEach(() => {
@@ -42,6 +42,24 @@ describe('getHistory', () => {
     await getHistory(15)
 
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe('http://localhost:5050/api/analytics/history?days=15')
+  })
+})
+
+describe('getSkillDemand', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('requests both taxonomy types and the chart limit in the query string', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ types: [] }) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getSkillDemand({ types: ['ProgrammingLanguage', 'Framework'], limit: 10 })
+
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
+      'http://localhost:5050/api/analytics/skill-demand?types=ProgrammingLanguage%2CFramework&limit=10',
+    )
   })
 })
 

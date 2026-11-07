@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { comparisonFixture, dataRoleExplorerFixture, freshnessFixture, healthFixture, historyFixture, jobFixture, overviewFixture, qualityFixture } from './contract.fixtures'
+import { comparisonFixture, dataRoleExplorerFixture, freshnessFixture, healthFixture, historyFixture, jobFixture, overviewFixture, qualityFixture, skillDemandFixture } from './contract.fixtures'
 
 /**
  * Round 14 consistency contract. One focused check per widget group: every API
@@ -288,5 +288,28 @@ describe('Two-cohort comparison contract', () => {
     expect(comparisonFixture.skillHistory.reason).toContain('14 complete skill-captured days')
     expect(comparisonFixture.a.salary.suppressed).toBe(true)
     expect(comparisonFixture.b.salary.smallSample).toBe(true)
+  })
+})
+
+describe('Round 24 skill-demand contract', () => {
+  it('carries both denominators, the taxonomy version and every ranked value', () => {
+    requireFields(skillDemandFixture, [
+      'generatedAtUtc', 'taxonomyVersion', 'activeListings', 'listingsWithExtractedSkills',
+      'extractionCoveragePercent', 'denominatorBasis', 'types',
+      'types[0].type', 'types[0].listingDenominator', 'types[0].listingsWithExtractedSkills',
+      'types[0].extractionCoveragePercent', 'types[0].skills',
+      'types[0].skills[0].skillName', 'types[0].skills[0].jobCount',
+      'types[0].skills[0].percentOfActiveListings', 'types[0].skills[0].percentOfListingsWithSkills',
+    ])
+    requireNonNull(skillDemandFixture, [
+      'generatedAtUtc', 'taxonomyVersion', 'denominatorBasis', 'types[0].type',
+      'types[0].skills[0].skillName',
+    ])
+    requireType(skillDemandFixture, 'activeListings', 'number')
+    requireType(skillDemandFixture, 'extractionCoveragePercent', 'number')
+    requireType(skillDemandFixture, 'types[0].skills[0].jobCount', 'number')
+    expect(skillDemandFixture.types.map((type) => type.type)).toEqual(['ProgrammingLanguage', 'Framework'])
+    expect(skillDemandFixture.taxonomyVersion).toBe('2')
+    expect(skillDemandFixture.types[0].skills[0].jobCount).toBe(79)
   })
 })

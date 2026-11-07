@@ -154,6 +154,32 @@ export type SkillDemand = {
   jobCount: number
 }
 
+/** Round 24: type-aware demand used by the language and framework charts. */
+export type RankedSkillDemand = {
+  skillName: string
+  jobCount: number
+  percentOfActiveListings: number
+  percentOfListingsWithSkills: number
+}
+
+export type SkillTypeDemand = {
+  type: string
+  listingDenominator: number
+  listingsWithExtractedSkills: number
+  extractionCoveragePercent: number
+  skills: RankedSkillDemand[]
+}
+
+export type SkillDemandByType = {
+  generatedAtUtc: string
+  taxonomyVersion: string
+  activeListings: number
+  listingsWithExtractedSkills: number
+  extractionCoveragePercent: number
+  denominatorBasis: string
+  types: SkillTypeDemand[]
+}
+
 export type JobsByRegion = {
   region: string
   jobCount: number

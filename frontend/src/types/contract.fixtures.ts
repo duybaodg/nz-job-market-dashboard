@@ -1,4 +1,4 @@
-import type { CohortComparison, DataRoleExplorer, Freshness, HealthReport, History, Job, Overview, QualitySummary } from './api'
+import type { CohortComparison, DataRoleExplorer, Freshness, HealthReport, History, Job, Overview, QualitySummary, SkillDemandByType } from './api'
 
 /**
  * Round 14 contract fixtures: a realistic snapshot of the live API payloads,
@@ -749,5 +749,41 @@ export const comparisonFixture: CohortComparison = {
     'Active tracked listings at one capture time for counts, skill shares and salary; complete Pacific/Auckland windows for period discovery counts. Both cohorts use identical date rules. Salary figures are descriptive advertised medians, not a causal premium.',
   notes: [
     'Sub-role cohorts are classified from the retained title. Current counts, skill shares and salary samples are available, but period counts and skill-share history cannot be reconstructed from older snapshots that do not store the sub-role.',
+  ],
+}
+
+/** Round 24: the shape of GET /api/analytics/skill-demand. */
+export const skillDemandFixture: SkillDemandByType = {
+  generatedAtUtc: '2026-11-07T00:00:00Z',
+  taxonomyVersion: '2',
+  activeListings: 749,
+  listingsWithExtractedSkills: 513,
+  extractionCoveragePercent: 68.5,
+  denominatorBasis:
+    'Each skill is counted at most once per active listing. Percent of active listings uses all 749 active tracked listings; percent of listings with skills uses 513 active listings with at least one extracted skill. Taxonomy version 2.',
+  types: [
+    {
+      type: 'ProgrammingLanguage',
+      listingDenominator: 749,
+      listingsWithExtractedSkills: 513,
+      extractionCoveragePercent: 68.5,
+      skills: [
+        { skillName: 'SQL', jobCount: 79, percentOfActiveListings: 10.5, percentOfListingsWithSkills: 15.4 },
+        { skillName: 'JavaScript', jobCount: 69, percentOfActiveListings: 9.2, percentOfListingsWithSkills: 13.5 },
+        { skillName: 'Python', jobCount: 59, percentOfActiveListings: 7.9, percentOfListingsWithSkills: 11.5 },
+      ],
+    },
+    {
+      type: 'Framework',
+      listingDenominator: 749,
+      listingsWithExtractedSkills: 513,
+      extractionCoveragePercent: 68.5,
+      skills: [
+        { skillName: 'React', jobCount: 53, percentOfActiveListings: 7.1, percentOfListingsWithSkills: 10.3 },
+        { skillName: '.NET', jobCount: 45, percentOfActiveListings: 6, percentOfListingsWithSkills: 8.8 },
+        { skillName: 'HTML', jobCount: 20, percentOfActiveListings: 2.7, percentOfListingsWithSkills: 3.9 },
+        { skillName: 'CSS', jobCount: 18, percentOfActiveListings: 2.4, percentOfListingsWithSkills: 3.5 },
+      ],
+    },
   ],
 }
