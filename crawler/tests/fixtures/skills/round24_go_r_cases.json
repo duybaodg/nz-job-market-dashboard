@@ -1,0 +1,128 @@
+[
+  {
+    "id": "go-live-backend-list",
+    "source": "live description: Senior Software Engineer (fdb4d97b)",
+    "text": "Backend development experience using technologies such as Go, TypeScript, Java, C#, or similar.",
+    "expect": ["Go"]
+  },
+  {
+    "id": "go-live-programming-list",
+    "source": "live description: Software Product Owner (af37a4f9)",
+    "text": "Programming experience in C, C++, C#, Go, Python, HTML, Rust or TypeScript",
+    "expect": ["Go"]
+  },
+  {
+    "id": "go-live-typed-language",
+    "source": "live description: Lead - Operations Software (cdec5bdd)",
+    "text": "Proficiency in a statically typed language such as Go, C#, or C++.",
+    "expect": ["Go"]
+  },
+  {
+    "id": "go-live-services-in-go",
+    "source": "live description: Senior Software Engineer - Production Test Systems (7ef761af)",
+    "text": "REST APIs, event-driven and distributed services in Go or Python, databases, and data pipelines.",
+    "expect": ["Go"]
+  },
+  {
+    "id": "go-live-golang",
+    "source": "live description: Intermediate Software Engineer (Go) (e90550ae)",
+    "text": "Requirements Go/Golang: 2 years commercial experience",
+    "expect": ["Go"]
+  },
+  {
+    "id": "go-false-company-values",
+    "source": "live description: Lead Engineer - Front End (React) (cbe402ea)",
+    "text": "You will Go Bold by challenging the status quo, and Go Further by making the experience better for customers around the world.",
+    "reject": ["Go"]
+  },
+  {
+    "id": "go-false-go-next",
+    "source": "live description: Lead Software Engineer - Platform (b2f64ef7)",
+    "text": "and you'll shape where ours go next.",
+    "reject": ["Go"]
+  },
+  {
+    "id": "go-false-go-deeper",
+    "source": "live description: Senior Frontend Engineer (b9508e81)",
+    "text": "The key is you\u2019re keen to go deeper on mobile",
+    "reject": ["Go"]
+  },
+  {
+    "id": "go-false-go-native",
+    "source": "live description: Lead React Native Engineer (957cf8a0)",
+    "text": "Know when to go native and how to design stable bridges.",
+    "reject": ["Go"]
+  },
+  {
+    "id": "go-false-go-to-market",
+    "source": "live description: Senior Product Marketing Manager (Temporary)",
+    "text": "You will own the go-to-market strategy, positioning, messaging, launch planning, and market activation.",
+    "reject": ["Go"]
+  },
+  {
+    "id": "r-constructed-python-list",
+    "source": "constructed true-R regression: no genuine live R mention exists in the retained descriptions",
+    "text": "Data scientist: R, Python and SQL for modelling.",
+    "expect": ["R"]
+  },
+  {
+    "id": "r-constructed-programming",
+    "source": "constructed true-R regression: no genuine live R mention exists in the retained descriptions",
+    "text": "R programming and statistical modelling.",
+    "expect": ["R"]
+  },
+  {
+    "id": "r-constructed-studio",
+    "source": "constructed true-R regression: no genuine live R mention exists in the retained descriptions",
+    "text": "Experience with RStudio and tidyverse.",
+    "expect": ["R"]
+  },
+  {
+    "id": "r-constructed-plus-sql",
+    "source": "constructed true-R regression: no genuine live R mention exists in the retained descriptions",
+    "text": "Strong R + SQL skills.",
+    "expect": ["R"]
+  },
+  {
+    "id": "r-live-r-and-d",
+    "source": "live description: Site Reliability Engineer (SRE) (a6f2e133)",
+    "text": "Partner directly with R&D in this high-impact engineering role.",
+    "reject": ["R"]
+  },
+  {
+    "id": "r-live-maori-roopu",
+    "source": "live description: Senior Information Security Advisor (58e61d25)",
+    "text": "About the Team - M\u014d t\u014d m\u0101tou R\u014dp\u016bOur InfoSec team sits within the Security and Privacy directorate.",
+    "reject": ["R"]
+  },
+  {
+    "id": "r-live-te-ra",
+    "source": "live description: Solution Architect (6ac11978)",
+    "text": "Te R\u0101 \u014ctinga - Job Posting End Date Wednesday 11 November at 11.59pm (NZ)",
+    "reject": ["R"]
+  },
+  {
+    "id": "r-live-regular-reviews",
+    "source": "live description: Quality Assurance Engineer - C#/Playwright",
+    "text": "Competitive salary with regular reviews.",
+    "reject": ["R"]
+  },
+  {
+    "id": "r-live-risk-registers",
+    "source": "live description: Lead Cyber Security Engineer",
+    "text": "Managing vulnerabilities, maintaining security risk registers and ensuring remediation activities are followed through.",
+    "reject": ["R"]
+  },
+  {
+    "id": "r-false-r-and-d-free",
+    "source": "constructed R&D-free regression",
+    "text": "R&D-free environment",
+    "reject": ["R"]
+  },
+  {
+    "id": "r-false-or-comparable-languages",
+    "source": "live description: Software Test Engineer (af8116f8)",
+    "text": "Programming or scripting experience in JavaScript, Java, Python or comparable languages",
+    "reject": ["R"]
+  }
+]

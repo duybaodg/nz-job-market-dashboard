@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "description": "Shared technical-skill taxonomy for the NZ Job Market Dashboard. Read by both the Python crawler (crawler/skills_taxonomy.py) and the .NET ingestion (backend/src/Application/Jobs/SkillsTaxonomy.cs).",
   "maxSkillsPerJob": 15,
   "categories": [
@@ -63,12 +63,18 @@
             "Golang"
           ],
           "deny": [
-            "[- ]?to[- ]market\\b"
+            "[- ]?to[- ]market\\b",
+            "[- ]?to\\b",
+            "[- ]?(?:bold|further|together|deeper|native|back|next|above|beyond|through|forward|ahead|live|home|away|out|up|down|in|on|over|under|around|between|after|against|along|by|for|from|into|off|past|with|without|wrong)\\b"
           ],
           "contextAny": [
-            "golang",
-            "\\bgo\\b[^.]{0,40}\\b(?:developer|engineer|programming|language|backend|microservice|concurren|goroutine|api|sdk)\\b",
-            "\\b(?:backend|microservice|distributed)\\b"
+            "\\bgolang\\b",
+            "\\bgo\\b\\s*(?:developer|engineer|programmer|programming|language|services?|backend|microservices?|apis?|sdk|codebase|modules?|routines?)\\b",
+            "\\b(?:written|developed|coded|implemented|built|using|use|experience|proficien\\w*|skilled|knowledge|expertise)\\b[^.]{0,30}\\bgo\\b",
+            "\\b(?:services?|apis?|backend|microservices?|applications?|systems?|language)\\b[^.]{0,30}\\bgo\\b",
+            "\\bgo\\s*/\\s*(?:rust|python|java|node(?:\\.js)?|typescript|kotlin|c#|c\\+\\+)",
+            "(?:\\bpython\\b|\\bjava\\b|\\bjavascript\\b|\\btypescript\\b|\\bc#\\b|\\bc\\+\\+\\b|\\brust\\b|\\bkotlin\\b|\\bscala\\b|\\bruby\\b|\\bphp\\b|\\bswift\\b|\\bsql\\b|\\breact\\b|\\bnode(?:\\.js)?\\b|\\.net\\b|\\bperl\\b|\\belixir\\b|\\bhaskell\\b|\\bdart\\b|\\bbash\\b|\\bpower ?shell\\b|\\bterraform\\b|\\bansible\\b|\\bhtml\\b|\\bcss\\b)[^.]{0,30}\\bgo\\b",
+            "\\bgo\\b[^.]{0,30}(?:\\bpython\\b|\\bjava\\b|\\bjavascript\\b|\\btypescript\\b|\\bc#\\b|\\bc\\+\\+\\b|\\brust\\b|\\bkotlin\\b|\\bscala\\b|\\bruby\\b|\\bphp\\b|\\bswift\\b|\\bsql\\b|\\breact\\b|\\bnode(?:\\.js)?\\b|\\.net\\b|\\bperl\\b|\\belixir\\b|\\bhaskell\\b|\\bdart\\b|\\bbash\\b|\\bpower ?shell\\b|\\bterraform\\b|\\bansible\\b|\\bhtml\\b|\\bcss\\b)"
           ],
           "contextWindow": 60
         },
@@ -112,16 +118,27 @@
         {
           "name": "R",
           "aliases": [
-            "R"
+            "R",
+            "RStudio",
+            "R Studio",
+            "tidyverse",
+            "ggplot2",
+            "dplyr"
           ],
           "deny": [
             "\\s*(?:&|and)\\s*D\\b",
-            "\\+"
+            "\\s*\\+\\s*D\\b",
+            "[^\\W\\d_]"
           ],
           "contextAny": [
             "\\br\\s*(?:studio|shiny|programming|language|packages?|stats)\\b",
             "rstudio",
             "\\brstats\\b",
+            "\\btidyverse\\b",
+            "\\bggplot2?\\b",
+            "\\bdplyr\\b",
+            "\\br\\s*[,/+&]\\s*(?:python|sql)\\b",
+            "\\b(?:python|sql)\\s*[,/+&]\\s*r\\b",
             "data scien",
             "statistic",
             "machine learning",

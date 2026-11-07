@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Application.Jobs;
 using FluentAssertions;
 
@@ -72,6 +73,43 @@ public sealed class SkillExtractorTests
 
         skills.Should().HaveCount(Extractor.Taxonomy.MaxSkillsPerJob);
         skills.Select(skill => skill.Name).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void Round24_shared_go_and_r_cases_match_the_python_mirror()
+    {
+        // Both extractors read this fixture file, so a guard change cannot pass
+        // one side and silently drift on the other. True-R cases are marked
+        // constructed in the fixture: the retained live descriptions contain no
+        // genuine R-language mention (all standalone R tokens are R&D or Māori).
+        var json = File.ReadAllText(RepoFile("crawler", "tests", "fixtures", "skills", "round24_go_r_cases.json"));
+        using var document = JsonDocument.Parse(json);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var testCase in document.RootElement.EnumerateArray())
+        {
+            var id = testCase.GetProperty("id").GetString()!;
+            var source = testCase.GetProperty("source").GetString()!;
+            var text = testCase.GetProperty("text").GetString()!;
+            seen.Add(id).Should().BeTrue($"fixture id '{id}' must be unique");
+            var names = Names(text);
+
+            if (testCase.TryGetProperty("expect", out var expected))
+            {
+                foreach (var skill in expected.EnumerateArray())
+                {
+                    names.Should().Contain(skill.GetString()!, source);
+                }
+            }
+
+            if (testCase.TryGetProperty("reject", out var rejected))
+            {
+                foreach (var skill in rejected.EnumerateArray())
+                {
+                    names.Should().NotContain(skill.GetString()!, source);
+                }
+            }
+        }
     }
 
     [Fact]

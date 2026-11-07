@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -100,6 +101,39 @@ class SkillFalsePositiveTests(unittest.TestCase):
     def test_maui_place_name_is_not_the_dotnet_maui_framework(self) -> None:
         names = [skill["name"] for skill in extract_skills("Based in Te Matau a Maui Hawke's Bay.")]
         self.assertNotIn(".NET MAUI", names)
+
+
+class Round24GoRRegressionTests(unittest.TestCase):
+    """Round 24: exact live Go/R strings shared with the .NET mirror test.
+
+    The fixture file is read by both ``crawler/tests/test_skills_taxonomy.py``
+    and ``backend/tests/Application.Tests/SkillExtractorTests.cs`` so the two
+    extractors cannot drift on the guards. No genuine live R-language mention
+    exists in the retained descriptions (all ten standalone R tokens are R&D or
+    Māori words), so the true-R cases are explicitly marked constructed rather
+    than inventing a database source.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.cases = json.loads(
+            (FIXTURES / "round24_go_r_cases.json").read_text(encoding="utf-8")
+        )
+
+    def test_shared_go_r_cases_match_the_dotnet_mirror(self) -> None:
+        extractor = SkillExtractor()
+        seen: set[str] = set()
+
+        for case in self.cases:
+            with self.subTest(case=case["id"]):
+                self.assertNotIn(case["id"], seen, "fixture ids must be unique")
+                seen.add(case["id"])
+                names = {skill["name"] for skill in extractor.extract(case["text"])}
+
+                for expected in case.get("expect", []):
+                    self.assertIn(expected, names, case["source"])
+                for rejected in case.get("reject", []):
+                    self.assertNotIn(rejected, names, case["source"])
 
 
 class SkillNormalisationTests(unittest.TestCase):
