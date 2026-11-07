@@ -467,6 +467,56 @@ PY
 fi
 rm -f "$skills_jobs" "$top_skills"
 
+printf '%-28s ' "skill demand by type"
+skill_demand=$(mktemp)
+if ! curl -fsS --max-time 20 \
+  "${BASE_URL}/api/analytics/skill-demand?types=ProgrammingLanguage,Framework&limit=10" \
+  -o "$skill_demand" 2>/dev/null; then
+  echo "FAIL (no response)"
+  fail=1
+elif python3 - "$skill_demand" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+problems = []
+if not data.get("taxonomyVersion"):
+    problems.append("missing taxonomyVersion")
+if not data.get("generatedAtUtc"):
+    problems.append("missing generatedAtUtc")
+active = data.get("activeListings")
+with_skills = data.get("listingsWithExtractedSkills")
+if not isinstance(active, int) or not isinstance(with_skills, int):
+    problems.append("missing active/skill denominators")
+elif with_skills > active:
+    problems.append("listingsWithExtractedSkills exceeds activeListings")
+types = data.get("types", [])
+if [entry.get("type") for entry in types] != ["ProgrammingLanguage", "Framework"]:
+    problems.append("types are not ProgrammingLanguage,Framework")
+for entry in types:
+    if entry.get("listingDenominator") != active:
+        problems.append(entry.get("type") + " listingDenominator does not match activeListings")
+    if not entry.get("skills"):
+        problems.append(entry.get("type") + " has no ranked skills")
+    for skill in entry.get("skills", []):
+        if not 0 <= skill.get("jobCount", -1) <= active:
+            problems.append(entry.get("type") + " has an out-of-range jobCount")
+if problems:
+    print("FAIL (" + "; ".join(problems) + ")")
+    raise SystemExit(1)
+print("OK (taxonomy=" + data["taxonomyVersion"] + ", active=" + str(active)
+      + ", with skills=" + str(with_skills) + ")")
+for entry in types:
+    print("  " + entry["type"] + ": " + ", ".join(
+        skill["skillName"] + "=" + str(skill["jobCount"]) for skill in entry["skills"]))
+PY
+then
+  :
+else
+  fail=1
+fi
+rm -f "$skill_demand"
+
 printf '%-28s ' "Round 22 data role explorer"
 roles_tmp=$(mktemp)
 if ! curl -fsS --max-time 30 "${BASE_URL}/api/analytics/data-roles" -o "$roles_tmp" 2>/dev/null; then

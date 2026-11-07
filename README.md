@@ -209,6 +209,7 @@ GET /api/jobs                       # ?status=&region=&skill=&search=&days=2|7|1
 GET /api/jobs/{id}
 GET /api/analytics/overview
 GET /api/analytics/top-skills
+GET /api/analytics/skill-demand      # ?types=ProgrammingLanguage,Framework&limit=10 type-aware counts + denominators + taxonomy version
 GET /api/analytics/jobs-by-region
 GET /api/analytics/freshness         # posted + first-seen counts for the 2, 7 and 15 NZ-day windows
 GET /api/analytics/history           # ?days=7|15|30 daily-snapshot history, weekly trend, coverage changes
@@ -473,7 +474,7 @@ frameworks, cloud, databases, data/BI, DevOps, testing, security,
 integration/ERP and process keywords), not just a programming-language list.
 
 - The vocabulary is a single data file: **`crawler/skills_taxonomy.json`**
-  (272 skills across 10 skill types). It is read by both the Python scrapling
+  (272 skills across 10 skill types, taxonomy version 2). It is read by both the Python scrapling
   worker (`crawler/skills_taxonomy.py`) and the .NET ingestion pipeline
   (`backend/src/Application/Jobs/SkillsTaxonomy.cs` + `SkillExtractor.cs`).
 - Matching is case-insensitive alias matching with word boundaries. Every skill
@@ -482,11 +483,13 @@ integration/ERP and process keywords), not just a programming-language list.
   design", etc.). Results are normalised to canonical names and capped at **15
   per job**.
 - `SkillBackfillService` runs once at worker startup to re-extract skills for
-  every stored job from its title, summary and retained raw-page markdown. It is
-  idempotent and unions with existing valid skills so a weaker stored signal
-  never destroys data.
+  every stored job from its title, summary, full stored description and retained
+  raw-page markdown. It is idempotent and unions with existing valid skills so a
+  weaker stored signal never destroys data.
 - `GET /api/analytics/top-skills` returns the top 15 by distinct active job
-  across every skill type.
+  across every skill type. `GET /api/analytics/skill-demand?types=ProgrammingLanguage,Framework&limit=10`
+  adds type-aware rankings with the active-listing and extracted-skill
+  denominators, extraction coverage, capture time and taxonomy version.
 
 ## Self-hosted Firecrawl (optional)
 
